@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserPlus, Trash2 } from 'lucide-react';
 import TenantForm from '../tenant/TenantForm';
-import { deleteProperty } from '../../utils/property';
+import { deleteProperty } from '../../utils/propertyApi';
 import toast from 'react-hot-toast';
 import { Property } from '../../types/property';
 import PropertyTableHeader from './PropertyTableHeader';
@@ -28,6 +28,8 @@ export default function PropertyTable({ properties, onUpdate }: PropertyTablePro
     if (result.success) {
       toast.success('Property deleted successfully');
       onUpdate();
+    } else {
+      toast.error(result.error || 'Failed to delete property');
     }
     setLoading(null);
   };
@@ -52,14 +54,7 @@ export default function PropertyTable({ properties, onUpdate }: PropertyTablePro
       {showTenantForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
-            <TenantForm
-              propertyId={showTenantForm}
-              onSubmit={() => {
-                setShowTenantForm(null);
-                onUpdate();
-              }}
-              onCancel={() => setShowTenantForm(null)}
-            />
+            <TenantForm onClose={() => setShowTenantForm(null)} propertyId={showTenantForm} />
           </div>
         </div>
       )}

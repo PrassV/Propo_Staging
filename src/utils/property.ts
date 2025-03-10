@@ -1,34 +1,5 @@
 import { supabase, cachedQuery, batchRequests } from '../lib/supabase';
-import { Property } from '../types/property';
-import toast from 'react-hot-toast';
-
-// Delete property and its associations
-export const deleteProperty = async (propertyId: string) => {
-  try {
-    // First, remove all tenant associations
-    const { error: tenantLinkError } = await supabase
-      .from('property_tenants')
-      .delete()
-      .eq('property_id', propertyId);
-
-    if (tenantLinkError) throw tenantLinkError;
-
-    // Then delete the property
-    const { error: propertyError } = await supabase
-      .from('properties')
-      .delete()
-      .eq('id', propertyId);
-
-    if (propertyError) throw propertyError;
-
-    toast.success('Property deleted successfully');
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting property:', error);
-    toast.error(error.message || 'Failed to delete property');
-    return { success: false, error };
-  }
-};
+import type { Property } from '../types/property';
 
 export const getProperty = async (propertyId: string) => {
   return cachedQuery<Property>(
@@ -50,4 +21,42 @@ export const getProperty = async (propertyId: string) => {
 export const getPropertiesWithDetails = async (propertyIds: string[]) => {
   const requests = propertyIds.map(id => () => getProperty(id));
   return batchRequests(requests, 3);
+};
+
+export const deleteProperty = async (propertyId: string) => {
+  try {
+    const { error } = await supabase
+      .from('properties')
+      .delete()
+      .eq('id', propertyId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting property:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to delete property' 
+    };
+  }
+};
+
+export const deleteTenant = async (tenantId: string) => {
+  try {
+    const { error } = await supabase
+      .from('property_tenants')
+      .delete()
+      .eq('id', tenantId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting tenant:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to delete tenant' 
+    };
+  }
 };
