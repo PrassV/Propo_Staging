@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { X, Home, Calculator, FileText, Receipt, Wrench, Video, Settings } from 'lucide-react';
+import { Home, Calculator, LayoutDashboard, FileText, Receipt, Wrench, Settings, X } from 'lucide-react';
 import { useProfile } from '../hooks/useProfile';
 
 interface SidebarProps {
@@ -12,13 +12,48 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { profile } = useProfile();
 
   const menuItems = [
-    { icon: Home, label: 'Dashboard', path: '/dashboard' },
-    { icon: Calculator, label: 'Rent Estimation', path: '/dashboard/rent-estimation' },
-    { icon: FileText, label: 'Rent Agreement', path: '/dashboard/rent-agreement' },
-    { icon: Receipt, label: 'Tax Payments', path: '/dashboard/tax-payments' },
-    { icon: Wrench, label: 'Maintenance', path: '/dashboard/maintenance' },
-    { icon: Video, label: 'Monitoring', path: '/dashboard/monitoring' },
-    { icon: Settings, label: 'Settings', path: '/profile' }
+    { 
+      icon: LayoutDashboard, 
+      label: 'Dashboard', 
+      path: '/dashboard',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: Home, 
+      label: 'Properties', 
+      path: '/dashboard/properties',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: Calculator, 
+      label: 'Rent Estimation', 
+      path: '/dashboard/rent-estimation',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: FileText, 
+      label: 'Rent Agreement', 
+      path: '/dashboard/rent-agreement',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: Receipt, 
+      label: 'Tax Payments', 
+      path: '/dashboard/tax-payments',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: Wrench, 
+      label: 'Maintenance', 
+      path: '/dashboard/maintenance',
+      iconClassName: 'text-gray-600'
+    },
+    { 
+      icon: Settings, 
+      label: 'Settings', 
+      path: '/profile',
+      iconClassName: 'text-gray-600'
+    }
   ];
 
   return (
@@ -31,7 +66,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       />
 
       {/* Sidebar */}
-      <aside className={`fixed top-16 left-0 h-[calc(100vh-4rem)] w-64 bg-white border-r z-40 transform transition-transform duration-200
+      <aside className={`fixed top-0 left-0 h-screen w-64 bg-white border-r z-40 transform transition-transform duration-200
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         
         {/* Mobile close button */}
@@ -43,13 +78,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </button>
 
         {/* User info */}
-        <div className="px-6 py-4 border-b">
-          <h2 className="font-semibold truncate">{profile?.first_name} {profile?.last_name}</h2>
+        <div className="px-6 py-8">
+          <h2 className="text-xl font-semibold truncate">{profile?.first_name} {profile?.last_name}</h2>
           <p className="text-sm text-gray-600 truncate">{profile?.email}</p>
         </div>
 
         {/* Menu items */}
-        <nav className="p-4">
+        <nav className="px-3">
           <ul className="space-y-1">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
@@ -64,7 +99,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <item.icon size={20} />
+                    <item.icon size={20} className={isActive ? 'text-white' : item.iconClassName} />
                     <span className="font-medium">{item.label}</span>
                   </Link>
                 </li>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
-import Sidebar from './dashboard/owner/Sidebar';
+import Sidebar from './Sidebar';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -23,7 +23,7 @@ export default function Layout({ children }: LayoutProps) {
       <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       
       {/* Main content */}
-      <div className="flex pt-16">
+      <div className="flex">
         {user && (
           <Sidebar 
             isOpen={sidebarOpen} 
@@ -31,7 +31,7 @@ export default function Layout({ children }: LayoutProps) {
           />
         )}
 
-        <main className={`flex-1 transition-all duration-200 ${user ? 'md:pl-64' : ''}`}>
+        <main className={`flex-1 transition-all duration-200 ${user ? 'md:pl-64' : ''} pt-16`}>
           <div className="h-full">
             {children}
           </div>

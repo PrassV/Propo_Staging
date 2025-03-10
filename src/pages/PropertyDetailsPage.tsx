@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, Heart, MapPin, Star, User, Calendar, Wrench, Download } from 'lucide-react';
+import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
 import { useDataCache } from '../hooks/useDataCache';
 import { supabase } from '../lib/supabase';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -65,7 +65,13 @@ export default function PropertyDetailsPage() {
     ? property.image_urls.map(url => getImageUrl(url))
     : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center items-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
   if (error || !property) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -199,10 +205,12 @@ export default function PropertyDetailsPage() {
           {/* Map */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Location</h2>
-            <PropertyMap 
-              address={fullAddress}
-              className="h-[400px] rounded-lg overflow-hidden"
-            />
+            {property && fullAddress && (
+              <PropertyMap 
+                address={fullAddress}
+                className="h-[400px] rounded-lg overflow-hidden"
+              />
+            )}
           </div>
 
           {/* Tenants Section */}

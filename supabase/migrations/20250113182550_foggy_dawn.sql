@@ -1,9 +1,11 @@
--- Add image_urls column to properties table
+-- Add image columns to properties table
 ALTER TABLE properties
-ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}';
+ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS image_paths TEXT[] DEFAULT '{}';
 
--- Create index for better performance
+-- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_properties_image_urls ON properties USING gin(image_urls);
+CREATE INDEX IF NOT EXISTS idx_properties_image_paths ON properties USING gin(image_paths);
 
 -- Create storage policy for property images
 DO $$ 

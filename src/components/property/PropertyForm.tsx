@@ -8,13 +8,21 @@ import OverviewSection from './form-sections/OverviewSection';
 import AmenitiesSection from './form-sections/AmenitiesSection';
 import ImageUploadSection from './ImageUploadSection';
 import { PropertyFormData } from '../../types/property';
-import { uploadPropertyImages } from '../../utils/storage';
 import { useAuth } from '../../contexts/AuthContext';
+import { uploadPropertyImages } from '../../utils/storage';
 import toast from 'react-hot-toast';
 
 interface PropertyFormProps {
-  initialData?: Partial<PropertyFormData>;
-  onSubmit: (property: PropertyFormData & { image_urls?: string[] }) => void;
+  initialData?: Partial<PropertyFormData> & { 
+    id?: string;
+    image_urls?: string[];
+    image_paths?: string[];
+  };
+  onSubmit: (property: PropertyFormData & { 
+    images?: File[],
+    image_urls?: string[],
+    image_paths?: string[] 
+  }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -24,6 +32,7 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
   const [formState, setFormState] = useState<{
     data: PropertyFormData;
     images: File[];
+    existingImages: { urls: string[]; paths: string[] };
   }>({
     data: {
       propertyName: initialData?.propertyName || '',
@@ -49,9 +58,15 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
       garageSize: initialData?.garageSize || 0,
       yearBuilt: initialData?.yearBuilt || 0,
       floors: initialData?.floors || 0,
-      amenities: initialData?.amenities || []
+      amenities: initialData?.amenities || [],
+      document: null,
+      units: initialData?.units || []
     },
-    images: []
+    images: [],
+    existingImages: {
+      urls: initialData?.image_urls || [],
+      paths: initialData?.image_paths || []
+    }
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,19 +75,25 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     
     setLoading(true);
     try {
-      // Upload images first if any
-      let imageUrls: string[] = [];
+      let imageUrls = formState.existingImages.urls;
+      let imagePaths = formState.existingImages.paths;
+
+      // Only upload new images if there are any
       if (formState.images.length > 0) {
-        imageUrls = await uploadPropertyImages(formState.images, user.id);
-        if (imageUrls.length === 0) {
-          throw new Error('Failed to upload images');
+        if (initialData?.id) {
+          // If editing, upload images directly
+          const uploadResult = await uploadPropertyImages(formState.images, initialData.id);
+          imageUrls = [...formState.existingImages.urls, ...uploadResult.urls];
+          imagePaths = [...formState.existingImages.paths, ...uploadResult.paths];
         }
+        // If creating new property, images will be handled by the edge function
       }
 
-      // Submit form data with image URLs
       await onSubmit({
         ...formState.data,
-        image_urls: imageUrls
+        images: formState.images,
+        image_urls: imageUrls,
+        image_paths: imagePaths
       });
     } catch (error: any) {
       console.error('Error in form submission:', error);
@@ -80,6 +101,17 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImagesChange = (newImages: File[]) => {
+    setFormState(prev => ({ ...prev, images: newImages }));
+  };
+
+  const handleExistingImagesChange = (urls: string[], paths: string[]) => {
+    setFormState(prev => ({
+      ...prev,
+      existingImages: { urls, paths }
+    }));
   };
 
   return (
@@ -99,7 +131,9 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
 
       <ImageUploadSection
         images={formState.images}
-        onChange={(images) => setFormState(prev => ({ ...prev, images }))}
+        existingImages={formState.existingImages}
+        onChange={handleImagesChange}
+        onExistingImagesChange={handleExistingImagesChange}
         disabled={loading}
       />
 
@@ -152,4 +186,4 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
       </div>
     </form>
   );
-}
+} 

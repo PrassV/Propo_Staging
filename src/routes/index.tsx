@@ -8,6 +8,9 @@ import OnboardingFlow from '../components/onboarding/OnboardingFlow';
 import Profile from '../pages/Profile';
 import RouteGuard from './RouteGuard';
 import AddTenantPage from '../pages/dashboard/AddTenantPage';
+import RentEstimationPage from '../pages/RentEstimationPage';
+import RentAgreement from '../pages/RentAgreement';
+import MaintenanceDashboard from '../pages/maintenance/MaintenanceDashboard';
 
 export const routes: RouteObject[] = [
   {
@@ -55,6 +58,30 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard>
         <PropertyDetailsPage />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/rent-estimation',
+    element: (
+      <RouteGuard>
+        <RentEstimationPage />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/rent-agreement',
+    element: (
+      <RouteGuard>
+        <RentAgreement />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/maintenance',
+    element: (
+      <RouteGuard>
+        <MaintenanceDashboard />
       </RouteGuard>
     )
   },

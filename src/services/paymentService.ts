@@ -8,6 +8,7 @@ interface NotifyTenantParams {
   unitNumber: string;
 }
 
+
 export async function notifyTenant(params: NotifyTenantParams) {
   try {
     const { data, error } = await supabase.functions.invoke('notify-tenant', {
