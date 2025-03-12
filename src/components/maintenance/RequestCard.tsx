@@ -20,6 +20,10 @@ interface RequestCardProps {
 export default function RequestCard({ request }: RequestCardProps) {
   const navigate = useNavigate();
 
+  const handleClick = () => {
+    navigate(`/dashboard/maintenance/${request.id}`);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'new': return 'bg-blue-100 text-blue-800';
@@ -39,10 +43,7 @@ export default function RequestCard({ request }: RequestCardProps) {
   };
 
   return (
-    <div 
-      onClick={() => navigate(`/dashboard/maintenance/${request.id}`)}
-      className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-    >
+    <div onClick={handleClick} className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex justify-between items-start mb-2">
         <div>
           <h3 className="font-semibold">{request.title}</h3>

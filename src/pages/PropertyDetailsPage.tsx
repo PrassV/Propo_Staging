@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
 import { useDataCache } from '../hooks/useDataCache';
@@ -22,8 +22,9 @@ export default function PropertyDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  // Use data cache hook for property data
-  const { data: property, loading, error, refetch } = useDataCache(`property-${id}`, async () => {
+  const fetchPropertyData = useCallback(async () => {
+    if (!id) throw new Error('Property ID is required');
+    
     const { data, error } = await supabase
       .from('properties')
       .select(`
@@ -50,40 +51,22 @@ export default function PropertyDetailsPage() {
       .single();
 
     if (error) throw error;
-    if (!data) throw new Error('Property not found');
+    return data;
+  }, [id]);
 
-    return {
-      ...data,
-      tenants: data.tenants?.map((pt: any) => ({
-        ...pt.tenant,
-        unit_number: pt.unit_number
-      })) || []
-    };
-  });
+  const { data: property, loading, error } = useDataCache(
+    `property-${id}`,
+    fetchPropertyData,
+    { ttl: 5 * 60 * 1000, revalidate: false }
+  );
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <div>Error loading property details</div>;
+  if (!property) return <div>Property not found</div>;
 
   const images = property?.image_urls?.length 
     ? property.image_urls.map(url => getImageUrl(url))
     : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center items-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-  if (error || !property) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-          <p>{error?.message || 'Property not found'}</p>
-          <button onClick={() => navigate('/dashboard')} className="mt-2 text-sm underline">
-            Return to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const fullAddress = [
     property.address_line1,

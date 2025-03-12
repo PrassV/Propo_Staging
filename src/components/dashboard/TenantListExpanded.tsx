@@ -3,6 +3,8 @@ import { deleteTenant } from '../../utils/property';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 import { Property } from '../../types/property';
+import { api } from '../../services/api';
+import { supabase } from '../../lib/supabase';
 
 interface TenantListExpandedProps {
   property: Property;
@@ -13,17 +15,28 @@ export default function TenantListExpanded({ property, onUpdate }: TenantListExp
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleDeleteTenant = async (tenantId: string) => {
-    if (!confirm('Are you sure you want to remove this tenant? This action cannot be undone.')) {
-      return;
-    }
+    if (!confirm('Are you sure you want to remove this tenant?')) return;
 
     setLoading(tenantId);
-    const result = await deleteTenant(tenantId);
-    if (result.success) {
+    try {
+      // Complex operations moved to FastAPI
+      await api.post(`/tenants/${tenantId}/terminate`);
+      
+      // Simple DB update stays in Supabase
+      const { error } = await supabase
+        .from('tenants')
+        .update({ status: 'terminated' })
+        .eq('id', tenantId);
+
+      if (error) throw error;
+      
       toast.success('Tenant removed successfully');
       onUpdate();
+    } catch (error) {
+      toast.error('Failed to remove tenant');
+    } finally {
+      setLoading(null);
     }
-    setLoading(null);
   };
 
   return (
