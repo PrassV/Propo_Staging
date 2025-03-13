@@ -21,7 +21,7 @@ class PropertyBase(BaseModel):
     state: str
     pincode: str
     country: Optional[str] = "India"
-    size_sqft: float
+    size_sqft: int
     bedrooms: int
     bathrooms: int
     description: Optional[str] = None
