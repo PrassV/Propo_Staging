@@ -29,28 +29,13 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 DEBUG = ENVIRONMENT.lower() == "development"
 
-# CORS settings with additional domains
-DEFAULT_CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "https://propo-staging.vercel.app",
-    "https://propify.netlify.app",
-    "https://propostaging-production.up.railway.app",
-]
-
-# Add FRONTEND_URL to CORS_ORIGINS if it's set
-CORS_ORIGINS = DEFAULT_CORS_ORIGINS.copy()
-if FRONTEND_URL and FRONTEND_URL not in CORS_ORIGINS:
-    CORS_ORIGINS.append(FRONTEND_URL)
-
-# In development mode, allow all origins for easier local development
-if DEBUG:
-    print("DEBUG mode is ON, allowing all origins (*) for CORS")
-    CORS_ORIGINS.append("*")
-else:
-    print(f"Running in {ENVIRONMENT} mode with specific CORS origins: {CORS_ORIGINS}")
-
-# Print the final CORS configuration for debugging
-print(f"Configured CORS origins: {CORS_ORIGINS}")
+# CORS configuration
+CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS", "*")
+# Convert to list, handle comma-separated values
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",") if origin.strip()]
+# If empty, add a wildcard
+if not CORS_ORIGINS:
+    CORS_ORIGINS = ["*"]
+    
+# Log CORS configuration for debugging
+print(f"CORS_ORIGINS configured as: {CORS_ORIGINS}")

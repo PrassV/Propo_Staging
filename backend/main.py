@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 import os
 from starlette.middleware.base import BaseHTTPMiddleware
+import traceback
 
 # Import configuration
 from config.settings import (
@@ -34,55 +35,46 @@ app = FastAPI(
 # Add a print statement to debug CORS origins
 print(f"Configuring CORS with allowed origins: {CORS_ORIGINS}")
 
-# Create a custom CORS middleware instead of using the built-in one
-class CustomCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Handle preflight OPTIONS requests
-        if request.method == "OPTIONS":
-            # Get the origin from the request headers
-            origin = request.headers.get("origin")
-            
-            # Check if the origin is allowed and not None
-            if origin and (origin in CORS_ORIGINS or "*" in CORS_ORIGINS):
-                # Create a custom response with CORS headers
-                headers = {
-                    "Access-Control-Allow-Origin": origin,
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                    "Access-Control-Allow-Credentials": "true",
-                    "Access-Control-Max-Age": "86400",  # 24 hours
-                }
-                return Response(status_code=200, headers=headers)
-        
-        # Handle regular requests
-        response = await call_next(request)
-        
-        # Add CORS headers to all responses
-        origin = request.headers.get("origin")
-        # Only set the header if origin is not None and is allowed
-        if origin and (origin in CORS_ORIGINS or "*" in CORS_ORIGINS):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-        
-        return response
-
-# Add middleware
-app.add_middleware(CustomCORSMiddleware)
+# Use FastAPI's built-in CORS middleware instead of custom middleware
+# This is more reliable and well-tested
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Add a logging middleware
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         
-        response = await call_next(request)
-        
-        # Calculate request processing time
-        process_time = time.time() - start_time
-        
-        # Log request details
-        print(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.4f}s")
-        
-        return response
+        try:
+            # Try to process the request
+            response = await call_next(request)
+            
+            # Calculate request processing time
+            process_time = time.time() - start_time
+            
+            # Log request details
+            print(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.4f}s")
+            
+            return response
+        except Exception as e:
+            # Log the exception with traceback
+            process_time = time.time() - start_time
+            print(f"ERROR processing {request.method} {request.url.path} after {process_time:.4f}s:")
+            print(f"Exception: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Return a 500 response with error details
+            error_message = str(e) if DEBUG else "Internal server error"
+            return Response(
+                content=f'{{"error": "{error_message}"}}',
+                status_code=500,
+                media_type="application/json"
+            )
 
 # Add middleware
 app.add_middleware(LoggingMiddleware)
@@ -101,11 +93,17 @@ app.include_router(data_router)
 
 @app.get("/")
 async def root():
-    return {
-        "message": "Welcome to the Property Management API",
-        "version": API_VERSION,
-        "documentation": "/docs"
-    }
+    """Root endpoint for API health check"""
+    try:
+        return {
+            "status": "ok",
+            "message": "API is running",
+            "version": API_VERSION
+        }
+    except Exception as e:
+        # Log any error that might occur
+        print(f"Error in root endpoint: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/cors-test")
 async def cors_test():
@@ -119,6 +117,21 @@ async def health_check():
         "api_version": API_VERSION,
         "environment": os.getenv("ENVIRONMENT", "development")
     }
+
+# Error handler for unhandled exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Log the exception
+    print(f"Global exception handler caught: {str(exc)}")
+    print(traceback.format_exc())
+    
+    # Return a JSON response with error details
+    error_message = str(exc) if DEBUG else "Internal server error"
+    return Response(
+        content=f'{{"error": "{error_message}"}}',
+        status_code=500,
+        media_type="application/json"
+    )
 
 # Startup and shutdown events
 @app.on_event("startup")
