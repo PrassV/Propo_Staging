@@ -245,7 +245,7 @@ class PropertyCreateWithImages(BaseModel):
     state: str
     zip_code: str
     country: str = "India"
-    size_sqft: float
+    size_sqft: int
     bedrooms: int
     bathrooms: int
     amenities: Optional[List[str]] = None
