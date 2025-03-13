@@ -30,8 +30,9 @@ export default function AddPropertyPage() {
 
       const images = await Promise.all(imagePromises);
 
-      // Call the FastAPI endpoint
-      const response = await fetch('/api/properties/create-with-images', {
+      // Call the FastAPI endpoint with the full API URL
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/properties/create-with-images`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
