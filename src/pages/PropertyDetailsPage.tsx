@@ -1,6 +1,6 @@
 import { useState, useCallback, lazy, Suspense, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
+import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download, Image as ImageIcon } from 'lucide-react';
 import { useDataCache } from '../hooks/useDataCache';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TenantList from '../components/tenant/TenantList';
@@ -9,10 +9,13 @@ const NewRequestModal = lazy(() => import('../components/maintenance/NewRequestM
 const RecordPaymentModal = lazy(() => import('../components/payment/RecordPaymentModal'));
 import PropertyForm from '../components/property/PropertyForm';
 import PropertyMap from '../components/property/PropertyMap';
-import { getImageUrl } from '../utils/storage';
+import { getImageUrl, findWorkingBucket } from '../utils/storage';
 import toast from 'react-hot-toast';
 import { apiFetch, fetchPropertyData } from '../utils/api';
 import { PropertyFormData } from '../types/property';
+
+// Default fallback image URL
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80";
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -23,6 +26,8 @@ export default function PropertyDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
+  const [processedImages, setProcessedImages] = useState<string[]>([DEFAULT_IMAGE]);
+  const [loadingImages, setLoadingImages] = useState<boolean>(true);
 
   const fetchData = useCallback(async () => {
     if (!id) throw new Error('Property ID is required');
@@ -42,17 +47,49 @@ export default function PropertyDetailsPage() {
     { ttl: 5 * 60 * 1000, revalidate: false }
   );
 
-  // Add debugging logs when property data loads
+  // Process images when property data loads
   useEffect(() => {
-    if (property) {
-      console.log('Property data loaded:', property);
-      console.log('Image URLs:', property.image_urls);
-      
-      // Check if image_urls exists and has valid entries
-      if (!property.image_urls || property.image_urls.length === 0) {
-        console.warn('No image URLs found for this property');
+    const processImages = async () => {
+      if (!property) return;
+
+      try {
+        setLoadingImages(true);
+        
+        // Check if bucket exists
+        await findWorkingBucket();
+        
+        console.log('Property data loaded:', property);
+        console.log('Raw Image URLs:', property.image_urls);
+        
+        // Check if image_urls exists and has valid entries
+        if (!property.image_urls || property.image_urls.length === 0) {
+          console.warn('No image URLs found for this property');
+          setProcessedImages([DEFAULT_IMAGE]);
+          return;
+        }
+
+        // Process all image URLs
+        const imagePromises = property.image_urls.map((url: string) => getImageUrl(url));
+        const resolvedImages = await Promise.all(imagePromises);
+        
+        console.log('Processed Images:', resolvedImages);
+        
+        // If we have valid images, use them
+        if (resolvedImages.length > 0) {
+          setProcessedImages(resolvedImages);
+        } else {
+          setProcessedImages([DEFAULT_IMAGE]);
+        }
+      } catch (error) {
+        console.error('Error processing images:', error);
+        setProcessedImages([DEFAULT_IMAGE]);
+        setImageLoadError(true);
+      } finally {
+        setLoadingImages(false);
       }
-    }
+    };
+
+    processImages();
   }, [property]);
 
   if (loading) return <LoadingSpinner />;
@@ -89,11 +126,6 @@ export default function PropertyDetailsPage() {
     setImageLoadError(true);
     console.warn('Error loading property images');
   };
-
-  // Get images with fallback to default image if there's an error
-  const images = property?.image_urls?.length && !imageLoadError
-    ? property.image_urls.map((url: string) => getImageUrl(url))
-    : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
 
   const fullAddress = [
     property.address_line1,
@@ -169,23 +201,37 @@ export default function PropertyDetailsPage() {
         </div>
       </div>
 
-      {/* Image Gallery */}
+      {/* Image Gallery - With Error State Handling */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="col-span-2 row-span-2 relative">
-          <img
-            src={images[selectedImage]}
-            alt={property.property_name}
-            className="w-full h-full object-cover rounded-lg"
-            onError={handleImageError}
-          />
-          {images.length > 1 && (
+          {loadingImages ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 rounded-lg">
+              <LoadingSpinner />
+              <p className="text-gray-500 mt-2">Loading property images...</p>
+            </div>
+          ) : imageLoadError ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 rounded-lg">
+              <ImageIcon size={48} className="text-gray-400 mb-2" />
+              <p className="text-gray-500">Property image unavailable</p>
+            </div>
+          ) : (
+            <img
+              src={processedImages[selectedImage] || DEFAULT_IMAGE}
+              alt={property.property_name}
+              className="w-full h-full object-cover rounded-lg"
+              onError={handleImageError}
+            />
+          )}
+          {processedImages.length > 1 && !imageLoadError && !loadingImages && (
             <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
-              {selectedImage + 1} / {images.length}
+              {selectedImage + 1} / {processedImages.length}
             </div>
           )}
         </div>
+        
+        {/* Thumbnail images */}
         <div className="grid grid-cols-2 gap-4 col-span-2">
-          {images.slice(1, 5).map((image: string, index: number) => (
+          {!loadingImages && !imageLoadError && processedImages.slice(1, 5).map((image: string, index: number) => (
             <img
               key={index}
               src={image}
@@ -195,6 +241,30 @@ export default function PropertyDetailsPage() {
               onError={handleImageError}
             />
           ))}
+          
+          {/* If loading, show loading placeholders */}
+          {loadingImages && 
+            Array.from({ length: 4 }).map((_, index) => (
+              <div 
+                key={index}
+                className="w-full h-48 flex items-center justify-center bg-gray-100 rounded-lg"
+              >
+                <LoadingSpinner />
+              </div>
+            ))
+          }
+          
+          {/* If no thumbnail images or error, show placeholders */}
+          {!loadingImages && (imageLoadError || processedImages.length <= 1) && 
+            Array.from({ length: 4 }).map((_, index) => (
+              <div 
+                key={index}
+                className="w-full h-48 flex items-center justify-center bg-gray-100 rounded-lg"
+              >
+                <ImageIcon size={24} className="text-gray-400" />
+              </div>
+            ))
+          }
         </div>
       </div>
 
@@ -308,7 +378,7 @@ export default function PropertyDetailsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Units</span>
-                  <span className="font-medium">{property.number_of_units}</span>
+                  <span className="font-medium">{property.number_of_units || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Occupied Units</span>
@@ -317,7 +387,7 @@ export default function PropertyDetailsPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Vacant Units</span>
                   <span className="font-medium">
-                    {property.number_of_units - (property.tenants?.length || 0)}
+                    {(property.number_of_units || 0) - (property.tenants?.length || 0)}
                   </span>
                 </div>
               </div>

@@ -90,4 +90,67 @@ export const fetchPropertyData = async (propertyId: string) => {
   }
   
   return property;
-}; 
+};
+
+/**
+ * Helper function to check the status of a Supabase storage bucket
+ * This can be called from the console to debug storage issues
+ */
+export async function checkStorageBucket(bucketName = 'propertyimage') {
+  try {
+    // Dynamically import to avoid circular dependencies
+    const { supabase } = await import('../lib/supabase');
+    
+    // First, list buckets to check if our bucket exists
+    const { data: buckets, error: bucketsError } = await supabase.storage
+      .listBuckets();
+    
+    if (bucketsError) {
+      console.error('Error listing buckets:', bucketsError);
+      return {
+        status: 'error',
+        message: `Failed to list buckets: ${bucketsError.message}`,
+        error: bucketsError
+      };
+    }
+    
+    console.log('All available buckets:', buckets?.map(b => b.name));
+    
+    const bucketExists = buckets?.some(b => b.name === bucketName);
+    
+    if (!bucketExists) {
+      return {
+        status: 'not_found',
+        message: `Bucket '${bucketName}' does not exist`,
+        availableBuckets: buckets?.map(b => b.name) || []
+      };
+    }
+    
+    // Try to list some files in the bucket
+    const { data: files, error: filesError } = await supabase.storage
+      .from(bucketName)
+      .list();
+    
+    if (filesError) {
+      return {
+        status: 'error',
+        message: `Bucket exists but cannot access files: ${filesError.message}`,
+        error: filesError
+      };
+    }
+    
+    return {
+      status: 'success',
+      message: `Bucket '${bucketName}' exists and is accessible`,
+      fileCount: files?.length || 0,
+      sampleFiles: files?.slice(0, 5) || []
+    };
+  } catch (error) {
+    console.error('Error checking storage bucket:', error);
+    return {
+      status: 'error',
+      message: 'Unexpected error checking storage bucket',
+      error
+    };
+  }
+} 
