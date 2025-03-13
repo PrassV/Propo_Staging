@@ -15,7 +15,8 @@ AUTH_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Service URLs
-AGREEMENT_SERVICE_URL = os.getenv("AGREEMENT_SERVICE_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # External API keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -29,13 +30,18 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 DEBUG = ENVIRONMENT == "development"
 
 # CORS settings
-CORS_ORIGINS = [
+DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    "https://propify.netlify.app",
 ]
 
+# Add FRONTEND_URL to CORS_ORIGINS if it's set
+CORS_ORIGINS = DEFAULT_CORS_ORIGINS.copy()
+if FRONTEND_URL and FRONTEND_URL not in CORS_ORIGINS:
+    CORS_ORIGINS.append(FRONTEND_URL)
+
+# In development mode, allow all origins
 if DEBUG:
     CORS_ORIGINS.append("*")
