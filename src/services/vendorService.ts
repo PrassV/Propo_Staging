@@ -1,35 +1,29 @@
-import { supabase } from '../lib/supabase';
 import { Vendor, MaintenanceCategory } from '../types/maintenance';
 import toast from 'react-hot-toast';
 
-interface SupabaseError {
+interface ApiError {
   message: string;
-  details: string;
-  hint: string;
-  code: string;
+  details?: string;
 }
 
 export async function getVendors(category?: MaintenanceCategory) {
   try {
-
-    // If not in cache, fetch from database
-    let query = supabase
-      .from('maintenance_vendors')
-      .select('*')
-      .order('rating', { ascending: false });
-
+    const url = new URL(`${import.meta.env.VITE_API_URL}/maintenance/vendors`);
     if (category) {
-      query = query.contains('categories', [category]);
+      url.searchParams.append('category', category);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-
-
+    const data = await response.json();
     return { success: true, data };
   } catch (error: unknown) {
-    const err = error as Error | SupabaseError;
+    const err = error as Error | ApiError;
     console.error('Error fetching vendors:', err);
     toast.error(err.message || 'Failed to fetch vendors');
     return { success: false, error: err };
@@ -38,18 +32,18 @@ export async function getVendors(category?: MaintenanceCategory) {
 
 export async function createVendor(data: Partial<Vendor>) {
   try {
-    const { data: vendor, error } = await supabase
-      .from('maintenance_vendors')
-      .insert(data)
-      .select()
-      .single();
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/maintenance/vendors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
 
-    if (error) throw error;
-
-  
+    const vendor = await response.json();
     return { success: true, data: vendor };
   } catch (error: unknown) {
-    const err = error as Error | SupabaseError;
+    const err = error as Error | ApiError;
     console.error('Error creating vendor:', err);
     toast.error(err.message || 'Failed to create vendor');
     return { success: false, error: err };

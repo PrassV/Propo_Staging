@@ -1,67 +1,42 @@
-```typescript
-import { supabase } from '../lib/supabase';
-import type { InvitationVerificationResponse } from '../types/invitation';
+import type { InvitationVerificationResponse, InvitationData, InvitationResponse } from '../types/invitation';
 
 export async function verifyInvitationToken(token: string): Promise<InvitationVerificationResponse> {
   try {
-    const { data, error } = await supabase
-      .from('tenant_invitations')
-      .select(`
-        *,
-        property:properties(
-          id,
-          property_name,
-          address_line1,
-          city,
-          state,
-          property_type,
-          owner:user_profiles(
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        ),
-        tenant:tenants(
-          id,
-          name,
-          email,
-          phone,
-          rental_type,
-          rental_amount,
-          maintenance_fee,
-          rental_frequency,
-          rental_start_date,
-          rental_end_date
-        )
-      `)
-      .eq('token', token)
-      .eq('status', 'pending')
-      .single();
-
-    if (error) throw error;
-    if (!data) throw new Error('Invalid or expired invitation');
-
-    // Check if invitation has expired
-    if (new Date(data.expires_at) < new Date()) {
-      await supabase
-        .from('tenant_invitations')
-        .update({ status: 'expired' })
-        .eq('token', token);
-
-      throw new Error('This invitation has expired');
-    }
-
-    return {
-      success: true,
-      data: data
-    };
-  } catch (error: any) {
+    // Using fetch API to make the API call
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/invitations/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+    
+    return await response.json();
+  } catch (error: unknown) {
     console.error('Error verifying invitation:', error);
     return {
       success: false,
-      error: error.message || 'Invalid invitation'
+      error: error instanceof Error ? error.message : 'Invalid invitation'
     };
   }
 }
-```
+
+// Other invitation-related functions
+export async function sendInvitation(data: InvitationData): Promise<InvitationResponse> {
+  try {
+    // Using fetch API to make the call
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/invitations/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    return await response.json();
+  } catch (error: unknown) {
+    console.error('Error sending invitation:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to send invitation';
+    throw new Error(errorMessage);
+  }
+}

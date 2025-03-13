@@ -8,63 +8,46 @@ interface NotifyTenantParams {
   unitNumber: string;
 }
 
-
 export async function notifyTenant(params: NotifyTenantParams) {
   try {
-    const { data, error } = await supabase.functions.invoke('notify-tenant', {
-      body: params
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/payments/notify-tenant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
     });
 
-    if (error) throw error;
+    const data = await response.json();
     return { success: true, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error notifying tenant:', error);
     return { 
       success: false, 
-      error: error.message || 'Failed to notify tenant'
+      error: error instanceof Error ? error.message : 'Failed to notify tenant'
     };
   }
 }
 
 export async function getPaymentHistory(tenantId: string, type: 'rent' | 'electricity' | 'tax') {
   try {
-    let query;
-    
-    switch (type) {
-      case 'rent':
-        query = supabase
-          .from('payment_history')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .order('period_start', { ascending: false });
-        break;
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/payments/history/${tenantId}?type=${type}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-      case 'electricity':
-        query = supabase
-          .from('electricity_payments')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .order('bill_period', { ascending: false });
-        break;
-
-      case 'tax':
-        query = supabase
-          .from('tax_payments')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .order('due_date', { ascending: false });
-        break;
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
+    const data = await response.json();
     return { success: true, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching payment history:', error);
     return { 
       success: false, 
-      error: error.message || 'Failed to fetch payment history'
+      error: error instanceof Error ? error.message : 'Failed to fetch payment history'
     };
   }
 }

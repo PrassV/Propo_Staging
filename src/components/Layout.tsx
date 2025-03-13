@@ -13,10 +13,10 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // Don't show layout on auth pages and landing page
+  // Don't show layout on auth pages
   const isAuthPage = location.pathname.startsWith('/invite/');
-  const isLandingPage = location.pathname === '/';
-  if (isAuthPage || (isLandingPage && !user)) return <>{children}</>;
+  // Only skip the layout wrapper for auth pages, but always show Navbar
+  if (isAuthPage) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-white">

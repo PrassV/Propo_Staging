@@ -8,6 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// Initialize Supabase client for authentication only
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function cachedQuery<T>(

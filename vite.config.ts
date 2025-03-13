@@ -3,6 +3,19 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      }
+    }
+  },
+  define: {
+    // Use environment variable with fallback for local development
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '/api')
+  },
   build: {
     rollupOptions: {
       output: {

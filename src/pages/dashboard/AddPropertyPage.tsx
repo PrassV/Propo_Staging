@@ -14,15 +14,14 @@ export default function AddPropertyPage() {
     if (!user) return;
 
     try {
-      // Convert images to base64 for the edge function
+      // Convert images to base64 for the FastAPI endpoint
       const imagePromises = (formData.images || []).map((file) => {
-        return new Promise<{ fileName: string; base64Data: string; fileType: string }>((resolve) => {
+        return new Promise<{ image_name: string; image_data: string }>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => {
             resolve({
-              fileName: file.name,
-              base64Data: reader.result as string,
-              fileType: file.type
+              image_name: file.name,
+              image_data: reader.result as string
             });
           };
           reader.readAsDataURL(file);
@@ -31,49 +30,36 @@ export default function AddPropertyPage() {
 
       const images = await Promise.all(imagePromises);
 
-      // Call the Edge Function
-      const response = await fetch('/api/createPropertyWithImages', {
+      // Call the FastAPI endpoint
+      const response = await fetch('/api/properties/create-with-images', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
-          propertyData: {
-            owner_id: user.id,
-            property_name: formData.propertyName,
-            property_type: formData.propertyType,
-            number_of_units: formData.numberOfUnits,
-            address_line1: formData.addressLine1,
-            address_line2: formData.addressLine2,
-            city: formData.city,
-            state: formData.state,
-            pincode: formData.pincode,
-            survey_number: formData.surveyNumber,
-            door_number: formData.doorNumber,
-            description: formData.description,
-            category: formData.category,
-            listed_in: formData.listedIn,
-            price: formData.price,
-            yearly_tax_rate: formData.yearlyTaxRate,
-            size_sqft: formData.sizeSqft,
-            bedrooms: formData.bedrooms,
-            bathrooms: formData.bathrooms,
-            kitchens: formData.kitchens,
-            garages: formData.garages,
-            garage_size: formData.garageSize,
-            year_built: formData.yearBuilt,
-            floors: formData.floors,
-            amenities: formData.amenities || []
-          },
-          images
+          property_name: formData.propertyName,
+          address_line1: formData.addressLine1,
+          address_line2: formData.addressLine2 || null,
+          city: formData.city,
+          state: formData.state,
+          zip_code: formData.pincode,
+          country: "India",
+          property_type: formData.propertyType,
+          size_sqft: formData.sizeSqft,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          amenities: formData.amenities || [],
+          description: formData.description || null,
+          images: images,
+          owner_id: user.id
         })
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to create property');
+        throw new Error(result.detail || 'Failed to create property');
       }
 
       toast.success('Property added successfully!');
