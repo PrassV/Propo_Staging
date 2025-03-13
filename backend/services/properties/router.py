@@ -245,9 +245,20 @@ class PropertyCreateWithImages(BaseModel):
     state: str
     zip_code: str
     country: str = "India"
+    survey_number: str
+    door_number: str
     size_sqft: int
     bedrooms: int
     bathrooms: int
+    kitchens: Optional[int] = None
+    garages: Optional[int] = None
+    garage_size: Optional[int] = None
+    year_built: Optional[int] = None
+    floors: Optional[int] = None
+    price: Optional[float] = None
+    yearly_tax_rate: Optional[float] = None
+    category: Optional[str] = None
+    listed_in: Optional[str] = None
     amenities: Optional[List[str]] = None
     description: Optional[str] = None
     images: List[ImageData]
@@ -270,9 +281,20 @@ async def create_property_with_images(property_data: PropertyCreateWithImages):
         "state": property_data.state,
         "pincode": property_data.zip_code,
         "country": property_data.country,
+        "survey_number": property_data.survey_number,
+        "door_number": property_data.door_number,
         "property_type": property_data.property_type,
         "bedrooms": property_data.bedrooms,
         "bathrooms": property_data.bathrooms,
+        "kitchens": property_data.kitchens,
+        "garages": property_data.garages,
+        "garage_size": property_data.garage_size,
+        "year_built": property_data.year_built,
+        "floors": property_data.floors,
+        "price": property_data.price,
+        "yearly_tax_rate": property_data.yearly_tax_rate,
+        "category": property_data.category,
+        "listed_in": property_data.listed_in,
         "size_sqft": property_data.size_sqft,
         "owner_id": property_data.owner_id,
         "description": property_data.description,
