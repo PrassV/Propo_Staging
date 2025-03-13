@@ -42,8 +42,8 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
             # Get the origin from the request headers
             origin = request.headers.get("origin")
             
-            # Check if the origin is allowed
-            if origin in CORS_ORIGINS or "*" in CORS_ORIGINS:
+            # Check if the origin is allowed and not None
+            if origin and (origin in CORS_ORIGINS or "*" in CORS_ORIGINS):
                 # Create a custom response with CORS headers
                 headers = {
                     "Access-Control-Allow-Origin": origin,
@@ -59,7 +59,8 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
         
         # Add CORS headers to all responses
         origin = request.headers.get("origin")
-        if origin in CORS_ORIGINS or "*" in CORS_ORIGINS:
+        # Only set the header if origin is not None and is allowed
+        if origin and (origin in CORS_ORIGINS or "*" in CORS_ORIGINS):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
         
