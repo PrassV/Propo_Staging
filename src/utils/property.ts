@@ -1,4 +1,5 @@
 import { supabase, cachedQuery, batchRequests } from '../lib/supabase';
+import { apiFetch } from './api';
 import type { Property } from '../types/property';
 
 export const getProperty = async (propertyId: string) => {
@@ -25,12 +26,14 @@ export const getPropertiesWithDetails = async (propertyIds: string[]) => {
 
 export const deleteProperty = async (propertyId: string) => {
   try {
-    const { error } = await supabase
-      .from('properties')
-      .delete()
-      .eq('id', propertyId);
+    const response = await apiFetch(`properties/${propertyId}`, {
+      method: 'DELETE'
+    });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to delete property');
+    }
 
     return { success: true };
   } catch (error) {
@@ -44,12 +47,14 @@ export const deleteProperty = async (propertyId: string) => {
 
 export const deleteTenant = async (tenantId: string) => {
   try {
-    const { error } = await supabase
-      .from('property_tenants')
-      .delete()
-      .eq('id', tenantId);
+    const response = await apiFetch(`invitations/tenant/${tenantId}`, {
+      method: 'DELETE'
+    });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to delete tenant');
+    }
 
     return { success: true };
   } catch (error) {

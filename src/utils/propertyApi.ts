@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { apiFetch } from './api';
 
 export interface DeleteResult {
   success: boolean;
@@ -7,12 +7,14 @@ export interface DeleteResult {
 
 export const deleteProperty = async (propertyId: string): Promise<DeleteResult> => {
   try {
-    const { error } = await supabase
-      .from('properties')
-      .delete()
-      .eq('id', propertyId);
+    const response = await apiFetch(`properties/${propertyId}`, {
+      method: 'DELETE'
+    });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to delete property');
+    }
 
     return { success: true };
   } catch (error) {

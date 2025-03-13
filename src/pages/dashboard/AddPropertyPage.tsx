@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import PropertyForm from '../../components/property/PropertyForm';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { PropertyFormData } from '../../types/property';
+import { apiFetch } from '../../utils/api';
 
 export default function AddPropertyPage() {
   const navigate = useNavigate();
@@ -29,15 +29,9 @@ export default function AddPropertyPage() {
       });
 
       const images = await Promise.all(imagePromises);
-
-      // Call the FastAPI endpoint with the full API URL
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/properties/create-with-images`, {
+      
+      const response = await apiFetch('properties/create-with-images', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
         body: JSON.stringify({
           property_name: formData.propertyName,
           address_line1: formData.addressLine1,

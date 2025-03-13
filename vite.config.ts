@@ -6,20 +6,24 @@ export default defineConfig(({ mode }) => {
   // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, process.cwd(), '');
   
+  // Default API URL - use environment variable or fallback to Railway URL
+  const apiUrl = env.VITE_API_URL || 'https://propostaging-production.up.railway.app';
+  
   return {
     plugins: [react()],
     server: {
       proxy: {
         '/api': {
-          target: env.VITE_API_URL || 'http://localhost:8000',
+          target: apiUrl,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         }
       }
     },
     define: {
-      // Use environment variable with fallback for local development
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'http://localhost:8000')
+      // Define environment variables for client-side code
+      'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'import.meta.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL || 'https://propo-staging.vercel.app')
     },
     build: {
       rollupOptions: {
