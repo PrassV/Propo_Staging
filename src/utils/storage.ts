@@ -11,7 +11,7 @@ interface UploadResult {
   error?: Error;
 }
 
-export async function uploadImage(file: File, propertyId: string, category: ImageCategory = 'other'): Promise<UploadResult> {
+export async function uploadImage(file: File, propertyId: string): Promise<UploadResult> {
   try {
     if (!file.type.startsWith('image/')) {
       throw new Error(`${file.name} is not an image file`);
@@ -68,15 +68,34 @@ export async function uploadPropertyImages(files: File[], propertyId: string): P
 }
 
 export function getImageUrl(path: string | null | undefined): string {
-  if (!path) return DEFAULT_IMAGE;
-  
-  if (path.startsWith('http')) {
-    return path;
-  }
-  
-  const { data: { publicUrl } } = supabase.storage
-    .from('propertyimage')
-    .getPublicUrl(path);
+  try {
+    if (!path) {
+      console.warn('No image path provided, using default image');
+      return DEFAULT_IMAGE;
+    }
     
-  return publicUrl || DEFAULT_IMAGE;
+    if (path.startsWith('http')) {
+      return path;
+    }
+    
+    // Check if path is valid for Supabase storage
+    if (!path.includes('/')) {
+      console.warn(`Invalid image path format: ${path}, using default image`);
+      return DEFAULT_IMAGE;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('propertyimage')
+      .getPublicUrl(path);
+      
+    if (!publicUrl) {
+      console.warn(`Failed to get public URL for path: ${path}, using default image`);
+      return DEFAULT_IMAGE;
+    }
+    
+    return publicUrl;
+  } catch (error) {
+    console.error('Error getting image URL:', error);
+    return DEFAULT_IMAGE;
+  }
 }

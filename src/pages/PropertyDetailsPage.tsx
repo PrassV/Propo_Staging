@@ -1,16 +1,17 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, lazy, Suspense, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
 import { useDataCache } from '../hooks/useDataCache';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TenantList from '../components/tenant/TenantList';
-import NewRequestModal from '../components/maintenance/NewRequestModal';
-import RecordPaymentModal from '../components/payment/RecordPaymentModal';
+// Lazy load these components to improve initial load time
+const NewRequestModal = lazy(() => import('../components/maintenance/NewRequestModal'));
+const RecordPaymentModal = lazy(() => import('../components/payment/RecordPaymentModal'));
 import PropertyForm from '../components/property/PropertyForm';
 import PropertyMap from '../components/property/PropertyMap';
 import { getImageUrl } from '../utils/storage';
 import toast from 'react-hot-toast';
-import { apiFetch } from '../utils/api';
+import { apiFetch, fetchPropertyData } from '../utils/api';
 import { PropertyFormData } from '../types/property';
 
 export default function PropertyDetailsPage() {
@@ -21,20 +22,14 @@ export default function PropertyDetailsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState<boolean>(false);
 
-  const fetchPropertyData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!id) throw new Error('Property ID is required');
     
     try {
-      // Use FastAPI endpoint instead of direct Supabase call
-      const response = await apiFetch(`properties/${id}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to fetch property details');
-      }
-      
-      return await response.json();
+      // Use the specialized property data fetching function
+      return await fetchPropertyData(id);
     } catch (error) {
       console.error('Error fetching property:', error);
       throw error;
@@ -43,15 +38,60 @@ export default function PropertyDetailsPage() {
 
   const { data: property, loading, error, refetch } = useDataCache(
     `property-${id}`,
-    fetchPropertyData,
+    fetchData,
     { ttl: 5 * 60 * 1000, revalidate: false }
   );
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <div>Error loading property details</div>;
-  if (!property) return <div>Property not found</div>;
+  // Add debugging logs when property data loads
+  useEffect(() => {
+    if (property) {
+      console.log('Property data loaded:', property);
+      console.log('Image URLs:', property.image_urls);
+      
+      // Check if image_urls exists and has valid entries
+      if (!property.image_urls || property.image_urls.length === 0) {
+        console.warn('No image URLs found for this property');
+      }
+    }
+  }, [property]);
 
-  const images = property?.image_urls?.length 
+  if (loading) return <LoadingSpinner />;
+  if (error) return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <h2 className="text-xl font-bold text-red-600 mb-2">Error loading property details</h2>
+        <p className="text-gray-700">{error.message || 'An error occurred while loading the property details'}</p>
+        <button 
+          onClick={() => navigate('/dashboard')}
+          className="mt-4 px-4 py-2 bg-black text-white rounded-lg"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+  if (!property) return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <h2 className="text-xl font-bold text-yellow-600 mb-2">Property Not Found</h2>
+        <p className="text-gray-700">The property you are looking for does not exist or has been removed.</p>
+        <button 
+          onClick={() => navigate('/dashboard')}
+          className="mt-4 px-4 py-2 bg-black text-white rounded-lg"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+
+  const handleImageError = () => {
+    setImageLoadError(true);
+    console.warn('Error loading property images');
+  };
+
+  // Get images with fallback to default image if there's an error
+  const images = property?.image_urls?.length && !imageLoadError
     ? property.image_urls.map((url: string) => getImageUrl(url))
     : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
 
@@ -136,6 +176,7 @@ export default function PropertyDetailsPage() {
             src={images[selectedImage]}
             alt={property.property_name}
             className="w-full h-full object-cover rounded-lg"
+            onError={handleImageError}
           />
           {images.length > 1 && (
             <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
@@ -151,6 +192,7 @@ export default function PropertyDetailsPage() {
               alt={`${property.property_name} ${index + 2}`}
               className="w-full h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setSelectedImage(index + 1)}
+              onError={handleImageError}
             />
           ))}
         </div>
@@ -286,24 +328,28 @@ export default function PropertyDetailsPage() {
 
       {/* Modals */}
       {showMaintenanceModal && (
-        <NewRequestModal
-          onClose={() => setShowMaintenanceModal(false)}
-          onSubmit={() => {
-            setShowMaintenanceModal(false);
-            if (refetch) refetch();
-          }}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <NewRequestModal
+            onClose={() => setShowMaintenanceModal(false)}
+            onSubmit={() => {
+              setShowMaintenanceModal(false);
+              if (refetch) refetch();
+            }}
+          />
+        </Suspense>
       )}
 
       {showPaymentModal && (
-        <RecordPaymentModal
-          propertyId={id!}
-          onClose={() => setShowPaymentModal(false)}
-          onSubmit={() => {
-            setShowPaymentModal(false);
-            if (refetch) refetch();
-          }}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <RecordPaymentModal
+            propertyId={id!}
+            onClose={() => setShowPaymentModal(false)}
+            onSubmit={() => {
+              setShowPaymentModal(false);
+              if (refetch) refetch();
+            }}
+          />
+        </Suspense>
       )}
 
       {showEditModal && (

@@ -59,4 +59,35 @@ export const apiFetch = async (
       ...(options.headers || {})
     }
   });
+};
+
+/**
+ * Specifically fetch property data with better error handling for images
+ */
+export const fetchPropertyData = async (propertyId: string) => {
+  if (!propertyId) throw new Error('Property ID is required');
+  
+  const response = await apiFetch(`properties/${propertyId}`);
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch property details' }));
+    console.error('Error fetching property data:', errorData);
+    throw new Error(errorData.detail || 'Failed to fetch property details');
+  }
+  
+  const property = await response.json();
+  
+  // Add validation for image paths
+  if (property.image_urls) {
+    // Check for valid image URLs
+    property.image_urls = property.image_urls.filter((url: string) => {
+      const isValid = url && (url.startsWith('http') || url.includes('/'));
+      if (!isValid) {
+        console.warn('Invalid image URL found:', url);
+      }
+      return isValid;
+    });
+  }
+  
+  return property;
 }; 
