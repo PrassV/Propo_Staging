@@ -37,6 +37,7 @@ DEFAULT_CORS_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://propo-staging.vercel.app",
     "https://propify.netlify.app",
+    "https://propostaging-production.up.railway.app",
 ]
 
 # Add FRONTEND_URL to CORS_ORIGINS if it's set
