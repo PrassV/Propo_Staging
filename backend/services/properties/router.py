@@ -347,7 +347,7 @@ async def create_property_with_images(property_data: PropertyCreateWithImages):
                 elif file_extension == '.gif':
                     content_type = "image/gif"
                 
-                upload_response = await supabase_client.storage.from_("propertyimage").upload(
+                upload_response = supabase_client.storage.from_("propertyimage").upload(
                     path=file_path,
                     file=binary_data,
                     file_options={"content-type": content_type}
@@ -462,7 +462,7 @@ async def upload_multiple_property_images(
             elif file_extension == '.gif':
                 content_type = "image/gif"
             
-            upload_response = await supabase_client.storage.from_("propertyimage").upload(
+            upload_response = supabase_client.storage.from_("propertyimage").upload(
                 path=file_path,
                 file=binary_data,
                 file_options={"content-type": content_type}
