@@ -40,6 +40,8 @@ export default function AddPropertyPage() {
           state: formData.state,
           zip_code: formData.pincode,
           country: "India",
+          survey_number: formData.surveyNumber,
+          door_number: formData.doorNumber,
           property_type: formData.propertyType,
           size_sqft: formData.sizeSqft,
           bedrooms: formData.bedrooms,
