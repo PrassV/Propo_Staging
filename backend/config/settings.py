@@ -39,3 +39,8 @@ if not CORS_ORIGINS:
     
 # Log CORS configuration for debugging
 print(f"CORS_ORIGINS configured as: {CORS_ORIGINS}")
+
+# Ensure we have at least the frontend URL in CORS_ORIGINS if it's not a wildcard
+if "*" not in CORS_ORIGINS and FRONTEND_URL and FRONTEND_URL not in CORS_ORIGINS:
+    CORS_ORIGINS.append(FRONTEND_URL)
+    print(f"Added FRONTEND_URL to CORS_ORIGINS: {FRONTEND_URL}")

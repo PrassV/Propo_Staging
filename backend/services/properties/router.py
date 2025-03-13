@@ -180,13 +180,23 @@ async def upload_property_image(
         raise HTTPException(status_code=404, detail="Property not found")
     
     try:
+        # Validate file
+        if file is None:
+            raise HTTPException(status_code=400, detail="No file provided")
+            
+        # Reset file position
+        await file.seek(0)
+        
         # Read file content
         contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="File content is empty")
+            
         if len(contents) > 5 * 1024 * 1024:  # 5MB limit
             raise HTTPException(status_code=400, detail="File size exceeds the 5MB limit")
         
         # Extract file extension
-        file_extension = os.path.splitext(file.filename)[1].lower()
+        file_extension = os.path.splitext(file.filename)[1].lower() if file.filename else ""
         if not file_extension:
             file_extension = ".jpg"  # Default extension
         
@@ -204,25 +214,33 @@ async def upload_property_image(
         elif file_extension == '.gif':
             content_type = "image/gif"
         
-        # Upload to Supabase Storage
-        upload_response = await supabase_client.storage.from_("propertyimage").upload(
-            path=file_path,
-            file=contents,
-            file_options={"content-type": content_type}
+        # Reset file position again before upload
+        await file.seek(0)
+        
+        # Use the shared storage utility instead of direct Supabase client
+        from shared.storage import upload_file
+        
+        # Create a new UploadFile with the content
+        upload_result = await upload_file(
+            bucket_name="propertyimage",
+            file=file,
+            file_path=file_path
         )
         
-        if hasattr(upload_response, 'error') and upload_response.error:
-            raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
+        if not upload_result.get("success"):
+            error_msg = upload_result.get("error", "Unknown error")
+            print(f"Upload failed: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload image: {error_msg}")
         
-        # Generate signed URL with token instead of public URL
-        signed_url = generate_signed_url("propertyimage", file_path)
+        # Get the public URL from the upload result
+        public_url = upload_result.get("public_url")
         
         # Update existing property with new image info
         image_paths = existing_property.get("image_paths", [])
         image_urls = existing_property.get("image_urls", [])
         
         image_paths.append(file_path)
-        image_urls.append(signed_url)
+        image_urls.append(public_url)
         
         # Update the property with new image info
         await update("properties", property_id, {
@@ -234,10 +252,13 @@ async def upload_property_image(
             "status": "success", 
             "filename": file.filename, 
             "path": file_path,
-            "url": signed_url,
+            "url": public_url,
             "description": description
         }
     except Exception as e:
+        print(f"Exception in upload_property_image: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
 class ImageData(BaseModel):

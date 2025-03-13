@@ -77,23 +77,40 @@ async def upload_file(
         Dictionary with upload status information
     """
     try:
+        # Validate file is not None
+        if file is None:
+            return {"success": False, "error": "No file provided"}
+        
+        # Reset file position to beginning to ensure we can read it
+        await file.seek(0)
+        
         # Read file content
         content = await file.read()
+        
+        # Validate content
+        if content is None or len(content) == 0:
+            return {"success": False, "error": "File content is empty or could not be read"}
         
         # Generate file path if not provided
         if not file_path:
             file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
             file_path = f"{uuid.uuid4()}{file_ext}"
         
+        # Set default content type if None
+        content_type = file.content_type or "application/octet-stream"
+        
         # Upload file
+        print(f"Uploading file to {bucket_name}/{file_path}, size: {len(content)} bytes, type: {content_type}")
         response = supabase_client.storage.from_(bucket_name).upload(
             path=file_path,
             file=content,
-            file_options={"content-type": file.content_type}
+            file_options={"content-type": content_type}
         )
         
-        if "error" in response and response["error"]:
-            return {"success": False, "error": response["error"]}
+        # Check for error in response
+        if response and hasattr(response, 'error') and response.error:
+            print(f"Supabase upload error: {response.error}")
+            return {"success": False, "error": str(response.error)}
             
         # Get public URL
         public_url = supabase_client.storage.from_(bucket_name).get_public_url(file_path)
@@ -102,10 +119,13 @@ async def upload_file(
             "success": True,
             "file_path": file_path,
             "public_url": public_url,
-            "content_type": file.content_type,
+            "content_type": content_type,
             "size": len(content)
         }
     except Exception as e:
+        print(f"Exception in upload_file: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         return {"success": False, "error": str(e)}
 
 async def delete_files(bucket_name: str, file_paths: List[str]) -> Dict[str, Any]:
