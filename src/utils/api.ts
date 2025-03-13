@@ -54,8 +54,11 @@ export const apiFetch = async (
   
   return fetch(url, {
     ...options,
+    mode: 'cors',
+    credentials: 'include',
     headers: {
       ...headers,
+      'Access-Control-Allow-Origin': '*',
       ...(options.headers || {})
     }
   });

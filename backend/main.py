@@ -24,13 +24,18 @@ app = FastAPI(
     version=API_VERSION
 )
 
+# Add a print statement to debug CORS origins
+print(f"Configuring CORS with allowed origins: {CORS_ORIGINS}")
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Content-Length"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 # Include routers with appropriate prefixes and tags
