@@ -58,13 +58,10 @@ export default function PropertyDetailsPage() {
         // Check if bucket exists
         await findWorkingBucket();
         
-        console.log('Property data loaded:', property);
-        console.log('Raw Image URLs:', property.image_urls);
-        
-        // Check if image_urls exists and has valid entries
-        if (!property.image_urls || property.image_urls.length === 0) {
-          console.warn('No image URLs found for this property');
+        // Safely check for image_urls
+        if (!property.image_urls || !Array.isArray(property.image_urls) || property.image_urls.length === 0) {
           setProcessedImages([DEFAULT_IMAGE]);
+          setLoadingImages(false);
           return;
         }
 
@@ -72,14 +69,7 @@ export default function PropertyDetailsPage() {
         const imagePromises = property.image_urls.map((url: string) => getImageUrl(url));
         const resolvedImages = await Promise.all(imagePromises);
         
-        console.log('Processed Images:', resolvedImages);
-        
-        // If we have valid images, use them
-        if (resolvedImages.length > 0) {
-          setProcessedImages(resolvedImages);
-        } else {
-          setProcessedImages([DEFAULT_IMAGE]);
-        }
+        setProcessedImages(resolvedImages.length > 0 ? resolvedImages : [DEFAULT_IMAGE]);
       } catch (error) {
         console.error('Error processing images:', error);
         setProcessedImages([DEFAULT_IMAGE]);
@@ -128,11 +118,11 @@ export default function PropertyDetailsPage() {
   };
 
   const fullAddress = [
-    property.address_line1,
-    property.address_line2,
-    property.city,
-    property.state,
-    property.pincode
+    property?.address_line1,
+    property?.address_line2,
+    property?.city,
+    property?.state,
+    property?.pincode
   ].filter(Boolean).join(', ');
 
   // Update the edit form submission to use FastAPI
@@ -168,6 +158,15 @@ export default function PropertyDetailsPage() {
     } catch (error) {
       console.error('Error updating property:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update property');
+    }
+  };
+
+  // Safely access property data with null checks
+  const propertyStats = {
+    totalUnits: property?.number_of_units || 0,
+    occupiedUnits: property?.tenants?.length || 0,
+    get vacantUnits() {
+      return this.totalUnits - this.occupiedUnits;
     }
   };
 
@@ -378,17 +377,15 @@ export default function PropertyDetailsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Units</span>
-                  <span className="font-medium">{property.number_of_units || 0}</span>
+                  <span className="font-medium">{propertyStats.totalUnits}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Occupied Units</span>
-                  <span className="font-medium">{property.tenants?.length || 0}</span>
+                  <span className="font-medium">{propertyStats.occupiedUnits}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Vacant Units</span>
-                  <span className="font-medium">
-                    {(property.number_of_units || 0) - (property.tenants?.length || 0)}
-                  </span>
+                  <span className="font-medium">{propertyStats.vacantUnits}</span>
                 </div>
               </div>
             </div>
