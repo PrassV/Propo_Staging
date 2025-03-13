@@ -1,80 +1,67 @@
-import { supabase } from '../lib/supabase';
+import { apiFetch } from './api';
 import { MaintenanceRequest } from '../types/maintenance';
 import toast from 'react-hot-toast';
 
 export async function getMaintenanceRequests(propertyId?: string) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // First get the user's properties
-    const { data: properties } = await supabase
-      .from('properties')
-      .select('id')
-      .eq('owner_id', user.id);
-
-    if (!properties) return { success: true, data: [] };
+    // Use propertyId as a query parameter if provided
+    const endpoint = propertyId 
+      ? `maintenance/requests?property_id=${propertyId}` 
+      : 'maintenance/requests';
     
-    const propertyIds = properties.map(p => p.id);
-
-    let query = supabase
-      .from('maintenance_requests')
-      .select(`
-        *,
-        property:properties(
-          id,
-          property_name,
-          address_line1,
-          city
-        ),
-        vendor:maintenance_vendors(name)
-      `)
-      .in('property_id', propertyIds)
-      .order('created_at', { ascending: false });
-
-    if (propertyId) {
-      query = query.eq('property_id', propertyId);
+    const response = await apiFetch(endpoint);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to fetch maintenance requests');
     }
-
-    const { data, error } = await query;
-    if (error) throw error;
+    
+    const data = await response.json();
     return { success: true, data };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching maintenance requests:', error);
-    toast.error(error.message || 'Failed to fetch requests');
+    toast.error(error instanceof Error ? error.message : 'Failed to fetch requests');
     return { success: false, error };
   }
 }
 
 export async function createMaintenanceRequest(data: Partial<MaintenanceRequest>) {
   try {
-    const { data: request, error } = await supabase
-      .from('maintenance_requests')
-      .insert(data)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { success: true, data: request };
-  } catch (error: any) {
+    const response = await apiFetch('maintenance/requests', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to create maintenance request');
+    }
+    
+    const requestData = await response.json();
+    return { success: true, data: requestData };
+  } catch (error) {
     console.error('Error creating maintenance request:', error);
-    toast.error(error.message || 'Failed to create request');
+    toast.error(error instanceof Error ? error.message : 'Failed to create request');
     return { success: false, error };
   }
 }
 
 export async function updateMaintenanceRequest(id: string, data: Partial<MaintenanceRequest>) {
   try {
-    const { error } = await supabase
-      .from('maintenance_requests')
-      .update(data)
-      .eq('id', id);
-
-    if (error) throw error;
+    const response = await apiFetch(`maintenance/requests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to update maintenance request');
+    }
+    
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating maintenance request:', error);
-    toast.error(error.message || 'Failed to update request');
+    toast.error(error instanceof Error ? error.message : 'Failed to update request');
     return { success: false, error };
   }
 }

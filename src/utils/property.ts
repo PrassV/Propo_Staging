@@ -1,4 +1,4 @@
-import { supabase, cachedQuery, batchRequests } from '../lib/supabase';
+import { cachedQuery, batchRequests } from '../lib/supabase';
 import { apiFetch } from './api';
 import type { Property } from '../types/property';
 
@@ -6,14 +6,14 @@ export const getProperty = async (propertyId: string) => {
   return cachedQuery<Property>(
     `property:${propertyId}`,
     async () => {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('id', propertyId)
-        .single();
-
-      if (error) throw error;
-      return data;
+      const response = await apiFetch(`properties/${propertyId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch property');
+      }
+      
+      return await response.json();
     },
     5 * 60 * 1000 // 5 minutes cache
   );

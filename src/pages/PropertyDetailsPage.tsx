@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
 import { useDataCache } from '../hooks/useDataCache';
-import { supabase } from '../lib/supabase';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TenantList from '../components/tenant/TenantList';
 import NewRequestModal from '../components/maintenance/NewRequestModal';
@@ -10,8 +9,9 @@ import RecordPaymentModal from '../components/payment/RecordPaymentModal';
 import PropertyForm from '../components/property/PropertyForm';
 import PropertyMap from '../components/property/PropertyMap';
 import { getImageUrl } from '../utils/storage';
-import { formatCurrency } from '../utils/format';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../utils/api';
+import { PropertyFormData } from '../types/property';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -25,36 +25,23 @@ export default function PropertyDetailsPage() {
   const fetchPropertyData = useCallback(async () => {
     if (!id) throw new Error('Property ID is required');
     
-    const { data, error } = await supabase
-      .from('properties')
-      .select(`
-        *,
-        tenants:property_tenants(
-          tenant:tenants(*),
-          unit_number
-        ),
-        owner:user_profiles(
-          first_name,
-          last_name,
-          email,
-          phone
-        ),
-        maintenance_requests(
-          id,
-          title,
-          status,
-          priority,
-          created_at
-        )
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) throw error;
-    return data;
+    try {
+      // Use FastAPI endpoint instead of direct Supabase call
+      const response = await apiFetch(`properties/${id}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch property details');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching property:', error);
+      throw error;
+    }
   }, [id]);
 
-  const { data: property, loading, error } = useDataCache(
+  const { data: property, loading, error, refetch } = useDataCache(
     `property-${id}`,
     fetchPropertyData,
     { ttl: 5 * 60 * 1000, revalidate: false }
@@ -65,7 +52,7 @@ export default function PropertyDetailsPage() {
   if (!property) return <div>Property not found</div>;
 
   const images = property?.image_urls?.length 
-    ? property.image_urls.map(url => getImageUrl(url))
+    ? property.image_urls.map((url: string) => getImageUrl(url))
     : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
 
   const fullAddress = [
@@ -75,6 +62,42 @@ export default function PropertyDetailsPage() {
     property.state,
     property.pincode
   ].filter(Boolean).join(', ');
+
+  // Update the edit form submission to use FastAPI
+  const handlePropertyUpdate = async (formData: PropertyFormData) => {
+    try {
+      const response = await apiFetch(`properties/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          property_name: formData.propertyName,
+          property_type: formData.propertyType,
+          address_line1: formData.addressLine1,
+          address_line2: formData.addressLine2 || null,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          country: "India",
+          size_sqft: formData.sizeSqft,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          description: formData.description || null,
+          amenities: formData.amenities || []
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update property');
+      }
+
+      toast.success('Property updated successfully');
+      setShowEditModal(false);
+      if (refetch) refetch();
+    } catch (error) {
+      console.error('Error updating property:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update property');
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -121,7 +144,7 @@ export default function PropertyDetailsPage() {
           )}
         </div>
         <div className="grid grid-cols-2 gap-4 col-span-2">
-          {images.slice(1, 5).map((image, index) => (
+          {images.slice(1, 5).map((image: string, index: number) => (
             <img
               key={index}
               src={image}
@@ -176,7 +199,7 @@ export default function PropertyDetailsPage() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">What this place offers</h2>
             <div className="grid grid-cols-2 gap-4">
-              {property.amenities?.map((amenity) => (
+              {property.amenities?.map((amenity: string) => (
                 <div key={amenity} className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-black rounded-full" />
                   <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
@@ -202,7 +225,7 @@ export default function PropertyDetailsPage() {
             <TenantList 
               tenants={property.tenants} 
               property={property}
-              onUpdate={() => refetch()}
+              onUpdate={() => { if (refetch) refetch(); }}
               showFullDetails
             />
           </div>
@@ -267,7 +290,7 @@ export default function PropertyDetailsPage() {
           onClose={() => setShowMaintenanceModal(false)}
           onSubmit={() => {
             setShowMaintenanceModal(false);
-            refetch();
+            if (refetch) refetch();
           }}
         />
       )}
@@ -278,7 +301,7 @@ export default function PropertyDetailsPage() {
           onClose={() => setShowPaymentModal(false)}
           onSubmit={() => {
             setShowPaymentModal(false);
-            refetch();
+            if (refetch) refetch();
           }}
         />
       )}
@@ -307,22 +330,7 @@ export default function PropertyDetailsPage() {
                 floors: property.floors,
                 amenities: property.amenities
               }}
-              onSubmit={async (formData) => {
-                try {
-                  const { error } = await supabase
-                    .from('properties')
-                    .update(formData)
-                    .eq('id', id);
-
-                  if (error) throw error;
-                  toast.success('Property updated successfully');
-                  setShowEditModal(false);
-                  refetch();
-                } catch (error: any) {
-                  console.error('Error updating property:', error);
-                  toast.error(error.message || 'Failed to update property');
-                }
-              }}
+              onSubmit={handlePropertyUpdate}
               onCancel={() => setShowEditModal(false)}
             />
           </div>

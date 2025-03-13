@@ -13,16 +13,17 @@ from shared.database import get_by_id, create, update, delete_by_id, supabase_cl
 router = APIRouter()
 
 class PropertyBase(BaseModel):
-    name: str
-    address: str
-    type: str
+    property_name: str
+    property_type: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    pincode: str
+    country: Optional[str] = "India"
+    size_sqft: float
     bedrooms: int
     bathrooms: int
-    area_sqft: float
-    rent: float
-    security_deposit: float
-    available_from: str
-    furnished: bool
     description: Optional[str] = None
     amenities: Optional[List[str]] = None
 
@@ -37,7 +38,8 @@ class PropertyResponse(PropertyBase):
     owner_id: str
     created_at: str
     updated_at: str
-    images: List[str] = []
+    image_urls: Optional[List[str]] = []
+    image_paths: Optional[List[str]] = []
 
 # In-memory storage for demo purposes
 # In production, this would be stored in a database
@@ -54,7 +56,8 @@ async def create_property(property_data: PropertyCreate):
         **property_data.dict(),
         "created_at": timestamp,
         "updated_at": timestamp,
-        "images": []
+        "image_urls": [],
+        "image_paths": []
     }
     
     # In a real app, we would store this in the database
@@ -99,10 +102,43 @@ async def delete_property(property_id: str):
         raise HTTPException(status_code=404, detail="Property not found")
         
     try:
+        # First, try to delete any associated images from storage
+        if existing_property.get("image_paths"):
+            try:
+                await supabase_client.storage.from_("propertyimage").remove(
+                    existing_property["image_paths"]
+                )
+            except Exception as e:
+                # Log but continue - we still want to delete the property
+                print(f"Warning: Could not delete property images: {str(e)}")
+        
+        # Now delete the property record
         await delete_by_id("properties", property_id)
         return {"status": "success", "message": "Property deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete property: {str(e)}")
+
+@router.get("/user/{user_id}", response_model=List[PropertyResponse])
+async def get_properties_by_user(user_id: str):
+    """Get all properties owned by a user"""
+    try:
+        # Query Supabase to get properties by owner_id
+        properties_data = await supabase_client.table("properties").select("""
+            *,
+            tenants:property_tenants(
+                tenant:tenants(*)
+            )
+        """).eq("owner_id", user_id).execute()
+        
+        if hasattr(properties_data, 'error') and properties_data.error:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {properties_data.error.message}")
+        
+        # Format the data to match the expected response model
+        formatted_properties = properties_data.data if properties_data.data else []
+        
+        return formatted_properties
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch properties: {str(e)}")
 
 @router.post("/{property_id}/upload-image")
 async def upload_property_image(
@@ -127,7 +163,7 @@ async def upload_property_image(
             file_extension = ".jpg"  # Default extension
         
         # Get total images count to generate next image number
-        image_count = len(existing_property.get("images", []))
+        image_count = len(existing_property.get("image_paths", []))
         
         # Generate file path using the requested format: <UserID>/<PropertyID>/image.png
         owner_id = existing_property["owner_id"]
@@ -162,9 +198,8 @@ async def upload_property_image(
         
         # Update the property with new image info
         await update("properties", property_id, {
-            "images": existing_property["images"] + [file.filename],
-            "image_paths": image_paths,
-            "image_urls": image_urls
+            "image_urls": image_urls,
+            "image_paths": image_paths
         })
         
         return {
@@ -221,22 +256,22 @@ async def create_property_with_images(property_data: PropertyCreateWithImages):
     
     new_property = {
         "id": property_id,
-        "name": property_data.property_name,
-        "address": f"{property_data.address_line1}, {property_data.city}, {property_data.state}, {property_data.zip_code}",
-        "type": property_data.property_type,
+        "property_name": property_data.property_name,
+        "address_line1": property_data.address_line1,
+        "address_line2": property_data.address_line2,
+        "city": property_data.city,
+        "state": property_data.state,
+        "pincode": property_data.zip_code,
+        "country": property_data.country,
+        "property_type": property_data.property_type,
         "bedrooms": property_data.bedrooms,
         "bathrooms": property_data.bathrooms,
-        "area_sqft": property_data.size_sqft,
-        "rent": 0,  # These can be updated later
-        "security_deposit": 0,  # These can be updated later
-        "available_from": timestamp,
-        "furnished": False,  # Default value
+        "size_sqft": property_data.size_sqft,
+        "owner_id": property_data.owner_id,
         "description": property_data.description,
         "amenities": property_data.amenities,
-        "owner_id": property_data.owner_id,
         "created_at": timestamp,
         "updated_at": timestamp,
-        "images": [],
         "image_urls": [],
         "image_paths": []
     }
@@ -358,13 +393,13 @@ async def upload_multiple_property_images(
         raise HTTPException(status_code=404, detail="Property not found")
     
     # Get current image counts for correct numbering
-    current_image_count = len(existing_property.get("images", []))
+    current_image_count = len(existing_property.get("image_paths", []))
     owner_id = existing_property["owner_id"]
     
     # Process uploads
     image_paths = existing_property.get("image_paths", [])
     image_urls = existing_property.get("image_urls", [])
-    filenames = existing_property.get("images", [])
+    filenames = existing_property.get("image_names", [])
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit
     
     try:
@@ -417,7 +452,7 @@ async def upload_multiple_property_images(
                 
         # Update the property with all new image info
         await update("properties", property_id, {
-            "images": filenames,
+            "image_names": filenames,
             "image_paths": image_paths,
             "image_urls": image_urls
         })
