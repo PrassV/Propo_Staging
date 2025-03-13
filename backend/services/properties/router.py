@@ -194,6 +194,8 @@ async def upload_property_image(
             raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
         
         # Get public URL
+        # NOTE: Public URLs require the bucket to be publicly accessible.
+        # For restricted access, use signed URLs instead in the frontend.
         public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
         
         # Update existing property with new image info
@@ -357,6 +359,8 @@ async def create_property_with_images(property_data: PropertyCreateWithImages):
                     raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
                 
                 # Get public URL
+                # NOTE: Public URLs require the bucket to be publicly accessible.
+                # For restricted access, use signed URLs instead in the frontend.
                 public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
                 
                 # Store paths and URLs
@@ -472,6 +476,8 @@ async def upload_multiple_property_images(
                 raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
             
             # Get public URL
+            # NOTE: Public URLs require the bucket to be publicly accessible.
+            # For restricted access, use signed URLs instead in the frontend.
             public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
             
             # Store paths and URLs

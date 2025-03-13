@@ -7,7 +7,7 @@ ADD COLUMN IF NOT EXISTS image_paths TEXT[] DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS idx_properties_image_urls ON properties USING gin(image_urls);
 CREATE INDEX IF NOT EXISTS idx_properties_image_paths ON properties USING gin(image_paths);
 
--- Create storage policy for property images
+-- Create storage policy for property images - authenticated users
 DO $$ 
 BEGIN
   IF NOT EXISTS (
@@ -20,5 +20,20 @@ BEGIN
       TO authenticated
       USING (bucket_id = 'propertyimage')
       WITH CHECK (bucket_id = 'propertyimage');
+  END IF;
+END $$;
+
+-- Add public access policy for property images
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'objects' 
+    AND policyname = 'Public can read property images'
+  ) THEN
+    CREATE POLICY "Public can read property images"
+      ON storage.objects FOR SELECT
+      TO anon
+      USING (bucket_id = 'propertyimage');
   END IF;
 END $$;

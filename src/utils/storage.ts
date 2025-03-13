@@ -138,6 +138,22 @@ export async function getImageUrl(path: string | null | undefined): Promise<stri
     
     for (const currentPath of pathVariations) {
       try {
+        // First try to get a signed URL instead of a public URL
+        try {
+          const { data, error } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(currentPath, 3600); // 1 hour expiry
+            
+          if (!error && data && data.signedUrl) {
+            console.log(`Found working signed URL for: ${currentPath}`);
+            return data.signedUrl;
+          }
+        } catch (signedUrlError) {
+          console.warn(`Failed to get signed URL for path: ${currentPath}`, signedUrlError);
+          // Continue to try public URL as fallback
+        }
+        
+        // Fall back to public URL if signed URL fails
         const { data: { publicUrl } } = supabase.storage
           .from(bucketName)
           .getPublicUrl(currentPath);
@@ -146,7 +162,7 @@ export async function getImageUrl(path: string | null | undefined): Promise<stri
         try {
           const response = await fetch(publicUrl, { method: 'HEAD' });
           if (response.ok) {
-            console.log(`Found working image URL: ${publicUrl}`);
+            console.log(`Found working public URL: ${publicUrl}`);
             return publicUrl;
           }
         } 
@@ -159,7 +175,7 @@ export async function getImageUrl(path: string | null | undefined): Promise<stri
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       catch (error) {
         // Ignore URL generation errors and continue trying other paths
-        console.warn(`Failed to get public URL for path: ${currentPath}`);
+        console.warn(`Failed to get URL for path: ${currentPath}`);
       }
     }
     
