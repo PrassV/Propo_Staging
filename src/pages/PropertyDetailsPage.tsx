@@ -58,18 +58,29 @@ export default function PropertyDetailsPage() {
         // Check if bucket exists
         await findWorkingBucket();
         
-        // Safely check for image_urls
+        // Safely check for image_urls with more defensive checks
         if (!property.image_urls || !Array.isArray(property.image_urls) || property.image_urls.length === 0) {
           setProcessedImages([DEFAULT_IMAGE]);
           setLoadingImages(false);
           return;
         }
 
-        // Process all image URLs
-        const imagePromises = property.image_urls.map((url: string) => getImageUrl(url));
-        const resolvedImages = await Promise.all(imagePromises);
-        
-        setProcessedImages(resolvedImages.length > 0 ? resolvedImages : [DEFAULT_IMAGE]);
+        // Process all image URLs with error handling for each image
+        try {
+          const imagePromises = property.image_urls.map((url: string) => 
+            typeof url === 'string' ? getImageUrl(url) : Promise.resolve(DEFAULT_IMAGE)
+          );
+          const resolvedImages = await Promise.all(imagePromises);
+          
+          // Filter out any invalid images
+          const validImages = resolvedImages.filter(img => typeof img === 'string' && img.length > 0);
+          
+          // If we have valid images, use them
+          setProcessedImages(validImages.length > 0 ? validImages : [DEFAULT_IMAGE]);
+        } catch (imageError) {
+          console.error('Error processing image URLs:', imageError);
+          setProcessedImages([DEFAULT_IMAGE]);
+        }
       } catch (error) {
         console.error('Error processing images:', error);
         setProcessedImages([DEFAULT_IMAGE]);
@@ -117,13 +128,45 @@ export default function PropertyDetailsPage() {
     console.warn('Error loading property images');
   };
 
+  // Create safe references to property data with default values
+  const safeProperty = {
+    property_name: property?.property_name || 'Unnamed Property',
+    address_line1: property?.address_line1 || '',
+    address_line2: property?.address_line2 || '',
+    city: property?.city || '',
+    state: property?.state || '',
+    pincode: property?.pincode || '',
+    bedrooms: property?.bedrooms || 0,
+    bathrooms: property?.bathrooms || 0,
+    size_sqft: property?.size_sqft || 0,
+    description: property?.description || 'No description available',
+    amenities: Array.isArray(property?.amenities) ? property.amenities : [],
+    tenants: Array.isArray(property?.tenants) ? property.tenants : [],
+    number_of_units: property?.number_of_units || 0,
+    property_type: property?.property_type || 'residential',
+    kitchens: property?.kitchens || 0,
+    garages: property?.garages || 0,
+    garage_size: property?.garage_size || '',
+    year_built: property?.year_built || '',
+    floors: property?.floors || 0
+  };
+
   const fullAddress = [
-    property?.address_line1,
-    property?.address_line2,
-    property?.city,
-    property?.state,
-    property?.pincode
+    safeProperty.address_line1,
+    safeProperty.address_line2,
+    safeProperty.city,
+    safeProperty.state,
+    safeProperty.pincode
   ].filter(Boolean).join(', ');
+
+  // Safe property stats
+  const propertyStats = {
+    totalUnits: safeProperty.number_of_units,
+    occupiedUnits: safeProperty.tenants.length,
+    get vacantUnits() {
+      return this.totalUnits - this.occupiedUnits;
+    }
+  };
 
   // Update the edit form submission to use FastAPI
   const handlePropertyUpdate = async (formData: PropertyFormData) => {
@@ -158,15 +201,6 @@ export default function PropertyDetailsPage() {
     } catch (error) {
       console.error('Error updating property:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update property');
-    }
-  };
-
-  // Safely access property data with null checks
-  const propertyStats = {
-    totalUnits: property?.number_of_units || 0,
-    occupiedUnits: property?.tenants?.length || 0,
-    get vacantUnits() {
-      return this.totalUnits - this.occupiedUnits;
     }
   };
 
@@ -216,7 +250,7 @@ export default function PropertyDetailsPage() {
           ) : (
             <img
               src={processedImages[selectedImage] || DEFAULT_IMAGE}
-              alt={property.property_name}
+              alt={safeProperty.property_name}
               className="w-full h-full object-cover rounded-lg"
               onError={handleImageError}
             />
@@ -234,7 +268,7 @@ export default function PropertyDetailsPage() {
             <img
               key={index}
               src={image}
-              alt={`${property.property_name} ${index + 2}`}
+              alt={`${safeProperty.property_name} ${index + 2}`}
               className="w-full h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setSelectedImage(index + 1)}
               onError={handleImageError}
@@ -271,7 +305,7 @@ export default function PropertyDetailsPage() {
         <div className="col-span-2">
           {/* Property Title & Location */}
           <div className="border-b pb-6 mb-6">
-            <h1 className="text-3xl font-bold mb-2">{property.property_name}</h1>
+            <h1 className="text-3xl font-bold mb-2">{safeProperty.property_name}</h1>
             <div className="flex items-center text-gray-600">
               <MapPin size={18} className="mr-2" />
               <span>{fullAddress}</span>
@@ -280,22 +314,22 @@ export default function PropertyDetailsPage() {
 
           {/* Property Details */}
           <div className="grid grid-cols-3 gap-6 mb-8">
-            {property.bedrooms && (
+            {safeProperty.bedrooms > 0 && (
               <div>
                 <h3 className="font-semibold">Bedrooms</h3>
-                <p>{property.bedrooms}</p>
+                <p>{safeProperty.bedrooms}</p>
               </div>
             )}
-            {property.bathrooms && (
+            {safeProperty.bathrooms > 0 && (
               <div>
                 <h3 className="font-semibold">Bathrooms</h3>
-                <p>{property.bathrooms}</p>
+                <p>{safeProperty.bathrooms}</p>
               </div>
             )}
-            {property.size_sqft && (
+            {safeProperty.size_sqft > 0 && (
               <div>
                 <h3 className="font-semibold">Area</h3>
-                <p>{property.size_sqft} sq.ft</p>
+                <p>{safeProperty.size_sqft} sq.ft</p>
               </div>
             )}
           </div>
@@ -303,26 +337,30 @@ export default function PropertyDetailsPage() {
           {/* Description */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">About this property</h2>
-            <p className="text-gray-600 whitespace-pre-line">{property.description}</p>
+            <p className="text-gray-600 whitespace-pre-line">{safeProperty.description}</p>
           </div>
 
           {/* Amenities */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">What this place offers</h2>
             <div className="grid grid-cols-2 gap-4">
-              {property.amenities?.map((amenity: string) => (
-                <div key={amenity} className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-black rounded-full" />
-                  <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
-                </div>
-              ))}
+              {safeProperty.amenities.length > 0 ? (
+                safeProperty.amenities.map((amenity: string) => (
+                  <div key={amenity} className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-black rounded-full" />
+                    <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500">No amenities listed</p>
+              )}
             </div>
           </div>
 
           {/* Map */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Location</h2>
-            {property && fullAddress && (
+            {fullAddress && (
               <PropertyMap 
                 address={fullAddress}
                 className="h-[400px] rounded-lg overflow-hidden"
@@ -333,12 +371,16 @@ export default function PropertyDetailsPage() {
           {/* Tenants Section */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Current Tenants</h2>
-            <TenantList 
-              tenants={property.tenants} 
-              property={property}
-              onUpdate={() => { if (refetch) refetch(); }}
-              showFullDetails
-            />
+            {safeProperty.tenants.length > 0 ? (
+              <TenantList 
+                tenants={safeProperty.tenants} 
+                property={property}
+                onUpdate={() => { if (refetch) refetch(); }}
+                showFullDetails
+              />
+            ) : (
+              <p className="text-gray-500">No tenants currently assigned to this property</p>
+            )}
           </div>
         </div>
 
@@ -424,24 +466,24 @@ export default function PropertyDetailsPage() {
           <div className="bg-white rounded-lg p-8 max-w-4xl w-full m-4 max-h-[90vh] overflow-y-auto">
             <PropertyForm
               initialData={{
-                propertyName: property.property_name,
-                propertyType: property.property_type,
-                numberOfUnits: property.number_of_units,
-                addressLine1: property.address_line1,
-                addressLine2: property.address_line2,
-                city: property.city,
-                state: property.state,
-                pincode: property.pincode,
-                description: property.description,
-                sizeSqft: property.size_sqft,
-                bedrooms: property.bedrooms,
-                bathrooms: property.bathrooms,
-                kitchens: property.kitchens,
-                garages: property.garages,
-                garageSize: property.garage_size,
-                yearBuilt: property.year_built,
-                floors: property.floors,
-                amenities: property.amenities
+                propertyName: safeProperty.property_name,
+                propertyType: safeProperty.property_type,
+                numberOfUnits: safeProperty.number_of_units,
+                addressLine1: safeProperty.address_line1,
+                addressLine2: safeProperty.address_line2,
+                city: safeProperty.city,
+                state: safeProperty.state,
+                pincode: safeProperty.pincode,
+                description: safeProperty.description,
+                sizeSqft: safeProperty.size_sqft,
+                bedrooms: safeProperty.bedrooms,
+                bathrooms: safeProperty.bathrooms,
+                kitchens: safeProperty.kitchens,
+                garages: safeProperty.garages,
+                garageSize: safeProperty.garage_size,
+                yearBuilt: safeProperty.year_built,
+                floors: safeProperty.floors,
+                amenities: safeProperty.amenities
               }}
               onSubmit={handlePropertyUpdate}
               onCancel={() => setShowEditModal(false)}
