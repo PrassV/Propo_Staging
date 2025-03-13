@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { ensureValidSignedUrl } from './storage/access';
 
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80";
 
@@ -78,6 +79,22 @@ export async function uploadImage(file: File, propertyId: string): Promise<Uploa
 
     if (uploadError) throw uploadError;
 
+    // Try to get a signed URL first (7 days expiration)
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(filePath, 7 * 24 * 60 * 60); // 7 days expiry
+        
+      if (!error && data && data.signedUrl) {
+        console.log(`Created signed URL for uploaded image: ${filePath}`);
+        return { path: filePath, url: data.signedUrl };
+      }
+    } catch (signedUrlError) {
+      console.warn(`Failed to create signed URL for uploaded image: ${filePath}`, signedUrlError);
+      // Fall back to public URL
+    }
+
+    // Fall back to public URL if signed URL creation fails
     const { data: { publicUrl } } = supabase.storage
       .from(bucketName)
       .getPublicUrl(filePath);
@@ -120,6 +137,10 @@ export async function getImageUrl(path: string | null | undefined): Promise<stri
     
     // If it's already a complete URL (like our fallback image), use it
     if (path.startsWith('http')) {
+      // If it's a signed URL, check if it's valid and refresh if needed
+      if (path.includes('/storage/v1/object/sign/')) {
+        return ensureValidSignedUrl(path);
+      }
       return path;
     }
     
@@ -142,7 +163,7 @@ export async function getImageUrl(path: string | null | undefined): Promise<stri
         try {
           const { data, error } = await supabase.storage
             .from(bucketName)
-            .createSignedUrl(currentPath, 3600); // 1 hour expiry
+            .createSignedUrl(currentPath, 7 * 24 * 60 * 60); // 7 days expiry
             
           if (!error && data && data.signedUrl) {
             console.log(`Found working signed URL for: ${currentPath}`);

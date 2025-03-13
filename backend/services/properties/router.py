@@ -45,6 +45,27 @@ class PropertyResponse(PropertyBase):
 # In production, this would be stored in a database
 property_data = {}
 
+# Helper function to generate signed URLs with a long expiration time
+def generate_signed_url(bucket_name: str, file_path: str, expiration_days: int = 7) -> str:
+    """Generate a signed URL for a file with a specified expiration time in days"""
+    try:
+        expiration_seconds = expiration_days * 24 * 60 * 60  # Convert days to seconds
+        response = supabase_client.storage.from_(bucket_name).create_signed_url(
+            path=file_path,
+            expires_in=expiration_seconds
+        )
+        
+        if hasattr(response, 'error') and response.error:
+            print(f"Error generating signed URL: {response.error}")
+            # Fall back to public URL if signed URL generation fails
+            return supabase_client.storage.from_(bucket_name).get_public_url(file_path)
+            
+        return response.data.get('signedUrl')
+    except Exception as e:
+        print(f"Exception generating signed URL: {str(e)}")
+        # Fall back to public URL if there's an exception
+        return supabase_client.storage.from_(bucket_name).get_public_url(file_path)
+
 @router.post("/", response_model=PropertyResponse)
 async def create_property(property_data: PropertyCreate):
     """Create a new property listing"""
@@ -193,17 +214,15 @@ async def upload_property_image(
         if hasattr(upload_response, 'error') and upload_response.error:
             raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
         
-        # Get public URL
-        # NOTE: Public URLs require the bucket to be publicly accessible.
-        # For restricted access, use signed URLs instead in the frontend.
-        public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
+        # Generate signed URL with token instead of public URL
+        signed_url = generate_signed_url("propertyimage", file_path)
         
         # Update existing property with new image info
         image_paths = existing_property.get("image_paths", [])
         image_urls = existing_property.get("image_urls", [])
         
         image_paths.append(file_path)
-        image_urls.append(public_url)
+        image_urls.append(signed_url)
         
         # Update the property with new image info
         await update("properties", property_id, {
@@ -215,7 +234,7 @@ async def upload_property_image(
             "status": "success", 
             "filename": file.filename, 
             "path": file_path,
-            "url": public_url,
+            "url": signed_url,
             "description": description
         }
     except Exception as e:
@@ -358,14 +377,12 @@ async def create_property_with_images(property_data: PropertyCreateWithImages):
                 if hasattr(upload_response, 'error') and upload_response.error:
                     raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
                 
-                # Get public URL
-                # NOTE: Public URLs require the bucket to be publicly accessible.
-                # For restricted access, use signed URLs instead in the frontend.
-                public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
+                # Generate signed URL with token instead of public URL
+                signed_url = generate_signed_url("propertyimage", file_path)
                 
                 # Store paths and URLs
                 image_paths.append(file_path)
-                image_urls.append(public_url)
+                image_urls.append(signed_url)
                 
             except Exception as e:
                 # If any image upload fails, delete property and previously uploaded images
@@ -475,14 +492,12 @@ async def upload_multiple_property_images(
             if hasattr(upload_response, 'error') and upload_response.error:
                 raise HTTPException(status_code=500, detail=f"Failed to upload image: {upload_response.error.message}")
             
-            # Get public URL
-            # NOTE: Public URLs require the bucket to be publicly accessible.
-            # For restricted access, use signed URLs instead in the frontend.
-            public_url = supabase_client.storage.from_("propertyimage").get_public_url(file_path)
+            # Generate signed URL with token instead of public URL
+            signed_url = generate_signed_url("propertyimage", file_path)
             
             # Store paths and URLs
             image_paths.append(file_path)
-            image_urls.append(public_url)
+            image_urls.append(signed_url)
             filenames.append(image.image_name)
                 
         # Update the property with all new image info
