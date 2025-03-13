@@ -33,22 +33,22 @@ supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 async def get_by_id(table: str, id: str):
     """Get a record by ID"""
-    response = await supabase_client.table(table).select("*").eq("id", id).execute()
+    response = supabase_client.table(table).select("*").eq("id", id).execute()
     return response.data[0] if response.data else None
 
 async def create(table: str, data: dict):
     """Create a new record"""
-    response = await supabase_client.table(table).insert(data).execute()
+    response = supabase_client.table(table).insert(data).execute()
     return response.data[0] if response.data else None
 
 async def update(table: str, id: str, data: dict):
     """Update a record by ID"""
-    response = await supabase_client.table(table).update(data).eq("id", id).execute()
+    response = supabase_client.table(table).update(data).eq("id", id).execute()
     return response.data[0] if response.data else None
 
 async def delete_by_id(table: str, id: str):
     """Delete a record by ID"""
-    response = await supabase_client.table(table).delete().eq("id", id).execute()
+    response = supabase_client.table(table).delete().eq("id", id).execute()
     return response.data[0] if response.data else None
 
 async def query_table(table: str, query_func=None):
@@ -56,5 +56,5 @@ async def query_table(table: str, query_func=None):
     query = supabase_client.table(table).select("*")
     if query_func:
         query = query_func(query)
-    response = await query.execute()
+    response = query.execute()
     return response.data 

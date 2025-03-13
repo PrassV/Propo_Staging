@@ -71,10 +71,15 @@ async def create_property(property_data: PropertyCreate):
 @router.get("/{property_id}", response_model=PropertyResponse)
 async def get_property(property_id: str):
     """Get a property by ID"""
-    property_data = await get_by_id("properties", property_id)
-    if not property_data:
-        raise HTTPException(status_code=404, detail="Property not found")
-    return property_data
+    try:
+        # Check if we're using a direct Supabase call or a shared function
+        # If get_by_id is an async function, keep the await, otherwise remove it
+        property_data = await get_by_id("properties", property_id)
+        if not property_data:
+            raise HTTPException(status_code=404, detail="Property not found")
+        return property_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch property: {str(e)}")
 
 @router.put("/{property_id}", response_model=PropertyResponse)
 async def update_property(property_id: str, property_update: PropertyUpdate):
@@ -123,7 +128,9 @@ async def get_properties_by_user(user_id: str):
     """Get all properties owned by a user"""
     try:
         # Query Supabase to get properties by owner_id
-        properties_data = await supabase_client.table("properties").select("""
+        # The Supabase Python client's execute() doesn't return an awaitable
+        # so we shouldn't use 'await' with it
+        properties_data = supabase_client.table("properties").select("""
             *,
             tenants:property_tenants(
                 tenant:tenants(*)

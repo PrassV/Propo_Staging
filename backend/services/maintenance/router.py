@@ -45,9 +45,9 @@ async def get_maintenance_requests(property_id: Optional[str] = None):
         """
 
         if property_id:
-            result = await supabase_client.table("maintenance_requests").select(query).eq("property_id", property_id).order("created_at", {"ascending": False}).execute()
+            result = supabase_client.table("maintenance_requests").select(query).eq("property_id", property_id).order("created_at", {"ascending": False}).execute()
         else:
-            result = await supabase_client.table("maintenance_requests").select(query).order("created_at", {"ascending": False}).execute()
+            result = supabase_client.table("maintenance_requests").select(query).order("created_at", {"ascending": False}).execute()
             
         if hasattr(result, 'error') and result.error:
             raise HTTPException(status_code=500, detail=f"Failed to fetch maintenance requests: {result.error.message}")
@@ -180,9 +180,9 @@ async def get_vendors(category: Optional[str] = None):
         if category:
             # Filter vendors by category (would be done in a database query)
             # This is a very simplified version of what would typically be database filtering
-            result = await supabase_client.table("maintenance_vendors").select("*").contains("categories", [category]).execute()
+            result = supabase_client.table("maintenance_vendors").select("*").contains("categories", [category]).execute()
         else:
-            result = await supabase_client.table("maintenance_vendors").select("*").execute()
+            result = supabase_client.table("maintenance_vendors").select("*").execute()
         
         if hasattr(result, 'error') and result.error:
             raise HTTPException(status_code=500, detail=f"Failed to fetch vendors: {result.error.message}")
