@@ -13,16 +13,15 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // Don't show layout on auth pages
+  // Don't show layout on auth pages and landing page
   const isAuthPage = location.pathname.startsWith('/invite/');
-  if (isAuthPage) return <>{children}</>;
+  const isLandingPage = location.pathname === '/';
+  if (isAuthPage || (isLandingPage && !user)) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Fixed navbar */}
       <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       
-      {/* Main content */}
       <div className="flex">
         {user && (
           <Sidebar 

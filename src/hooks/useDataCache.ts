@@ -1,38 +1,76 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { analyticsTrack } from '../utils/analytics';
 
-const cache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+interface CacheOptions {
+  ttl: number;
+  revalidate: boolean;
+}
 
-export function useDataCache<T>(key: string, fetchFn: () => Promise<T>) {
+interface CacheItem<T> {
+  data: T;
+  timestamp: number;
+}
+
+export function useDataCache<T>(
+  key: string, 
+  fetchFn: () => Promise<T>, 
+  options: CacheOptions = { ttl: 5 * 60 * 1000, revalidate: false }
+) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const refreshData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await fetchFn();
+      
+      const cacheItem: CacheItem<T> = {
+        data: result,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem(`cache_${key}`, JSON.stringify(cacheItem));
+      
+      setData(result);
+      setError(null);
+      
+      analyticsTrack('data_fetch_success', { key });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError(error as Error);
+      analyticsTrack('data_fetch_error', { key, error: (error as Error).message });
+    } finally {
+      setLoading(false);
+    }
+  }, [key, fetchFn]);
+
   useEffect(() => {
     const fetchData = async () => {
-      const cached = cache[key];
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        setData(cached.data);
-        setLoading(false);
-        return;
+      const cachedItem = localStorage.getItem(`cache_${key}`);
+      
+      if (cachedItem) {
+        try {
+          const parsed = JSON.parse(cachedItem) as CacheItem<T>;
+          if (Date.now() - parsed.timestamp < options.ttl) {
+            setData(parsed.data);
+            setLoading(false);
+            
+            if (options.revalidate) {
+              refreshData();
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn(`Cache parse error for key ${key}:`, e);
+        }
       }
-
-      try {
-        setLoading(true);
-        const result = await fetchFn();
-        cache[key] = { data: result, timestamp: Date.now() };
-        setData(result);
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setError(error as Error);
-      } finally {
-        setLoading(false);
-      }
+      
+      await refreshData();
     };
 
     fetchData();
-  }, [key]);
+  }, [key, options.ttl, options.revalidate, refreshData]);
 
-  return { data, loading, error };
+  return { data, loading, error, refetch: refreshData };
 }

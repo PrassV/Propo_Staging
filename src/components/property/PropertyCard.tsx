@@ -24,8 +24,14 @@ export default function PropertyCard({ property, onDelete, onAddTenant, isLoadin
     setImageError(true);
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/property/${property.id}`);
+  };
+
   return (
-    <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/property/${property.id}`)}>
+    <tr className="hover:bg-gray-50 cursor-pointer" onClick={handleClick}>
       <td className="px-4 py-3">
         <div className="flex items-center">
           <div className="w-12 h-12 rounded-lg overflow-hidden mr-3">

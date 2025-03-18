@@ -17,10 +17,16 @@ export default function PropertyTableRow({
 }: PropertyTableRowProps) {
   const navigate = useNavigate();
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/property/${property.id}`);
+  };
+
   return (
     <tr 
       className="hover:bg-gray-50 cursor-pointer"
-      onClick={() => navigate(`/property/${property.id}`)}
+      onClick={handleClick}
     >
       <td className="px-4 py-3">
         <div className="flex items-center">

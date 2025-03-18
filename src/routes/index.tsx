@@ -1,103 +1,125 @@
+import { lazy, Suspense } from 'react';
 import { RouteObject } from 'react-router-dom';
-import LandingPage from '../pages/LandingPage';
-import PropertyDashboard from '../components/dashboard/PropertyDashboard';
-import PropertiesPage from '../pages/dashboard/PropertiesPage';
-import AddPropertyPage from '../pages/dashboard/AddPropertyPage';
-import PropertyDetailsPage from '../pages/PropertyDetailsPage';
-import OnboardingFlow from '../components/onboarding/OnboardingFlow';
-import Profile from '../pages/Profile';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 import RouteGuard from './RouteGuard';
-import AddTenantPage from '../pages/dashboard/AddTenantPage';
-import RentEstimationPage from '../pages/RentEstimationPage';
-import RentAgreement from '../pages/RentAgreement';
-import MaintenanceDashboard from '../pages/maintenance/MaintenanceDashboard';
+import LandingPage from '../pages/LandingPage';
+
+const OwnerDashboard = lazy(() => import('../components/dashboard/owner/OwnerDashboard'));
+const TenantDashboard = lazy(() => import('../components/dashboard/tenant/TenantDashboard'));
+const PropertyList = lazy(() => import('../pages/dashboard/PropertiesPage'));
+const PropertyDetailsPage = lazy(() => import('../pages/PropertyDetailsPage'));
+const AddProperty = lazy(() => import('../pages/dashboard/AddPropertyPage'));
+const Profile = lazy(() => import('../pages/Profile'));
+const RentEstimationPage = lazy(() => import('../pages/RentEstimationPage'));
+const RentAgreement = lazy(() => import('../pages/RentAgreement'));
+const AddTenantPage = lazy(() => import('../pages/dashboard/AddTenantPage'));
+const MaintenanceDashboard = lazy(() => import('../pages/maintenance/MaintenanceDashboard'));
+const RequestDetails = lazy(() => import('../components/maintenance/RequestDetails'));
+
+const withSuspense = (Component: React.ComponentType) => (
+  <Suspense fallback={<LoadingSpinner />}>
+    <Component />
+  </Suspense>
+);
 
 export const routes: RouteObject[] = [
   {
     path: '/',
-    element: (
-      <RouteGuard requireAuth={false} requireProfile={false}>
-        <LandingPage />
-      </RouteGuard>
-    )
+    element: <LandingPage />
   },
   {
     path: '/dashboard',
     element: (
-      <RouteGuard>
-        <PropertyDashboard />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(OwnerDashboard)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/owner',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(OwnerDashboard)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/tenant',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(TenantDashboard)}
       </RouteGuard>
     )
   },
   {
     path: '/dashboard/properties',
     element: (
-      <RouteGuard>
-        <PropertiesPage />
-      </RouteGuard>
-    )
-  },
-  {
-    path: '/dashboard/properties/add',
-    element: (
-      <RouteGuard>
-        <AddPropertyPage />
-      </RouteGuard>
-    )
-  },
-  {
-    path: '/dashboard/tenants/add',
-    element: (
-      <RouteGuard>
-        <AddTenantPage />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(PropertyList)}
       </RouteGuard>
     )
   },
   {
     path: '/property/:id',
     element: (
-      <RouteGuard>
-        <PropertyDetailsPage />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(PropertyDetailsPage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/properties/add',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(AddProperty)}
       </RouteGuard>
     )
   },
   {
     path: '/dashboard/rent-estimation',
     element: (
-      <RouteGuard>
-        <RentEstimationPage />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(RentEstimationPage)}
       </RouteGuard>
     )
   },
   {
     path: '/dashboard/rent-agreement',
     element: (
-      <RouteGuard>
-        <RentAgreement />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(RentAgreement)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/add-tenant',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(AddTenantPage)}
       </RouteGuard>
     )
   },
   {
     path: '/dashboard/maintenance',
     element: (
-      <RouteGuard>
-        <MaintenanceDashboard />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(MaintenanceDashboard)}
       </RouteGuard>
     )
   },
   {
-    path: '/onboarding',
+    path: '/dashboard/maintenance/:id',
     element: (
-      <RouteGuard requireAuth={true} requireProfile={false}>
-        <OnboardingFlow />
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(RequestDetails)}
       </RouteGuard>
     )
   },
   {
     path: '/profile',
     element: (
-      <RouteGuard>
-        <Profile />
+      <RouteGuard requireAuth>
+        {withSuspense(Profile)}
       </RouteGuard>
     )
   }

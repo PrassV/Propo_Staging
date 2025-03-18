@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Calculator, LayoutDashboard, FileText, Receipt, Wrench, Settings, X } from 'lucide-react';
 import { useProfile } from '../hooks/useProfile';
 
@@ -90,7 +90,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               const isActive = location.pathname === item.path;
               return (
                 <li key={item.path}>
-                  <Link
+                  <NavLink
                     to={item.path}
                     onClick={onClose}
                     className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
@@ -101,7 +101,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   >
                     <item.icon size={20} className={isActive ? 'text-white' : item.iconClassName} />
                     <span className="font-medium">{item.label}</span>
-                  </Link>
+                  </NavLink>
                 </li>
               );
             })}

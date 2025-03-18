@@ -7,19 +7,35 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor': [
+          'vendor-react': [
             'react',
             'react-dom',
-            'react-router-dom',
-            '@supabase/supabase-js',
+            'react-router-dom'
+          ],
+          'vendor-supabase': [
+            '@supabase/supabase-js'
+          ],
+          'vendor-charts': [
             'recharts'
           ],
-          'ui': [
+          'vendor-ui': [
             'lucide-react',
             'react-dropzone',
             'react-hot-toast'
+          ],
+          'vendor-utils': [
+            'uuid'
           ]
         }
+      }
+    },
+    chunkSizeWarningLimit: 1000,
+    sourcemap: false,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
       }
     }
   },
