@@ -29,3 +29,31 @@ export function getStoredInvitationToken(): string | null {
 export function clearInvitationToken(): void {
   sessionStorage.removeItem('invitation_token');
 }
+
+// === API Authentication Token Management ===
+
+// Store authentication token in local storage
+export function storeToken(token: string): void {
+  localStorage.setItem('auth_token', token);
+}
+
+// Retrieve authentication token from local storage
+export function getStoredToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
+// Store refresh token in local storage
+export function storeRefreshToken(token: string): void {
+  localStorage.setItem('refresh_token', token);
+}
+
+// Retrieve refresh token from local storage
+export function getStoredRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token');
+}
+
+// Clear all authentication tokens
+export function clearTokens(): void {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('refresh_token');
+}

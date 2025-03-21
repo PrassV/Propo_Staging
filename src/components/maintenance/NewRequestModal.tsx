@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { MaintenanceCategory, MaintenancePriority } from '../../types/maintenance';
-import { createMaintenanceRequest } from '../../utils/maintenance';
 import { useAuth } from '../../contexts/AuthContext';
+import { useMaintenanceApi } from '../../hooks/useMaintenanceApi';
 import PropertySelect from './forms/PropertySelect';
 import UnitSelect from './forms/UnitSelect';
 import TenantSelect from './forms/TenantSelect';
@@ -17,6 +17,7 @@ interface NewRequestModalProps {
 
 const NewRequestModal = ({ onClose, onSubmit }: NewRequestModalProps) => {
   const { user } = useAuth();
+  const { createRequest } = useMaintenanceApi();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     propertyId: '',
@@ -32,33 +33,42 @@ const NewRequestModal = ({ onClose, onSubmit }: NewRequestModalProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !formData.propertyId || !formData.unitNumber) return;
+    if (!user || !formData.propertyId) return;
     
     setLoading(true);
     try {
-      const result = await createMaintenanceRequest({
+      const result = await createRequest({
         property_id: formData.propertyId,
-        unit_number: formData.unitNumber,
-        tenant_id: formData.tenantId,
+        tenant_id: formData.tenantId || undefined,
         title: formData.title,
         description: formData.description,
-        priority: formData.priority,
+        priority: mapPriority(formData.priority),
         category: formData.category,
-        estimated_cost: formData.estimatedCost ? parseFloat(formData.estimatedCost) : undefined,
-        assigned_vendor_id: formData.vendorId || undefined,
-        created_by: user.id,
-        status: 'new'
       });
 
       if (!result.success) throw new Error(result.error);
 
       toast.success('Maintenance request created successfully');
       onSubmit();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating request:', error);
-      toast.error(error.message || 'Failed to create request');
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to create request';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Map from local priority values to API priority values
+  const mapPriority = (priority: MaintenancePriority): 'low' | 'medium' | 'high' | 'emergency' => {
+    switch (priority) {
+      case 'normal': return 'medium';
+      case 'urgent': return 'high';
+      case 'emergency': return 'emergency';
+      case 'low': return 'low';
+      default: return 'medium';
     }
   };
 

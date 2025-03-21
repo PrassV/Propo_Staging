@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useProperties } from '../../hooks/useProperties';
+import { usePropertiesApi } from '../../hooks/usePropertiesApi';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { deleteProperty } from '../../utils/property';
+import api from '../../api';
 
 export default function PropertiesPage() {
-  const { properties, loading, error, refetch, removeProperty } = useProperties();
+  const { properties, loading, error, refetch, removeProperty } = usePropertiesApi();
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredProperties = properties.filter(property => 
@@ -20,9 +20,12 @@ export default function PropertiesPage() {
       return;
     }
 
-    const result = await deleteProperty(propertyId);
-    if (result.success) {
+    try {
+      await api.property.deleteProperty(propertyId);
       removeProperty(propertyId);
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      alert('Failed to delete property. Please try again.');
     }
   };
 

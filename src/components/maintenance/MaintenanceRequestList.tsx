@@ -1,17 +1,32 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { useState } from 'react';
+import { Search } from 'lucide-react';
 import RequestCard from './RequestCard';
-import { getMaintenanceRequests } from '../../utils/maintenance';
-import { MaintenanceRequest } from '../../types/maintenance';
+import { useMaintenanceApi } from '../../hooks/useMaintenanceApi';
 import LoadingSpinner from '../common/LoadingSpinner';
+import { MaintenanceRequest } from '../../api/services/maintenanceService';
 
 interface MaintenanceRequestListProps {
-  userType?: 'owner' | 'tenant' | null;
+  propertyId?: string;
 }
 
-export default function MaintenanceRequestList({ userType }: MaintenanceRequestListProps) {
-  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+// Define an interface for the transformed request that matches what RequestCard expects
+interface TransformedRequest {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+  location: string;
+  property: {
+    id: string;
+    property_name: string;
+  };
+}
+
+export default function MaintenanceRequestList({ propertyId }: MaintenanceRequestListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     status: 'all',
@@ -19,34 +34,26 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
     category: 'all'
   });
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
-
-  const fetchRequests = async () => {
-    setLoading(true);
-    try {
-      const result = await getMaintenanceRequests();
-      if (result.success) {
-        setRequests(result.data || []);
-      }
-    } finally {
-      setLoading(false);
-    }
+  // Use the new API hook with filters
+  const apiFilters = {
+    property_id: propertyId,
+    // Add status filter if not 'all'
+    ...(filters.status !== 'all' && { status: filters.status }),
+    // Add priority filter if not 'all'
+    ...(filters.priority !== 'all' && { priority: filters.priority })
   };
+
+  const { requests, loading, error, refetch } = useMaintenanceApi(apiFilters);
 
   const filteredRequests = requests.filter(request => {
     const matchesSearch = 
       request.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.property?.property_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      request.description?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = filters.status === 'all' || request.status === filters.status;
-    const matchesPriority = filters.priority === 'all' || request.priority === filters.priority;
+    // Category is filtered on the client side since the API doesn't support it
     const matchesCategory = filters.category === 'all' || request.category === filters.category;
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
+    return matchesSearch && matchesCategory;
   });
 
   if (loading) {
@@ -54,6 +61,17 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex justify-center py-8">
           <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="text-center py-8 text-red-600">
+          Error loading maintenance requests: {error}
+          <button onClick={refetch} className="ml-2 underline">Retry</button>
         </div>
       </div>
     );
@@ -79,9 +97,10 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
             className="border rounded-lg px-3 py-2 focus:outline-none focus:border-black"
           >
             <option value="all">All Status</option>
-            <option value="new">New</option>
+            <option value="pending">New</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <select
             value={filters.priority}
@@ -90,8 +109,8 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
           >
             <option value="all">All Priority</option>
             <option value="emergency">Emergency</option>
-            <option value="urgent">Urgent</option>
-            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
           <select
@@ -102,8 +121,8 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
             <option value="all">All Categories</option>
             <option value="plumbing">Plumbing</option>
             <option value="electrical">Electrical</option>
-            <option value="carpentry">Carpentry</option>
-            <option value="painting">Painting</option>
+            <option value="hvac">HVAC</option>
+            <option value="structural">Structural</option>
             <option value="appliance">Appliance</option>
             <option value="other">Other</option>
           </select>
@@ -119,10 +138,32 @@ export default function MaintenanceRequestList({ userType }: MaintenanceRequestL
           </div>
         ) : (
           filteredRequests.map(request => (
-            <RequestCard key={request.id} request={request} />
+            <RequestCard 
+              key={request.id} 
+              request={adaptRequestToLegacyFormat(request)} 
+            />
           ))
         )}
       </div>
     </div>
   );
+}
+
+// Helper function to adapt API request format to legacy format expected by RequestCard
+function adaptRequestToLegacyFormat(request: MaintenanceRequest): TransformedRequest {
+  return {
+    id: request.id,
+    title: request.title,
+    description: request.description,
+    status: request.status,
+    priority: request.priority,
+    category: request.category,
+    created_at: request.created_at,
+    updated_at: request.updated_at,
+    location: '',
+    property: {
+      id: request.property_id,
+      property_name: 'Property' // Placeholder property name
+    }
+  };
 }

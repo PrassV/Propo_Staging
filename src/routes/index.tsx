@@ -3,6 +3,7 @@ import { RouteObject } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
+import AuthCallback from '../components/auth/AuthCallback';
 
 const OwnerDashboard = lazy(() => import('../components/dashboard/owner/OwnerDashboard'));
 const TenantDashboard = lazy(() => import('../components/dashboard/tenant/TenantDashboard'));
@@ -26,6 +27,10 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <LandingPage />
+  },
+  {
+    path: '/auth/callback',
+    element: <AuthCallback />
   },
   {
     path: '/dashboard',

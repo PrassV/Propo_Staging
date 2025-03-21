@@ -1,17 +1,37 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, Heart, MapPin, Star, Calendar, Wrench, Download } from 'lucide-react';
-import { useDataCache } from '../hooks/useDataCache';
-import { supabase } from '../lib/supabase';
+import { usePropertiesApi } from '../hooks/usePropertiesApi';
+import { useTenantsApi } from '../hooks/useTenantsApi';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TenantList from '../components/tenant/TenantList';
 import NewRequestModal from '../components/maintenance/NewRequestModal';
 import RecordPaymentModal from '../components/payment/RecordPaymentModal';
 import PropertyForm from '../components/property/PropertyForm';
 import PropertyMap from '../components/property/PropertyMap';
-import { getImageUrl } from '../utils/storage';
-import { formatCurrency } from '../utils/format';
 import toast from 'react-hot-toast';
+
+// Define extended property type to handle new API properties
+interface EnhancedProperty {
+  id: string;
+  property_name: string;
+  property_type: string;
+  address_line1: string;
+  address_line2?: string;
+  city: string;
+  state: string;
+  pincode?: string;
+  zip_code?: string; // Provided by the API
+  image_url?: string;
+  description?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  size_sqft?: number;
+  year_built?: number;
+  tenants?: any[];
+  amenities?: string[];
+  number_of_units?: number;
+}
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -21,51 +41,36 @@ export default function PropertyDetailsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  
+  // Use the properties API hook
+  const { properties, loading: propertiesLoading, error: propertiesError } = usePropertiesApi();
+  const property = id ? properties.find(p => p.id === id) as EnhancedProperty | undefined : undefined;
 
-  const fetchPropertyData = useCallback(async () => {
-    if (!id) throw new Error('Property ID is required');
-    
-    const { data, error } = await supabase
-      .from('properties')
-      .select(`
-        *,
-        tenants:property_tenants(
-          tenant:tenants(*),
-          unit_number
-        ),
-        owner:user_profiles(
-          first_name,
-          last_name,
-          email,
-          phone
-        ),
-        maintenance_requests(
-          id,
-          title,
-          status,
-          priority,
-          created_at
-        )
-      `)
-      .eq('id', id)
-      .single();
+  // If property not found in list, navigate back to dashboard
+  useEffect(() => {
+    if (!propertiesLoading && !property && id) {
+      toast.error('Property not found');
+      navigate('/dashboard');
+    }
+  }, [property, propertiesLoading, id, navigate]);
 
-    if (error) throw error;
-    return data;
-  }, [id]);
+  if (propertiesLoading) return <LoadingSpinner />;
+  if (propertiesError) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          <p>Error loading property details: {propertiesError}</p>
+          <button onClick={() => navigate('/dashboard')} className="underline mt-2">
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!property) return null;
 
-  const { data: property, loading, error } = useDataCache(
-    `property-${id}`,
-    fetchPropertyData,
-    { ttl: 5 * 60 * 1000, revalidate: false }
-  );
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <div>Error loading property details</div>;
-  if (!property) return <div>Property not found</div>;
-
-  const images = property?.image_urls?.length 
-    ? property.image_urls.map(url => getImageUrl(url))
+  const images = property?.image_url 
+    ? [property.image_url]
     : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
 
   const fullAddress = [
@@ -73,7 +78,7 @@ export default function PropertyDetailsPage() {
     property.address_line2,
     property.city,
     property.state,
-    property.pincode
+    property.pincode || property.zip_code
   ].filter(Boolean).join(', ');
 
   return (
@@ -173,17 +178,19 @@ export default function PropertyDetailsPage() {
           </div>
 
           {/* Amenities */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">What this place offers</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {property.amenities?.map((amenity) => (
-                <div key={amenity} className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-black rounded-full" />
-                  <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
-                </div>
-              ))}
+          {property.amenities && (
+            <div className="mb-8">
+              <h2 className="text-xl font-semibold mb-4">What this place offers</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {property.amenities.map((amenity) => (
+                  <div key={amenity} className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-black rounded-full" />
+                    <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Map */}
           <div className="mb-8">
@@ -200,10 +207,7 @@ export default function PropertyDetailsPage() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Current Tenants</h2>
             <TenantList 
-              tenants={property.tenants} 
               property={property}
-              onUpdate={() => refetch()}
-              showFullDetails
             />
           </div>
         </div>
@@ -243,16 +247,18 @@ export default function PropertyDetailsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Units</span>
-                  <span className="font-medium">{property.number_of_units}</span>
+                  <span className="font-medium">{property.number_of_units || 1}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Occupied Units</span>
                   <span className="font-medium">{property.tenants?.length || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Vacant Units</span>
+                  <span className="text-gray-600">Vacancy Rate</span>
                   <span className="font-medium">
-                    {property.number_of_units - (property.tenants?.length || 0)}
+                    {property.number_of_units 
+                      ? `${Math.round((1 - (property.tenants?.length || 0) / property.number_of_units) * 100)}%`
+                      : '0%'}
                   </span>
                 </div>
               </div>
@@ -267,63 +273,30 @@ export default function PropertyDetailsPage() {
           onClose={() => setShowMaintenanceModal(false)}
           onSubmit={() => {
             setShowMaintenanceModal(false);
-            refetch();
           }}
         />
       )}
 
       {showPaymentModal && (
         <RecordPaymentModal
-          propertyId={id!}
           onClose={() => setShowPaymentModal(false)}
           onSubmit={() => {
             setShowPaymentModal(false);
-            refetch();
           }}
+          propertyId={property.id}
         />
       )}
 
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-4xl w-full m-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full m-4 max-h-[90vh] overflow-y-auto">
             <PropertyForm
-              initialData={{
-                propertyName: property.property_name,
-                propertyType: property.property_type,
-                numberOfUnits: property.number_of_units,
-                addressLine1: property.address_line1,
-                addressLine2: property.address_line2,
-                city: property.city,
-                state: property.state,
-                pincode: property.pincode,
-                description: property.description,
-                sizeSqft: property.size_sqft,
-                bedrooms: property.bedrooms,
-                bathrooms: property.bathrooms,
-                kitchens: property.kitchens,
-                garages: property.garages,
-                garageSize: property.garage_size,
-                yearBuilt: property.year_built,
-                floors: property.floors,
-                amenities: property.amenities
+              property={property}
+              onClose={() => setShowEditModal(false)}
+              onSubmit={async () => {
+                setShowEditModal(false);
+                return Promise.resolve();
               }}
-              onSubmit={async (formData) => {
-                try {
-                  const { error } = await supabase
-                    .from('properties')
-                    .update(formData)
-                    .eq('id', id);
-
-                  if (error) throw error;
-                  toast.success('Property updated successfully');
-                  setShowEditModal(false);
-                  refetch();
-                } catch (error: any) {
-                  console.error('Error updating property:', error);
-                  toast.error(error.message || 'Failed to update property');
-                }
-              }}
-              onCancel={() => setShowEditModal(false)}
             />
           </div>
         </div>

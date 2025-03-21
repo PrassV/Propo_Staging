@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import Hero from '../components/hero/Hero';
 import Features from '../components/features/Features';
 import Benefits from '../components/Benefits';
+import Navbar from '../components/Navbar';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../hooks/useProfile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -32,9 +33,12 @@ export default function LandingPage() {
   // Show landing page for non-authenticated users
   return (
     <>
-      <Hero />
-      <Features />
-      <Benefits />
+      <Navbar />
+      <div className="pt-16"> {/* Add padding-top to account for fixed navbar */}
+        <Hero />
+        <Features />
+        <Benefits />
+      </div>
     </>
   );
 }

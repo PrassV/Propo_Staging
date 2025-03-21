@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python310"]
+
+[phases.install]
+cmds = ["cd Backend && pip install --upgrade pip", "cd Backend && pip install -r requirements.txt"]
+
+[phases.build]
+cmds = ["cd Backend && echo 'Build completed'"]
+
+[start]
+cmd = "cd Backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive=300" 

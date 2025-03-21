@@ -1,21 +1,32 @@
 import { Building2, Home, Users } from 'lucide-react';
+import { useDashboardSummary } from '../../hooks/useDashboardApi';
+import LoadingSpinner from '../common/LoadingSpinner';
 
-interface Property {
-  property_type: string;
-  tenants: any[];
-}
+const PropertyStats = () => {
+  const { summary, loading, error } = useDashboardSummary();
 
-interface PropertyStatsProps {
-  properties: Property[];
-}
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-40">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
-const PropertyStats = ({ properties }: PropertyStatsProps) => {
+  if (error || !summary) {
+    return (
+      <div className="bg-red-50 rounded-lg p-4 text-red-600">
+        <p>Error loading property statistics: {error || 'Unknown error'}</p>
+      </div>
+    );
+  }
+
   const stats = {
-    total: properties.length,
-    occupied: properties.filter(p => p.tenants.length > 0).length,
-    vacant: properties.filter(p => p.tenants.length === 0).length,
-    residential: properties.filter(p => p.property_type === 'residential').length,
-    commercial: properties.filter(p => p.property_type === 'commercial').length
+    total: summary.total_properties,
+    occupied: summary.occupied_units,
+    vacant: summary.vacant_units,
+    residential: summary.total_properties - 0, // We don't have residential/commercial split in the API yet
+    commercial: 0 // We don't have this data yet
   };
 
   return (
