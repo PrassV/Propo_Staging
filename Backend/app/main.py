@@ -4,6 +4,14 @@ from fastapi.responses import JSONResponse
 from typing import Dict
 import logging
 import time
+import os
+import sys
+
+# Set ROOT_DIR for proper path resolution
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
 from .config.settings import settings
 from .config.auth import get_current_user
 from .api import (
