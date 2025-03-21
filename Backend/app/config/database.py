@@ -1,4 +1,4 @@
-from supabase import create_client, Client
+from supabase import create_client
 from .settings import settings
 import logging
 import os
@@ -18,15 +18,8 @@ try:
     # Validate configuration
     validate_supabase_config()
     
-    # Initialize Supabase client with minimal configuration
-    supabase_client = create_client(
-        supabase_url=settings.SUPABASE_URL,
-        supabase_key=settings.SUPABASE_KEY,
-        options={
-            'auto_refresh_token': True,
-            'persist_session': False
-        }
-    )
+    # Initialize Supabase client
+    supabase_client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     logger.info("Successfully initialized Supabase client")
 except ValueError as ve:
     logger.critical(f"Configuration error: {str(ve)}")
