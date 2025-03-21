@@ -1,6 +1,6 @@
 # Import all routers directly
 from .auth import router as auth
-from .properties import router as property
+from .property import router as property
 from .tenants import router as tenant
 from .user import router as user
 from .dashboard import router as dashboard
