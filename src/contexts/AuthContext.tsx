@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -8,13 +8,15 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   initialized: boolean;
+  logoutUser: () => Promise<{ error: AuthError } | void>;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
   session: null, 
   loading: true,
-  initialized: false
+  initialized: false,
+  logoutUser: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -23,10 +25,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
+  const logoutUser = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error logging out:", error);
+      toast.error("Failed to log out.");
+      return { error };
+    }
+    toast.success("Logged out successfully!");
+  };
+
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -50,16 +61,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initializeAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        if (initialized) {
+          setLoading(false); 
+        }
 
         if (_event === 'SIGNED_OUT') {
           localStorage.removeItem('propify-auth');
         }
+        if (!initialized && mounted) setInitialized(true);
       }
     });
 
@@ -67,10 +80,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialized]);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, initialized }}>
+    <AuthContext.Provider value={{ user, session, loading, initialized, logoutUser }}>
       {children}
     </AuthContext.Provider>
   );
