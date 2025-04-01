@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, BackgroundTasks
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
-from ..models.reporting import (
+from app.models.reporting import (
     ReportCreate,
     ReportUpdate,
     Report,
-    ReportSchedule
+    ReportSchedule,
+    FinancialSummary, ExpenseReport, OccupancyReport, ReportDateRange
 )
-from ..services import reporting_service
-from ..utils.security import get_current_user
+from app.services import reporting_service
+from app.config.auth import get_current_user
 
 router = APIRouter()
 
@@ -93,47 +94,34 @@ async def get_report(
 @router.post("/", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
 async def create_report(
     report_data: ReportCreate,
+    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Create a new report.
-    
-    Args:
-        report_data: The report data
-        current_user: The current authenticated user
-        
-    Returns:
-        Created report
+    Create a new report and trigger background generation.
     """
-    report = await reporting_service.create_report(report_data, current_user["id"])
+    report = await reporting_service.create_report(report_data, current_user["id"], background_tasks)
     
     if not report:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create report"
+            detail="Failed to create report entry"
         )
     
     return {
         "report": report,
-        "message": "Report created successfully"
+        "message": "Report creation initiated successfully. Generation running in background."
     }
 
 @router.put("/{report_id}", response_model=ReportResponse)
 async def update_report(
     report_data: ReportUpdate,
+    background_tasks: BackgroundTasks,
     report_id: str = Path(..., description="The report ID"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Update a report.
-    
-    Args:
-        report_data: The updated report data
-        report_id: The report ID
-        current_user: The current authenticated user
-        
-    Returns:
-        Updated report
+    Update a report. If status is set to PENDING, triggers regeneration.
     """
     # Check if the report exists and belongs to the user
     existing_report = await reporting_service.get_report(report_id)
@@ -150,7 +138,8 @@ async def update_report(
             detail="You don't have permission to update this report"
         )
     
-    updated_report = await reporting_service.update_report(report_id, report_data)
+    # Pass background_tasks to the service function
+    updated_report = await reporting_service.update_report(report_id, report_data, background_tasks)
     
     if not updated_report:
         raise HTTPException(
@@ -160,7 +149,7 @@ async def update_report(
     
     return {
         "report": updated_report,
-        "message": "Report updated successfully"
+        "message": "Report updated successfully. Regeneration may be running in background if status was set to pending."
     }
 
 @router.delete("/{report_id}", status_code=status.HTTP_200_OK)
@@ -207,18 +196,12 @@ async def delete_report(
 
 @router.post("/{report_id}/regenerate", response_model=ReportResponse)
 async def regenerate_report(
+    background_tasks: BackgroundTasks,
     report_id: str = Path(..., description="The report ID"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Regenerate a report.
-    
-    Args:
-        report_id: The report ID
-        current_user: The current authenticated user
-        
-    Returns:
-        Updated report
+    Regenerate a report using background tasks.
     """
     # Check if the report exists and belongs to the user
     existing_report = await reporting_service.get_report(report_id)
@@ -235,19 +218,21 @@ async def regenerate_report(
             detail="You don't have permission to regenerate this report"
         )
     
-    # Set the report status to PENDING to trigger regeneration
+    # Call a specific service function for regeneration might be cleaner
+    # Or, just update status and let update_report handle the background task
     update_data = ReportUpdate(status="pending")
-    updated_report = await reporting_service.update_report(report_id, update_data)
+    # Pass background_tasks to the update function
+    updated_report = await reporting_service.update_report(report_id, update_data, background_tasks)
     
     if not updated_report:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to regenerate report"
+            detail="Failed to trigger report regeneration"
         )
     
     return {
         "report": updated_report,
-        "message": "Report regeneration initiated successfully"
+        "message": "Report regeneration initiated successfully. Running in background."
     }
 
 @router.get("/schedules", response_model=ReportSchedulesResponse)

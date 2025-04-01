@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, Any
 
-from ..models.rent_estimation import RentEstimationRequest, RentEstimationResponse
-from ..services import rent_estimation_service
-from ..utils.security import get_current_user
+from app.models.rent_estimation import RentEstimationRequest, RentEstimationResponse
+from app.services import rent_estimation_service
+from app.config.auth import get_current_user
 
 router = APIRouter()
 

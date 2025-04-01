@@ -3,11 +3,18 @@ import logging
 from datetime import datetime
 import uuid
 import re
+import io
 
 from ..db import agreement as agreement_db
 from ..db import properties as property_db
 from ..db import tenants as tenant_db
+from ..config.database import supabase_client
 from ..models.agreement import AgreementCreate, AgreementUpdate, AgreementTemplateCreate
+
+# ReportLab imports
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 
 logger = logging.getLogger(__name__)
 
@@ -237,70 +244,143 @@ async def get_current_agreement(property_id: str, tenant_id: str) -> Optional[Di
 
 async def generate_agreement_document(agreement_id: str, template_id: str = None) -> Optional[Dict[str, Any]]:
     """
-    Generate a document from an agreement and template.
-    
-    Args:
-        agreement_id: The agreement ID
-        template_id: Optional template ID (if not provided, uses default template)
-        
-    Returns:
-        Updated agreement data with document URL or None if generation failed
+    Generate a PDF document file from an agreement and template,
+    upload it to storage, and update the agreement record.
     """
+    logger.info(f"Starting PDF document generation for agreement {agreement_id} using template {template_id}")
     try:
-        # Get the agreement
+        # --- 1. Fetch Data --- 
         agreement = await agreement_db.get_agreement_by_id(agreement_id)
         if not agreement:
-            logger.error(f"Agreement not found: {agreement_id}")
+            logger.error(f"[Agreement Gen] Agreement {agreement_id} not found.")
             return None
-            
-        # Get the template
-        template = None
-        if template_id:
-            template = await agreement_db.get_agreement_template_by_id(template_id)
+
+        # Fetch Template (use default if template_id is None)
+        if not template_id:
+            # TODO: Implement logic to find a default template based on agreement type?
+            templates = await agreement_db.get_agreement_templates(agreement_type=agreement.get('agreement_type'))
+            if not templates:
+                 logger.error(f"[Agreement Gen] No default template found for agreement type {agreement.get('agreement_type')}")
+                 return None
+            template = templates[0] # Use the first found as default
+            template_id = template.get('id')
+            logger.info(f"[Agreement Gen] Using default template {template_id}")
         else:
-            # Get default template for this agreement type
-            templates = await agreement_db.get_agreement_templates(
-                owner_id=agreement.get('owner_id'),
-                agreement_type=agreement.get('agreement_type')
-            )
-            default_templates = [t for t in templates if t.get('is_default')]
-            if default_templates:
-                template = default_templates[0]
-                
-        if not template:
-            logger.error(f"No suitable template found for agreement: {agreement_id}")
-            return None
-            
-        # Get property details
-        property_data = None
-        if agreement.get('property_id'):
-            property_data = await property_db.get_property_by_id(agreement.get('property_id'))
-            
-        # Get tenant details
-        tenant_data = None
-        if agreement.get('tenant_id'):
-            tenant_data = await tenant_db.get_tenant_by_id(agreement.get('tenant_id'))
-            
-        # In a real system, you would use the template and data to generate a document
-        # For now, we'll just simulate this by updating the agreement with a dummy URL
-        
-        # This would actually use the template content and replace placeholders
-        # For example: {{tenant.name}}, {{property.address}}, {{agreement.start_date}}, etc.
-        
-        # Generate a dummy document URL
-        document_url = f"https://example.com/agreements/{agreement_id}.pdf"
-        
-        # Update the agreement with the document URL
-        update_data = {
-            'document_url': document_url,
-            'status': 'generated',
-            'updated_at': datetime.utcnow().isoformat()
+            template = await agreement_db.get_agreement_template_by_id(template_id)
+            if not template:
+                 logger.error(f"[Agreement Gen] Specified template {template_id} not found.")
+                 return None
+
+        template_content = template.get('content', '')
+
+        # Fetch Related Data
+        property_details = await property_db.get_property(agreement.get('property_id'))
+        tenant_details = await tenant_db.get_tenant_by_id(agreement.get('tenant_id'))
+
+        if not property_details or not tenant_details:
+             logger.error(f"[Agreement Gen] Missing property or tenant details for agreement {agreement_id}")
+             return None
+
+        # --- 2. Process Template Variables --- 
+        variables = {
+            "agreement": agreement,
+            "property": property_details,
+            "tenant": tenant_details,
+            "owner": {"name": "[Owner Name Placeholder]"}, # TODO: Fetch owner details
+            "current_date": datetime.utcnow().strftime("%Y-%m-%d")
         }
-        
-        return await agreement_db.update_agreement(agreement_id, update_data)
+        processed_content = process_template_variables(template_content, variables)
+
+        # --- 3. Generate PDF File --- 
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=(8.5*inch, 11*inch), topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.75*inch, rightMargin=0.75*inch)
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Add Title (Example)
+        story.append(Paragraph(agreement.get('agreement_type', 'Agreement').capitalize(), styles['h1']))
+        story.append(Spacer(1, 0.2*inch))
+
+        # Add processed content as paragraphs
+        # Simple approach: Split content by newlines and create Paragraphs
+        # More advanced: Use HTML/Markdown parsing or specific ReportLab elements based on template structure
+        for line in processed_content.split('\n'):
+            if line.strip(): # Avoid empty paragraphs
+                 story.append(Paragraph(line, styles['Normal']))
+                 story.append(Spacer(1, 0.1*inch))
+            else:
+                 story.append(Spacer(1, 0.1*inch)) # Keep spacing for blank lines
+
+        # Build the PDF
+        doc.build(story)
+        pdf_content_bytes = pdf_buffer.getvalue()
+        pdf_buffer.close()
+
+        file_extension = "pdf"
+        mime_type = "application/pdf"
+
+        # --- 4. Upload to Storage --- 
+        file_name = f"agreement_{agreement_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.{file_extension}"
+        bucket_name = "agreements"
+        file_path = f"{agreement.get('owner_id')}/{agreement_id}/{file_name}"
+
+        try:
+            supabase_storage = supabase_client.storage
+            upload_response = await supabase_storage.from_(bucket_name).upload(
+                file=io.BytesIO(pdf_content_bytes),
+                path=file_path,
+                file_options={"content-type": mime_type, "upsert": "true"}
+            )
+            logger.debug(f"[Agreement Gen] Supabase storage upload response: {upload_response}")
+
+            public_url_response = supabase_storage.from_(bucket_name).get_public_url(file_path)
+            document_url = public_url_response
+            logger.info(f"[Agreement Gen] Uploaded agreement document URL: {document_url}")
+
+        except Exception as storage_error:
+            logger.error(f"[Agreement Gen] Failed to upload agreement {agreement_id} to storage: {storage_error}", exc_info=True)
+            return None
+
+        # --- 5. Update Agreement Record --- 
+        if document_url:
+            update_data = {
+                "document_url": document_url,
+                "status": "generated", # Update status to indicate generation
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            updated_agreement = await agreement_db.update_agreement(agreement_id, update_data)
+            logger.info(f"[Agreement Gen] Updated agreement {agreement_id} with document URL.")
+            return updated_agreement
+        else:
+            logger.error(f"[Agreement Gen] Document URL was not obtained after upload attempt for {agreement_id}")
+            return None
+
     except Exception as e:
-        logger.error(f"Error generating agreement document: {str(e)}")
+        logger.error(f"[Agreement Gen] Error generating document for agreement {agreement_id}: {e}", exc_info=True)
         return None
+
+def process_template_variables(content: str, variables: Dict[str, Any]) -> str:
+    """Replace placeholders like {{ tenant.name }} in the content."""
+    def replace_match(match):
+        # Simple replacement: match.group(1) is like 'tenant.name'
+        keys = match.group(1).strip().split('.')
+        value = variables
+        try:
+            for key in keys:
+                if isinstance(value, dict):
+                    value = value.get(key, f"[Missing: {match.group(0)}]")
+                elif hasattr(value, key):
+                    value = getattr(value, key, f"[Missing: {match.group(0)}]")
+                else:
+                    value = f"[Invalid Path: {match.group(0)}]"
+                    break
+            return str(value) if value is not None else ""
+        except Exception:
+            return f"[Error: {match.group(0)}]"
+
+    # Regex to find placeholders like {{ object.field }} or {{ simple_var }}
+    processed_content = re.sub(r"{{\s*([^}]+?)\s*}}", replace_match, content)
+    return processed_content
 
 async def process_agreement_variables(template_content: str, data: Dict[str, Any]) -> str:
     """

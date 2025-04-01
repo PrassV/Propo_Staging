@@ -1,16 +1,16 @@
 import apiClient from '../client';
-import { ApiResponse, LoginRequest, LoginResponse, UserProfile } from '../types';
+import { ApiResponse, LoginRequest, LoginResponse, UserProfile, UserUpdate } from '../types';
 import { storeToken, storeRefreshToken, clearTokens } from '../../utils/token';
 
 // Login user
-export const login = async (credentials: LoginRequest): Promise<UserProfile> => {
-  const response = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', credentials);
+export const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
+  const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
   
   // Store the tokens
-  storeToken(response.data.data.access_token);
-  storeRefreshToken(response.data.data.refresh_token);
+  storeToken(response.data.access_token);
+  storeRefreshToken(response.data.refresh_token);
   
-  return response.data.data.user;
+  return response.data;
 };
 
 // Register new user
@@ -46,4 +46,23 @@ export const logout = async (): Promise<void> => {
     // Clear tokens even if the API call fails
     clearTokens();
   }
-}; 
+};
+
+// Function to get current user profile
+export const getCurrentUserProfile = async (): Promise<UserProfile> => {
+  const response = await apiClient.get<UserProfile>('/auth/me'); 
+  return response.data;
+};
+
+// Function to update current user profile
+export const updateCurrentUserProfile = async (updateData: UserUpdate): Promise<UserProfile> => {
+  const response = await apiClient.put<UserProfile>('/users/me', updateData);
+  return response.data;
+};
+
+/* Potential alternative using /users/me for getting profile
+export const getCurrentUserProfileViaUsers = async (): Promise<UserProfile> => {
+  const response = await apiClient.get<UserProfile>('/users/me'); 
+  return response.data;
+};
+*/ 

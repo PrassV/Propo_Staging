@@ -2,9 +2,12 @@ import os
 from typing import List
 from pydantic import BaseSettings
 from dotenv import load_dotenv
+import logging
 
 # Load environment variables from .env file
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # API Configuration
@@ -24,6 +27,7 @@ class Settings(BaseSettings):
     # Supabase Configuration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
     
     # Security
@@ -48,5 +52,7 @@ def validate_settings():
         raise ValueError("SUPABASE_URL environment variable is not set")
     if not settings.SUPABASE_KEY:
         raise ValueError("SUPABASE_KEY environment variable is not set")
+    if not settings.SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning("SUPABASE_SERVICE_ROLE_KEY environment variable is not set. RLS bypass tests will fail.")
     
     return True 

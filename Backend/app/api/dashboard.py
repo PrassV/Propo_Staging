@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
 import logging
-from ..config.auth import get_current_user
+from app.config.auth import get_current_user
 
-from ..services import dashboard_service
+from app.services import dashboard_service
 
 router = APIRouter(
     prefix="/dashboard",

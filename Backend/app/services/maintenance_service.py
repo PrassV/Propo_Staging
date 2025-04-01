@@ -13,6 +13,7 @@ from ..models.maintenance import (
     MaintenanceComment,
     MaintenanceStatus
 )
+from ..services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +92,17 @@ async def create_maintenance_request(request_data: MaintenanceCreate, tenant_id:
         
         # Create the maintenance request
         created_request = await maintenance_db.create_maintenance_request(insert_data)
+        
+        # Trigger notification if creation successful
+        if created_request:
+            logger.info(f"Maintenance request {created_request['id']} created, triggering notification.")
+            await notification_service.notify_new_maintenance_request(created_request)
+        else:
+            logger.error("Failed to create maintenance request in DB, notification not sent.")
+        
         return created_request
     except Exception as e:
-        logger.error(f"Error creating maintenance request: {str(e)}")
+        logger.error(f"Error creating maintenance request: {str(e)}", exc_info=True)
         return None
 
 async def update_maintenance_request(request_id: str, request_data: MaintenanceUpdate) -> Optional[Dict[str, Any]]:
@@ -371,4 +380,85 @@ async def get_maintenance_summary(owner_id: str) -> Dict[str, Any]:
             'open_requests': 0,
             'status_counts': {},
             'priority_counts': {}
-        } 
+        }
+
+async def count_maintenance_requests(
+    user_id: uuid.UUID,
+    tenant_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = 'new'
+) -> int:
+    """
+    Count maintenance requests matching the specified filters.
+    
+    Args:
+        user_id: The ID of the requesting user (for access control)
+        tenant_id: Optional tenant ID to filter requests for a specific tenant
+        status: Status to filter by (new, in_progress, completed, etc.) - default is 'new'
+        
+    Returns:
+        Count of matching maintenance requests
+    """
+    try:
+        # Convert UUIDs to strings for the DB layer
+        user_id_str = str(user_id) if user_id else None
+        tenant_id_str = str(tenant_id) if tenant_id else None
+        
+        # Normalize status - frontend might send 'open' which should be mapped to 'new'
+        if status and status.lower() == 'open':
+            status = 'new'
+            
+        # If tenant_id is provided, directly query by tenant
+        if tenant_id_str:
+            # Check access control - user must be either the tenant or owner of a property the tenant is linked to
+            # This is a simplistic approach - in a real app you'd have more robust access control
+            
+            # Is the requesting user the tenant?
+            if user_id_str == tenant_id_str:
+                # User is requesting their own maintenance count
+                results = await maintenance_db.get_maintenance_requests(
+                    tenant_id=tenant_id_str,
+                    status=status
+                )
+                return len(results)
+                
+            # Is the requesting user an owner of a property the tenant is renting?
+            tenant_properties = await maintenance_db.get_tenant_properties(tenant_id_str)
+            can_access = False
+            
+            for property_info in tenant_properties:
+                if property_info.get('owner_id') == user_id_str:
+                    can_access = True
+                    break
+                    
+            if can_access:
+                results = await maintenance_db.get_maintenance_requests(
+                    tenant_id=tenant_id_str,
+                    status=status
+                )
+                return len(results)
+            else:
+                # No access
+                logger.warning(f"User {user_id} attempted to access maintenance count for tenant {tenant_id} without permission")
+                return 0
+        else:
+            # No tenant_id specified, check if user is owner or tenant
+            
+            # First try as owner
+            results = await maintenance_db.get_maintenance_requests(
+                owner_id=user_id_str,
+                status=status
+            )
+            
+            if results:
+                return len(results)
+                
+            # Then try as tenant
+            results = await maintenance_db.get_maintenance_requests(
+                tenant_id=user_id_str,
+                status=status
+            )
+            
+            return len(results)
+    except Exception as e:
+        logger.error(f"Error counting maintenance requests: {str(e)}")
+        return 0 

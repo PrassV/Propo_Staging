@@ -1,19 +1,38 @@
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import InputField from '../auth/InputField';
 import toast from 'react-hot-toast';
+import { TenantFormData, RentalDetails, UtilityDetails } from '../../types/tenant';
 
 interface TenantFormProps {
-  propertyId: string;
-  onSubmit: () => void;
+  onSubmit: (data: TenantFormData & { documents?: File[] }) => Promise<void>;
   onCancel: () => void;
-  loading?: boolean;
+  isSubmitting?: boolean;
 }
 
-const TenantForm = ({ propertyId, onSubmit, onCancel, loading = false }: TenantFormProps) => {
-  const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
+const defaultUtilityDetails: UtilityDetails = {
+  electricity_responsibility: 'tenant',
+  water_responsibility: 'tenant',
+  property_tax_responsibility: 'tenant',
+  maintenance_fee: 0,
+  notice_period_days: 30, 
+};
+
+const defaultRentalDetails: RentalDetails = {
+  rental_type: 'rent',
+  rental_frequency: undefined,
+  rental_amount: '',
+  maintenance_fee: '',
+  advance_amount: '',
+  rental_start_date: '',
+  rental_end_date: '',
+  lease_amount: '',
+  lease_start_date: '',
+  lease_end_date: '',
+};
+
+const TenantForm = ({ onSubmit, onCancel, isSubmitting = false }: TenantFormProps) => {
+  const [formData, setFormData] = useState<TenantFormData>({
     name: '',
     phone: '',
     email: '',
@@ -21,100 +40,68 @@ const TenantForm = ({ propertyId, onSubmit, onCancel, loading = false }: TenantF
     gender: 'male',
     familySize: '',
     permanentAddress: '',
-    idType: 'pan_card',
+    idType: 'aadhaar',
     idNumber: '',
-    idProof: null as File | null,
-    unitNumber: '',
-    rentalType: 'rent',
-    rentalFrequency: 'monthly',
-    rentalAmount: '',
-    maintenanceCharges: '',
-    advanceAmount: '',
-    startDate: '',
-    endDate: '',
-    electricityBills: 'tenant',
-    waterCharges: 'tenant',
-    noticePeriod: '30'
+    idProof: null,
+    rental_details: defaultRentalDetails,
+    utility_details: defaultUtilityDetails,
+    tenantType: 'individual',
+    moveInDate: '',
+    leaseEndDate: '',
+    rentAmount: undefined,
+    rentFrequency: 'monthly',
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.unitNumber) {
-      toast.error('Unit number is required');
-      return;
-    }
+  const [documents, setDocuments] = useState<File[]>([]);
 
-    setSubmitting(true);
-
-    try {
-      let idProofUrl = '';
-      if (formData.idProof) {
-        const fileExt = formData.idProof.name.split('.').pop();
-        const filePath = `${propertyId}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('tenant-documents')
-          .upload(filePath, formData.idProof);
-
-        if (uploadError) throw uploadError;
-        idProofUrl = filePath;
-      }
-
-      // Create tenant record
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          dob: formData.dob,
-          gender: formData.gender,
-          family_size: parseInt(formData.familySize),
-          permanent_address: formData.permanentAddress,
-          id_type: formData.idType,
-          id_number: formData.idNumber,
-          id_proof_url: idProofUrl,
-          rental_type: formData.rentalType,
-          rental_frequency: formData.rentalFrequency,
-          rental_amount: parseFloat(formData.rentalAmount),
-          maintenance_fee: parseFloat(formData.maintenanceCharges),
-          advance_amount: parseFloat(formData.advanceAmount),
-          rental_start_date: formData.startDate,
-          rental_end_date: formData.endDate,
-          utility_details: {
-            electricity_responsibility: formData.electricityBills,
-            water_responsibility: formData.waterCharges,
-            notice_period_days: parseInt(formData.noticePeriod)
-          }
-        })
-        .select()
-        .single();
-
-      if (tenantError) throw tenantError;
-
-      // Link tenant to property with unit number
-      const { error: linkError } = await supabase
-        .from('property_tenants')
-        .insert({
-          property_id: propertyId,
-          tenant_id: tenant.id,
-          unit_number: formData.unitNumber,
-          start_date: formData.startDate
-        });
-
-      if (linkError) throw linkError;
-
-      toast.success('Tenant added successfully!');
-      onSubmit();
-    } catch (error: any) {
-      console.error('Error adding tenant:', error);
-      toast.error(error.message || 'Failed to add tenant');
-    } finally {
-      setSubmitting(false);
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (name.startsWith('rental_details.')) {
+      const key = name.split('.')[1];
+      const processedValue = type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value;
+      setFormData(prev => ({
+        ...prev,
+        rental_details: { ...prev.rental_details, [key]: processedValue },
+      }));
+    } else if (name.startsWith('utility_details.')) {
+      const key = name.split('.')[1];
+      const processedValue = type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value;
+      setFormData(prev => ({
+        ...prev,
+        utility_details: { ...prev.utility_details, [key]: processedValue },
+      }));
+    } else {
+      const processedValue = type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value;
+      setFormData(prev => ({ ...prev, [name]: processedValue }));
     }
   };
 
-  const isDisabled = loading || submitting;
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setDocuments(Array.from(e.target.files));
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setDocuments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.email) {
+      toast.error('Name and Email are required.');
+      return;
+    }
+
+    try {
+      await onSubmit({ ...formData, documents });
+    } catch (error) {
+      console.error("Error occurred during tenant submission process:", error);
+    }
+  };
+
+  const isDisabled = isSubmitting;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -130,279 +117,136 @@ const TenantForm = ({ propertyId, onSubmit, onCancel, loading = false }: TenantF
         </button>
       </div>
 
-      {/* Basic info */}
-      <div className="grid grid-cols-2 gap-4">
-        <InputField
-          label="Tenant Name"
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          required
-          disabled={isDisabled}
-        />
-        <InputField
-          label="Phone Number"
-          type="tel"
-          value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          required
-          disabled={isDisabled}
-        />
-      </div>
-
+      <InputField
+        label="Tenant Name"
+        type="text"
+        name="name"
+        value={formData.name}
+        onChange={handleInputChange}
+        required
+        disabled={isDisabled}
+      />
+      <InputField
+        label="Phone Number"
+        type="tel"
+        name="phone"
+        value={formData.phone}
+        onChange={handleInputChange}
+        disabled={isDisabled}
+      />
       <InputField
         label="Email"
         type="email"
+        name="email"
         value={formData.email}
-        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+        onChange={handleInputChange}
         required
         disabled={isDisabled}
       />
 
-      {/* Unit Number */}
-      <InputField
-        label="Unit Number"
-        type="text"
-        value={formData.unitNumber}
-        onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
-        required
-        disabled={isDisabled}
-        placeholder="Enter unit number"
-      />
-
-      {/* Personal details */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Tenant Type</label>
+        <select
+          name="tenantType"
+          value={formData.tenantType}
+          onChange={handleInputChange}
+          className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
+          disabled={isDisabled}
+        >
+          <option value="individual">Individual</option>
+          <option value="company">Company</option>
+        </select>
+      </div>
+      
       <div className="grid grid-cols-2 gap-4">
         <InputField
-          label="Date of Birth"
+          label="Move-in Date"
           type="date"
-          value={formData.dob}
-          onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-          required
+          name="moveInDate"
+          value={formData.moveInDate ?? ''}
+          onChange={handleInputChange}
           disabled={isDisabled}
         />
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">Gender</label>
-          <select
-            value={formData.gender}
-            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-            className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-            required
-            disabled={isDisabled}
-          >
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
+        <InputField
+          label="Lease End Date"
+          type="date"
+          name="leaseEndDate"
+          value={formData.leaseEndDate ?? ''}
+          onChange={handleInputChange}
+          disabled={isDisabled}
+        />
       </div>
-
-      {/* Additional details */}
+      
       <div className="grid grid-cols-2 gap-4">
         <InputField
-          label="Family Size"
+          label="Rent Amount"
           type="number"
-          min="1"
-          value={formData.familySize}
-          onChange={(e) => setFormData({ ...formData, familySize: e.target.value })}
-          required
+          name="rentAmount"
+          value={formData.rentAmount?.toString() ?? ''}
+          onChange={handleInputChange}
+          min="0"
           disabled={isDisabled}
         />
-      </div>
-
-      <InputField
-        label="Permanent Address"
-        type="text"
-        value={formData.permanentAddress}
-        onChange={(e) => setFormData({ ...formData, permanentAddress: e.target.value })}
-        required
-        disabled={isDisabled}
-      />
-
-      {/* ID details */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">ID Type</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Rent Frequency</label>
           <select
-            value={formData.idType}
-            onChange={(e) => setFormData({ ...formData, idType: e.target.value })}
+            name="rentFrequency"
+            value={formData.rentFrequency}
+            onChange={handleInputChange}
             className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-            required
             disabled={isDisabled}
           >
-            <option value="pan_card">PAN Card</option>
-            <option value="aadhaar">Aadhaar</option>
-            <option value="passport">Passport</option>
-            <option value="ration_card">Ration Card</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annually">Annually</option>
           </select>
         </div>
-        <InputField
-          label="ID Number"
-          type="text"
-          value={formData.idNumber}
-          onChange={(e) => setFormData({ ...formData, idNumber: e.target.value })}
-          required
-          disabled={isDisabled}
-        />
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Upload ID Proof</label>
+        <label className="block text-sm font-medium text-gray-700">Upload Documents (Optional)</label>
         <input
           type="file"
-          accept="image/*,.pdf"
-          onChange={(e) => setFormData({ ...formData, idProof: e.target.files?.[0] || null })}
-          className="w-full p-2 border rounded-lg"
-          required
+          multiple
+          onChange={handleFileChange}
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-700 disabled:opacity-50"
           disabled={isDisabled}
         />
+        {documents.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-medium">Selected files:</p>
+            {documents.map((file, index) => (
+              <div key={index} className="flex justify-between items-center text-xs bg-gray-100 px-2 py-1 rounded">
+                <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                <button 
+                  type="button" 
+                  onClick={() => removeFile(index)} 
+                  className="text-red-500 hover:text-red-700"
+                  disabled={isDisabled}
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Rental Details */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Rental Details</h3>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Rental Type</label>
-            <select
-              value={formData.rentalType}
-              onChange={(e) => setFormData({ ...formData, rentalType: e.target.value })}
-              className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-              required
-              disabled={isDisabled}
-            >
-              <option value="rent">Rent</option>
-              <option value="lease">Lease</option>
-            </select>
-          </div>
-          
-          {formData.rentalType === 'rent' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Frequency</label>
-              <select
-                value={formData.rentalFrequency}
-                onChange={(e) => setFormData({ ...formData, rentalFrequency: e.target.value })}
-                className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-                required
-                disabled={isDisabled}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <InputField
-            label="Rental Amount"
-            type="number"
-            value={formData.rentalAmount}
-            onChange={(e) => setFormData({ ...formData, rentalAmount: e.target.value })}
-            required
-            disabled={isDisabled}
-          />
-          <InputField
-            label="Maintenance Charges"
-            type="number"
-            value={formData.maintenanceCharges}
-            onChange={(e) => setFormData({ ...formData, maintenanceCharges: e.target.value })}
-            required
-            disabled={isDisabled}
-          />
-        </div>
-
-        <InputField
-          label="Advance Amount"
-          type="number"
-          value={formData.advanceAmount}
-          onChange={(e) => setFormData({ ...formData, advanceAmount: e.target.value })}
-          required
-          disabled={isDisabled}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          <InputField
-            label="Start Date"
-            type="date"
-            value={formData.startDate}
-            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-            required
-            disabled={isDisabled}
-          />
-          <InputField
-            label="End Date"
-            type="date"
-            value={formData.endDate}
-            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-            required
-            disabled={isDisabled}
-          />
-        </div>
-      </div>
-
-      {/* Utility Details */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Utility Details</h3>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Electricity Bills</label>
-            <select
-              value={formData.electricityBills}
-              onChange={(e) => setFormData({ ...formData, electricityBills: e.target.value })}
-              className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-              required
-              disabled={isDisabled}
-            >
-              <option value="tenant">Paid by Tenant</option>
-              <option value="landlord">Paid by Landlord</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Water Charges</label>
-            <select
-              value={formData.waterCharges}
-              onChange={(e) => setFormData({ ...formData, waterCharges: e.target.value })}
-              className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-              required
-              disabled={isDisabled}
-            >
-              <option value="tenant">Paid by Tenant</option>
-              <option value="landlord">Paid by Landlord</option>
-            </select>
-          </div>
-        </div>
-
-        <InputField
-          label="Notice Period (in days)"
-          type="number"
-          min="1"
-          value={formData.noticePeriod}
-          onChange={(e) => setFormData({ ...formData, noticePeriod: e.target.value })}
-          required
-          disabled={isDisabled}
-        />
-      </div>
-
-      {/* Form actions */}
-      <div className="flex justify-end space-x-4">
+      <div className="flex justify-end space-x-4 pt-4">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+          className="px-6 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
           disabled={isDisabled}
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
+          className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
           disabled={isDisabled}
         >
-          {submitting ? 'Adding Tenant...' : 'Add Tenant'}
+          {isSubmitting ? 'Adding Tenant...' : 'Add Tenant'}
         </button>
       </div>
     </form>

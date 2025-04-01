@@ -143,4 +143,28 @@ class RentCollectionData(BaseModel):
     late_payments: int
     outstanding_payments: int
     collection_by_property: Dict[str, Dict[str, float]]
-    collection_trend: List[Dict[str, Any]] 
+    collection_trend: List[Dict[str, Any]]
+
+# Classes needed by the API
+class FinancialSummary(BaseModel):
+    period: str
+    total_revenue: float
+    total_expenses: float
+    net_income: float
+    cash_flow: float
+    
+class ExpenseReport(BaseModel):
+    period: str
+    categories: Dict[str, float]
+    total: float
+    
+class OccupancyReport(BaseModel):
+    period: str
+    rate: float
+    total_units: int
+    occupied_units: int
+    vacant_units: int
+    
+class ReportDateRange(BaseModel):
+    start_date: date
+    end_date: date 

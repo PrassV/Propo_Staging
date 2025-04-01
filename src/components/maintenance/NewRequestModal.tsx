@@ -1,67 +1,144 @@
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { X } from 'lucide-react';
 import { MaintenanceCategory, MaintenancePriority } from '../../types/maintenance';
 import { useAuth } from '../../contexts/AuthContext';
-import { useMaintenanceApi } from '../../hooks/useMaintenanceApi';
 import PropertySelect from './forms/PropertySelect';
 import UnitSelect from './forms/UnitSelect';
 import TenantSelect from './forms/TenantSelect';
-import VendorSelect from './forms/VendorSelect';
 import InputField from '../auth/InputField';
 import toast from 'react-hot-toast';
+import api from '../../api';
+import { supabase } from '../../lib/supabase';
+import { MaintenanceRequestCreate, DocumentCreate, MaintenanceRequest } from '../../api/types';
+
+interface UploadedFileInfo {
+  url: string;
+  fileName: string;
+  fileType: string;
+  size: number;
+}
 
 interface NewRequestModalProps {
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmitSuccess: () => void;
 }
 
-const NewRequestModal = ({ onClose, onSubmit }: NewRequestModalProps) => {
+const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => {
   const { user } = useAuth();
-  const { createRequest } = useMaintenanceApi();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    propertyId: string;
+    unitNumber: string;
+    tenantId: string;
+    title: string;
+    description: string;
+    priority: MaintenancePriority;
+    category: MaintenanceCategory | '';
+  }>({
     propertyId: '',
     unitNumber: '',
     tenantId: '',
     title: '',
     description: '',
-    priority: 'normal' as MaintenancePriority,
-    category: '' as MaintenanceCategory,
-    estimatedCost: '',
-    vendorId: ''
+    priority: 'normal',
+    category: '',
   });
+  const [files, setFiles] = useState<File[]>([]);
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !formData.propertyId) return;
+    if (!user || !formData.propertyId || !formData.title || !formData.category) {
+        toast.error("Property, Title, and Category are required.");
+        return;
+    }
     
     setLoading(true);
+    let createdRequest: MaintenanceRequest | null = null;
+    const uploadedFileUrls: UploadedFileInfo[] = [];
+
     try {
-      const result = await createRequest({
+      if (files.length > 0) {
+        toast.loading('Uploading files...');
+        const uploadPromises = files.map(async (file) => {
+           const fileExt = file.name.split('.').pop();
+           const filePath = `maintenance-files/${user.id}/${formData.propertyId}/${Date.now()}.${fileExt}`;
+           const { error: uploadError } = await supabase.storage
+            .from('maintenance-files') 
+            .upload(filePath, file);
+           if (uploadError) throw new Error(`Upload failed for ${file.name}: ${uploadError.message}`);
+           const { data: urlData } = supabase.storage.from('maintenance-files').getPublicUrl(filePath);
+           if (!urlData?.publicUrl) {
+               console.warn(`Could not get public URL for ${filePath}`);
+               return null;
+           }
+           return { url: urlData.publicUrl, fileName: file.name, fileType: file.type, size: file.size };
+        });
+        const uploadResults = await Promise.all(uploadPromises);
+        uploadedFileUrls.push(...uploadResults.filter(f => f !== null) as UploadedFileInfo[]);
+        toast.dismiss();
+        if (uploadedFileUrls.length !== files.length) {
+             toast.error('Some files failed to upload or retrieve URL.');
+        }
+      }
+
+      const requestAPIData: MaintenanceRequestCreate = {
         property_id: formData.propertyId,
         tenant_id: formData.tenantId || undefined,
         title: formData.title,
         description: formData.description,
         priority: mapPriority(formData.priority),
         category: formData.category,
-      });
+      };
 
-      if (!result.success) throw new Error(result.error);
+      toast.loading('Creating request...');
+      createdRequest = await api.maintenance.createMaintenanceRequest(requestAPIData);
+      toast.dismiss();
+
+      if (createdRequest?.id && uploadedFileUrls.length > 0) { 
+        toast.loading('Linking files...');
+        const linkPromises = uploadedFileUrls.map(fileInfo => {
+          const docData: DocumentCreate = {
+            title: fileInfo.fileName,
+            maintenance_request_id: createdRequest!.id,
+            property_id: formData.propertyId,
+            tenant_id: formData.tenantId || undefined,
+            file_url: fileInfo.url,
+            file_name: fileInfo.fileName,
+            file_type: fileInfo.fileType,
+            file_size: fileInfo.size,
+            document_type: fileInfo.fileType.startsWith('image/') ? 'MAINTENANCE_IMAGE' : 'MAINTENANCE_DOCUMENT',
+            access_level: 'PRIVATE',
+          };
+          return api.document.createDocument(docData);
+        });
+        await Promise.all(linkPromises);
+        toast.dismiss();
+      }
 
       toast.success('Maintenance request created successfully');
-      onSubmit();
+      onSubmitSuccess();
+      onClose();
+
     } catch (error: unknown) {
-      console.error('Error creating request:', error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'Failed to create request';
+      toast.dismiss();
+      console.error('Error creating maintenance request:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create request';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
   
-  // Map from local priority values to API priority values
   const mapPriority = (priority: MaintenancePriority): 'low' | 'medium' | 'high' | 'emergency' => {
     switch (priority) {
       case 'normal': return 'medium';
@@ -173,20 +250,34 @@ const NewRequestModal = ({ onClose, onSubmit }: NewRequestModalProps) => {
             </div>
           </div>
 
-          <InputField
-            label="Estimated Cost (optional)"
-            type="number"
-            value={formData.estimatedCost}
-            onChange={(e) => setFormData({ ...formData, estimatedCost: e.target.value })}
-            disabled={loading}
-          />
-
-          <VendorSelect
-            category={formData.category as MaintenanceCategory}
-            value={formData.vendorId}
-            onChange={(value) => setFormData({ ...formData, vendorId: value })}
-            disabled={loading}
-          />
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Upload Images/Documents (Optional)</label>
+            <input
+              type="file"
+              multiple
+              onChange={handleFileChange}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-700 disabled:opacity-50"
+              disabled={loading}
+            />
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium">Selected files:</p>
+                {files.map((file, index) => (
+                  <div key={index} className="flex justify-between items-center text-xs bg-gray-100 px-2 py-1 rounded">
+                    <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                    <button 
+                      type="button" 
+                      onClick={() => removeFile(index)}
+                      className="text-red-500 hover:text-red-700"
+                      disabled={loading}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end space-x-4">
             <button

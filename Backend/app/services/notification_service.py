@@ -2,6 +2,13 @@ from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
 import uuid
+import os # For getting environment variables
+
+# Resend imports
+import resend
+
+# Twilio imports
+from twilio.rest import Client
 
 from ..db import notifications as notifications_db
 from ..models.notification import (
@@ -13,7 +20,38 @@ from ..models.notification import (
     NotificationPriority
 )
 
+# Import user service to get profile data
+from ..services import user_service
+
+# Get Resend API Key from environment variables
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+# Define a default sender email (Format: Name <email@domain.com>)
+FROM_EMAIL = os.environ.get("DEFAULT_SENDER_EMAIL", "Propify <noreply@propify.app>")
+
+# Get Twilio credentials from environment variables
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
+
 logger = logging.getLogger(__name__)
+
+# Initialize Resend client globally if key exists
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+else:
+    logger.warning("RESEND_API_KEY not found in environment. Email notifications will be disabled.")
+
+# Initialize Twilio client globally if credentials exist
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER:
+    try:
+        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        logger.info("Twilio client initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize Twilio client: {e}", exc_info=True)
+        twilio_client = None # Ensure client is None if init fails
+else:
+    logger.warning("Twilio credentials not fully configured. SMS notifications will be disabled.")
 
 async def get_user_notifications(
     user_id: str,
@@ -137,107 +175,138 @@ async def delete_notification(notification_id: str) -> bool:
     return await notifications_db.delete_notification(notification_id)
 
 async def send_notification(notification_id: str) -> bool:
-    """
-    Send a notification using its configured methods.
-    
-    Args:
-        notification_id: The notification ID to send
-        
-    Returns:
-        True if sending succeeded, False otherwise
-    """
+    """Orchestrates sending a notification via configured methods."""
+    success = True # Assume success initially for IN_APP
     try:
-        # Get the notification
         notification = await notifications_db.get_notification_by_id(notification_id)
         if not notification:
             logger.error(f"Notification {notification_id} not found for sending")
             return False
-            
-        # Get user notification settings
-        settings = await notifications_db.get_notification_settings(notification['user_id'])
-        
-        # Check if the user has disabled this notification type
-        if settings and not settings.get('enabled_types', {}).get(notification['notification_type'], True):
-            logger.info(f"Notification {notification_id} not sent as user has disabled this type")
-            await notifications_db.update_notification(notification_id, {
-                'status': NotificationStatus.FAILED.value,
-                'updated_at': datetime.utcnow().isoformat()
-            })
-            return False
-            
-        # Get the methods to use
+
+        # TODO: Implement user notification settings fetching & application
+        # settings = await notifications_db.get_notification_settings(notification['user_id'])
+        # Check if type disabled, override methods based on settings, etc.
+
         methods = notification.get('methods', [NotificationMethod.IN_APP.value])
-        
-        # Override with user preferences if available
-        if settings and notification['notification_type'] in settings.get('preferred_methods', {}):
-            methods = settings['preferred_methods'][notification['notification_type']]
-            
-        success = True
-        
-        # Send the notification through each method
+
         for method in methods:
             if method == NotificationMethod.EMAIL.value:
-                success = success and await send_email_notification(notification)
+                if not RESEND_API_KEY:
+                     logger.warning(f"Skipping email for notification {notification_id} as RESEND_API_KEY is not set.")
+                     success = False # Consider this a failure if email was requested but couldn't be sent
+                     continue
+
+                # Fetch user profile using the user_service function
+                user_profile = await user_service.get_user_profile(notification.get('user_id'))
+                if user_profile and user_profile.get('email'):
+                    email_sent = await send_email_notification(notification, user_profile['email'])
+                    success = success and email_sent # Overall success depends on all requested methods succeeding
+                else:
+                    logger.error(f"Could not find email for user {notification.get('user_id')} to send notification {notification_id}")
+                    success = False
+
             elif method == NotificationMethod.SMS.value:
-                success = success and await send_sms_notification(notification)
+                if not twilio_client:
+                     logger.warning(f"Skipping SMS for notification {notification_id} as Twilio client is not configured.")
+                     success = False
+                     continue
+                
+                # Fetch user phone number
+                user_profile = await user_service.get_user_profile(notification.get('user_id'))
+                recipient_phone = user_profile.get('phone') if user_profile else None
+                
+                if recipient_phone:
+                    # Format phone number if necessary (e.g., ensure E.164 format)
+                    # formatted_phone = format_phone_number(recipient_phone) # Add helper if needed
+                    sms_sent = await send_sms_notification(notification, recipient_phone)
+                    success = success and sms_sent
+                else:
+                     logger.error(f"Could not find phone number for user {notification.get('user_id')} to send SMS notification {notification_id}")
+                     success = False
+
             elif method == NotificationMethod.PUSH.value:
-                success = success and await send_push_notification(notification)
-        
-        # Update notification status
+                 # Placeholder - needs implementation
+                 logger.warning(f"Push notification sending not implemented for notification {notification_id}")
+                 # success = success and await send_push_notification(notification)
+                 success = False # Mark as fail if requested but not implemented
+
+        # Update notification status based on overall success
         new_status = NotificationStatus.SENT.value if success else NotificationStatus.FAILED.value
         sent_at = datetime.utcnow().isoformat() if success else None
-        
         await notifications_db.update_notification(notification_id, {
             'status': new_status,
             'sent_at': sent_at,
             'updated_at': datetime.utcnow().isoformat()
         })
-        
         return success
+
     except Exception as e:
-        logger.error(f"Failed to send notification {notification_id}: {str(e)}")
-        await notifications_db.update_notification(notification_id, {
-            'status': NotificationStatus.FAILED.value,
-            'updated_at': datetime.utcnow().isoformat()
-        })
+        logger.error(f"Failed to send notification {notification_id}: {str(e)}", exc_info=True)
+        try:
+            # Attempt to mark as failed in DB
+            await notifications_db.update_notification(notification_id, {
+                'status': NotificationStatus.FAILED.value,
+                'updated_at': datetime.utcnow().isoformat()
+            })
+        except Exception as db_err:
+            logger.error(f"CRITICAL: Failed to update notification {notification_id} status to FAILED after error: {db_err}")
         return False
 
-async def send_email_notification(notification: Dict[str, Any]) -> bool:
-    """
-    Send a notification via email.
-    
-    Args:
-        notification: The notification data
-        
-    Returns:
-        True if sending succeeded, False otherwise
-    """
-    try:
-        # In a real implementation, this would send an email
-        # For demonstration, just log it
-        logger.info(f"Sending email notification: {notification['title']} to user {notification['user_id']}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send email notification: {str(e)}")
+async def send_email_notification(notification: Dict[str, Any], recipient_email: str) -> bool:
+    """Send a notification via email using Resend."""
+    if not RESEND_API_KEY:
+        # This check is technically redundant due to the check in send_notification, but good practice
+        logger.error("RESEND_API_KEY not configured. Cannot send email.")
         return False
 
-async def send_sms_notification(notification: Dict[str, Any]) -> bool:
-    """
-    Send a notification via SMS.
-    
-    Args:
-        notification: The notification data
-        
-    Returns:
-        True if sending succeeded, False otherwise
-    """
+    params = {
+        "from": FROM_EMAIL,
+        "to": [recipient_email],
+        "subject": notification.get('title', 'New Notification from Propify'),
+        "html": notification.get('message', 'You have a new notification.'), # Resend prefers HTML
+        # "text": notification.get('message', 'You have a new notification.') # Optional text version
+    }
+
     try:
-        # In a real implementation, this would send an SMS
-        # For demonstration, just log it
-        logger.info(f"Sending SMS notification: {notification['title']} to user {notification['user_id']}")
+        # Use the resend library (synchronous by default)
+        # To make this truly async, you'd typically run sync code in an executor
+        # For simplicity here, we call it directly. This will block the event loop.
+        # Consider using something like anyio.to_thread.run_sync in a real async app
+        email = resend.Emails.send(params)
+        logger.info(f"Resend email initiated for notification {notification.get('id')}. Email ID: {email.get('id')}")
+        # Resend's send doesn't directly confirm delivery, just acceptance.
+        # We'll assume success if no exception is thrown.
         return True
     except Exception as e:
-        logger.error(f"Failed to send SMS notification: {str(e)}")
+        logger.error(f"Failed to send Resend email for notification {notification.get('id')}: {e}", exc_info=True)
+        return False
+
+async def send_sms_notification(notification: Dict[str, Any], recipient_phone: str) -> bool:
+    """Send a notification via SMS using Twilio."""
+    if not twilio_client:
+        logger.error("Twilio client not configured. Cannot send SMS.")
+        return False
+
+    # Construct message body (Twilio SMS has character limits)
+    body = f"Propify: {notification.get('title', '')} - {notification.get('message', '')}" 
+    # Truncate if necessary
+    max_len = 1600 # Twilio limit
+    if len(body) > max_len:
+        body = body[:max_len-3] + "..."
+
+    try:
+        # Send SMS using Twilio client (synchronous call)
+        # Run in executor for true async: asyncio.to_thread(twilio_client.messages.create, ...)
+        message = twilio_client.messages.create(
+            body=body,
+            from_=TWILIO_PHONE_NUMBER,
+            to=recipient_phone # Assumes phone number is in E.164 format
+        )
+        logger.info(f"Twilio SMS initiated for notification {notification.get('id')}. SID: {message.sid}")
+        # Add check for message status if needed (e.g., message.status == 'queued', 'failed', etc.)
+        return message.status in ['queued', 'sending', 'sent'] # Consider queued/sending as success for now
+    except Exception as e:
+        logger.error(f"Failed to send Twilio SMS for notification {notification.get('id')}: {e}", exc_info=True)
         return False
 
 async def send_push_notification(notification: Dict[str, Any]) -> bool:
@@ -370,3 +439,54 @@ def process_template_text(template_text: str, data: Dict[str, Any]) -> str:
             result = result.replace(placeholder, str(value))
             
     return result 
+
+# --- Event-Based Notification Triggers --- 
+
+async def notify_new_maintenance_request(request: Dict[str, Any]):
+    """Creates notifications when a new maintenance request is submitted."""
+    logger.info(f"Creating notification for new maintenance request {request.get('id')}")
+    property_id = request.get('property_id')
+    tenant_id = request.get('tenant_id') # User who submitted
+    title = request.get('title', 'New Request')
+    request_id = request.get('id')
+
+    # TODO: Need logic to find the property owner(s)
+    # owner_id = await property_db.get_property_owner(property_id)
+    owner_id = "owner_placeholder_id" # Placeholder
+
+    if not owner_id:
+        logger.error(f"Cannot find owner for property {property_id} to notify about request {request_id}")
+        return
+
+    # 1. Notify the Property Owner
+    owner_message = f"New maintenance request '{title}' submitted for property {property_id}."
+    owner_notification_data = NotificationCreate(
+        user_id=owner_id,
+        title="New Maintenance Request",
+        message=owner_message,
+        notification_type=NotificationType.MAINTENANCE.value,
+        priority=NotificationPriority.MEDIUM.value,
+        methods=[NotificationMethod.IN_APP, NotificationMethod.EMAIL], # Example methods
+        related_entity_id=request_id,
+        related_entity_type="maintenance_request"
+    )
+    await create_notification(owner_notification_data)
+    logger.info(f"Created notification for owner {owner_id} about request {request_id}")
+
+    # 2. Notify the Tenant (Confirmation) - Optional
+    if tenant_id:
+        tenant_message = f"Your maintenance request '{title}' has been submitted successfully."
+        tenant_notification_data = NotificationCreate(
+            user_id=tenant_id,
+            title="Maintenance Request Submitted",
+            message=tenant_message,
+            notification_type=NotificationType.MAINTENANCE.value,
+            priority=NotificationPriority.LOW.value,
+            methods=[NotificationMethod.IN_APP], # Just in-app confirmation
+            related_entity_id=request_id,
+            related_entity_type="maintenance_request"
+        )
+        await create_notification(tenant_notification_data)
+        logger.info(f"Created confirmation notification for tenant {tenant_id} about request {request_id}")
+
+# TODO: Add other trigger functions (e.g., notify_payment_due, notify_lease_ending, etc.) 

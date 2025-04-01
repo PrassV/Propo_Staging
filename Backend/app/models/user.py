@@ -12,4 +12,19 @@ class User(BaseModel):
     role: Optional[str] = None
 
     class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    """ Fields allowed for user profile update """
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    # Add address fields if they are stored in the user profile table
+    # address_line1: Optional[str] = None
+    # address_line2: Optional[str] = None
+    # city: Optional[str] = None
+    # state: Optional[str] = None
+    # pincode: Optional[str] = None
+
+    class Config:
         from_attributes = True 

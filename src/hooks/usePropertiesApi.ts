@@ -33,6 +33,7 @@ function adaptApiProperty(apiProperty: ApiProperty): Property {
 export function usePropertiesApi() {
   const { user } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
+  const [totalProperties, setTotalProperties] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,10 +44,10 @@ export function usePropertiesApi() {
       setLoading(true);
       setError(null);
 
-      const apiProperties = await api.property.getProperties();
-      // Convert API properties to frontend property model
-      const adaptedProperties = apiProperties.map(adaptApiProperty);
+      const response = await api.property.getProperties();
+      const adaptedProperties = response.items.map(adaptApiProperty);
       setProperties(adaptedProperties);
+      setTotalProperties(response.total);
     } catch (error: unknown) {
       console.error('Error fetching properties:', error);
       let errorMessage = 'Failed to fetch properties';
@@ -61,19 +62,18 @@ export function usePropertiesApi() {
     }
   };
 
-  // Remove property from local state
   const removeProperty = (propertyId: string) => {
     setProperties(prev => prev.filter(p => p.id !== propertyId));
+    setTotalProperties(prev => prev - 1);
   };
 
-  // Add property to local state
   const addProperty = (property: Property) => {
     setProperties(prev => [...prev, property]);
+    setTotalProperties(prev => prev + 1);
   };
 
-  // Update property in local state
-  const updateProperty = (propertyId: string, updatedProperty: Partial<Property>) => {
-    setProperties(prev => prev.map(p => p.id === propertyId ? { ...p, ...updatedProperty } : p));
+  const updateProperty = (propertyId: string, updatedFields: Partial<Property>) => {
+    setProperties(prev => prev.map(p => p.id === propertyId ? { ...p, ...updatedFields } : p));
   };
 
   useEffect(() => {
@@ -84,6 +84,7 @@ export function usePropertiesApi() {
 
   return { 
     properties, 
+    totalProperties,
     loading, 
     error, 
     refetch: fetchProperties, 

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import InputField from '../auth/InputField';
 import BasicDetails from './form-sections/BasicDetails';
 import AddressDetails from './form-sections/AddressDetails';
 import ListingDetails from './form-sections/ListingDetails';
 import OverviewSection from './form-sections/OverviewSection';
 import AmenitiesSection from './form-sections/AmenitiesSection';
 import ImageUploadSection from './ImageUploadSection';
+import DocumentUploadSection from './form-sections/DocumentUpload';
 import { PropertyFormData } from '../../types/property';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadPropertyImages } from '../../utils/storage';
@@ -95,9 +95,13 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
         image_urls: imageUrls,
         image_paths: imagePaths
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in form submission:', error);
-      toast.error(error.message || 'Failed to submit form');
+      let errorMessage = 'Failed to submit form';
+      if (error instanceof Error) {
+          errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -115,7 +119,7 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-8 bg-card p-6 md:p-8 rounded-lg shadow-sm">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">
           {initialData ? 'Edit Property' : 'Add New Property'}
@@ -129,45 +133,51 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
         </button>
       </div>
 
-      <ImageUploadSection
-        images={formState.images}
-        existingImages={formState.existingImages}
-        onChange={handleImagesChange}
-        onExistingImagesChange={handleExistingImagesChange}
-        disabled={loading}
-      />
+      <div className="space-y-6">
+        <ImageUploadSection
+          images={formState.images}
+          existingImages={formState.existingImages}
+          onChange={handleImagesChange}
+          onExistingImagesChange={handleExistingImagesChange}
+          disabled={loading}
+        />
 
-      <BasicDetails
-        value={formState.data}
-        onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-        disabled={loading}
-      />
+        <BasicDetails
+          value={formState.data}
+          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
+          disabled={loading}
+        />
 
-      <AddressDetails
-        value={formState.data}
-        onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-        disabled={loading}
-      />
+        <AddressDetails
+          value={formState.data}
+          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
+          disabled={loading}
+        />
 
-      <OverviewSection
-        value={formState.data}
-        onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-        disabled={loading}
-      />
+        <OverviewSection
+          value={formState.data}
+          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
+          disabled={loading}
+        />
 
-      <ListingDetails
-        value={formState.data}
-        onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-        disabled={loading}
-      />
+        <ListingDetails
+          value={formState.data}
+          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
+          disabled={loading}
+        />
 
-      <AmenitiesSection
-        value={formState.data}
-        onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-        disabled={loading}
-      />
+        <AmenitiesSection
+          value={formState.data}
+          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
+          disabled={loading}
+        />
+        
+        {initialData?.id && (
+          <DocumentUploadSection propertyId={initialData.id} />
+        )}
+      </div>
 
-      <div className="flex justify-end space-x-4">
+      <div className="flex justify-end space-x-4 pt-4 border-t border-border">
         <button
           type="button"
           onClick={onCancel}

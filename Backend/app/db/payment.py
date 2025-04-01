@@ -394,4 +394,23 @@ async def get_upcoming_payments(owner_id: str = None, days: int = 7) -> List[Dic
         return payments
     except Exception as e:
         logger.error(f"Failed to get upcoming payments: {str(e)}")
+        return []
+
+async def get_potentially_overdue_payments(today_iso: str) -> List[Dict[str, Any]]:
+    """Fetch payments that are pending or partially_paid and due before a given date."""
+    try:
+        query = supabase_client.table('payments')\
+                    .select('*')\
+                    .in_('status', ['pending', 'partially_paid'])\
+                    .lt('due_date', today_iso)
+        
+        response = await query.execute()
+        
+        if response.error:
+            logger.error(f"Error fetching potentially overdue payments: {response.error.message}")
+            return []
+            
+        return response.data or []
+    except Exception as e:
+        logger.error(f"Failed to get potentially overdue payments: {str(e)}", exc_info=True)
         return [] 

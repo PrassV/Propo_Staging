@@ -8,6 +8,7 @@ from ..db import payment as payment_db
 from ..db import properties as property_db
 from ..db import tenants as tenant_db
 from ..models.payment import PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType
+from . import notification_service # Import notification service
 
 logger = logging.getLogger(__name__)
 
@@ -401,4 +402,79 @@ async def get_payment_summary(owner_id: str) -> Dict[str, Any]:
             'overdue_payments': 0,
             'status_counts': {},
             'type_counts': {}
-        } 
+        }
+
+# --- Scheduled Task Logic --- 
+
+async def check_and_notify_overdue_payments():
+    """Scheduled task to find overdue payments, update status, and notify."""
+    logger.info("Running scheduled task: check_and_notify_overdue_payments")
+    today = date.today()
+    overdue_payments_found = 0
+    notifications_sent = 0
+
+    try:
+        # Fetch payments that are pending or partially paid and due before today
+        potentially_overdue = await payment_db.get_potentially_overdue_payments(today.isoformat())
+
+        for payment in potentially_overdue:
+            payment_id = payment.get('id')
+            tenant_id = payment.get('tenant_id')
+            owner_id = payment.get('owner_id') # Assuming owner_id is on payment table
+            amount_due = payment.get('amount', 0)
+            amount_paid = payment.get('amount_paid', 0) or 0
+
+            if not payment_id or not tenant_id:
+                logger.warning(f"Skipping potentially overdue payment due to missing ID or tenant_id: {payment}")
+                continue
+
+            overdue_payments_found += 1
+
+            # Update payment status to overdue in DB
+            # Use the existing update function but ensure it returns the updated object
+            updated_payment = await payment_db.update_payment(payment_id, {'status': PaymentStatus.OVERDUE.value})
+            if not updated_payment:
+                 logger.error(f"Failed to update payment {payment_id} status to overdue.")
+                 continue # Skip notification if status update failed
+
+            # Trigger Notifications (Tenant and Owner)
+            # Tenant Notification
+            tenant_message = f"Your payment of {amount_due} for property {payment.get('property_id')} was due on {payment.get('due_date')} and is now overdue. Amount paid: {amount_paid}."
+            tenant_notification_data = NotificationCreate(
+                user_id=tenant_id,
+                title="Payment Overdue",
+                message=tenant_message,
+                notification_type=NotificationType.PAYMENT_OVERDUE.value,
+                priority=NotificationPriority.HIGH.value,
+                methods=[NotificationMethod.IN_APP, NotificationMethod.EMAIL], # Example
+                related_entity_id=payment_id,
+                related_entity_type="payment"
+            )
+            await notification_service.create_notification(tenant_notification_data)
+            notifications_sent += 1
+
+            # Owner Notification (Optional)
+            if owner_id:
+                owner_message = f"Payment of {amount_due} from tenant {tenant_id} for property {payment.get('property_id')} (Due: {payment.get('due_date')}) is now overdue."
+                owner_notification_data = NotificationCreate(
+                    user_id=owner_id,
+                    title="Tenant Payment Overdue",
+                    message=owner_message,
+                    notification_type=NotificationType.PAYMENT_OVERDUE.value,
+                    priority=NotificationPriority.MEDIUM.value,
+                    methods=[NotificationMethod.IN_APP], # Example
+                    related_entity_id=payment_id,
+                    related_entity_type="payment"
+                )
+                await notification_service.create_notification(owner_notification_data)
+                notifications_sent += 1
+
+        logger.info(f"Scheduled task finished. Checked {overdue_payments_found} potentially overdue payments. Sent {notifications_sent} notifications.")
+
+    except Exception as e:
+        logger.error(f"Error during scheduled check for overdue payments: {e}", exc_info=True)
+
+# TODO: Add get_potentially_overdue_payments function to payment_db.py
+# This function should select payments WHERE status IN ('pending', 'partially_paid') AND due_date < today
+
+# TODO: Integrate call to check_and_notify_overdue_payments with a scheduler (APScheduler, Celery Beat, etc.) 

@@ -9,7 +9,9 @@ async def get_maintenance_requests(
     property_id: str = None, 
     owner_id: str = None, 
     tenant_id: str = None,
-    status: str = None
+    status: str = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Get maintenance requests from Supabase, optionally filtered.
@@ -19,6 +21,8 @@ async def get_maintenance_requests(
         owner_id: Optional owner ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
+        start_date: Optional start date (YYYY-MM-DD) to filter by created_at
+        end_date: Optional end date (YYYY-MM-DD) to filter by created_at
         
     Returns:
         List of maintenance requests
@@ -37,6 +41,14 @@ async def get_maintenance_requests(
             
         if status:
             query = query.eq('status', status)
+        
+        if start_date:
+            query = query.gte('created_at', start_date)
+        
+        if end_date:
+            query = query.lte('created_at', end_date + 'T23:59:59')
+        
+        query = query.order('created_at', desc=True)
         
         response = query.execute()
         
@@ -250,4 +262,44 @@ async def get_maintenance_comments(request_id: str) -> List[Dict[str, Any]]:
         return response.data or []
     except Exception as e:
         logger.error(f"Failed to get maintenance comments: {str(e)}")
+        return []
+
+async def get_tenant_properties(tenant_id: str) -> List[Dict[str, Any]]:
+    """
+    Get properties associated with a tenant through property_tenants links.
+    
+    This is used for access control in the maintenance request count function.
+    
+    Args:
+        tenant_id: The tenant ID to get properties for
+        
+    Returns:
+        List of property data including owner_id
+    """
+    try:
+        # First get property IDs from property_tenants table
+        links_response = supabase_client.table('property_tenants').select('property_id').eq('tenant_id', tenant_id).execute()
+        
+        if "error" in links_response and links_response["error"]:
+            logger.error(f"Error fetching property links for tenant: {links_response['error']}")
+            return []
+            
+        if not links_response.data:
+            # No properties linked to this tenant
+            return []
+            
+        # Extract property IDs
+        property_ids = [link['property_id'] for link in links_response.data]
+        
+        # Get property information (including owner_id)
+        properties = []
+        for property_id in property_ids:
+            property_response = supabase_client.table('properties').select('id, owner_id, property_name').eq('id', property_id).execute()
+            
+            if not property_response.error and property_response.data:
+                properties.append(property_response.data[0])
+                
+        return properties
+    except Exception as e:
+        logger.error(f"Failed to get properties for tenant {tenant_id}: {str(e)}")
         return [] 

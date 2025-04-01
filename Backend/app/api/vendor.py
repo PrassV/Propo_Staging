@@ -2,9 +2,9 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 import logging
 
-from ..models.vendor import Vendor, VendorCreate, VendorUpdate
-from ..services import vendor_service
-from ..config.auth import get_current_user
+from app.models.vendor import Vendor, VendorCreate, VendorUpdate
+from app.services import vendor_service
+from app.config.auth import get_current_user
 
 router = APIRouter(
     prefix="/vendors",

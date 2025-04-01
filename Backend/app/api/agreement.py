@@ -2,15 +2,15 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Form
 import logging
 
-from ..models.agreement import (
+from app.models.agreement import (
     Agreement,
     AgreementCreate,
     AgreementUpdate,
     AgreementTemplate,
     AgreementTemplateCreate
 )
-from ..services import agreement_service
-from ..config.auth import get_current_user
+from app.services import agreement_service
+from app.config.auth import get_current_user
 
 router = APIRouter(
     prefix="/agreements",

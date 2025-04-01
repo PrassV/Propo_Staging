@@ -2,16 +2,18 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 import logging
+import uuid
 
-from ..models.maintenance import (
+from app.models.maintenance import (
     MaintenanceRequest,
     MaintenanceCreate,
     MaintenanceUpdate,
     MaintenanceComment,
-    MaintenanceStatus
+    MaintenanceStatus,
+    MaintenancePriority
 )
-from ..services import maintenance_service
-from ..config.auth import get_current_user
+from app.services import maintenance_service
+from app.config.auth import get_current_user
 
 router = APIRouter(
     prefix="/maintenance",
@@ -524,4 +526,45 @@ async def get_maintenance_summary(
         raise
     except Exception as e:
         logger.error(f"Error getting maintenance summary: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get maintenance summary") 
+        raise HTTPException(status_code=500, detail="Failed to get maintenance summary")
+
+@router.get("/requests/count", response_model=Dict[str, int])
+async def get_maintenance_requests_count(
+    tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
+    status: Optional[str] = Query('new', description="Status to filter by (default: new)"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Get count of maintenance requests matching the specified filters.
+    
+    This is particularly useful for dashboard widgets that show pending request counts.
+    Users can only access counts for their own requests or requests related to their properties.
+    
+    Args:
+        tenant_id: Optional tenant ID to filter requests for a specific tenant
+        status: Status to filter by (new, in_progress, completed, etc.) - defaults to 'new'
+        current_user: The currently authenticated user
+        
+    Returns:
+        Dictionary with count of matching requests
+    """
+    try:
+        # Convert string UUID to UUID object if present
+        tenant_id_obj = uuid.UUID(tenant_id) if tenant_id else None
+        user_id = uuid.UUID(current_user["id"])
+        
+        # Get count from service
+        count = await maintenance_service.count_maintenance_requests(
+            user_id=user_id,
+            tenant_id=tenant_id_obj,
+            status=status
+        )
+        
+        return {"count": count}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Invalid UUID format: {str(ve)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error counting maintenance requests: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to count maintenance requests") 

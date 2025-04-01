@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Body
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+import uuid
 
-from ..models.notification import (
+from app.models.notification import (
     NotificationCreate,
     NotificationUpdate,
     Notification,
     NotificationSettings
 )
-from ..services import notification_service
-from ..utils.security import get_current_user
+from app.services import notification_service
+from app.config.auth import get_current_user
 
 router = APIRouter()
 

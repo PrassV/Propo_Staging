@@ -18,7 +18,7 @@ export interface Property {
   address_line2?: string;
   city: string;
   state: string;
-  pincode: string;
+  zip_code?: string;
   image_url?: string;
   description?: string;
   category?: string;

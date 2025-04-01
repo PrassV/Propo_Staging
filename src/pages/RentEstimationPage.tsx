@@ -1,6 +1,8 @@
 import { useState, ChangeEvent } from 'react';
 import { Building2, MapPin, Home, IndianRupee } from 'lucide-react';
 import InputField from '../components/common/InputField';
+import api from '../api'; // Import the api object
+import { RentEstimationRequest, RentEstimationResponse } from '../api/types'; // Import types
 
 interface RentEstimationFormData {
   propertyType: string;
@@ -48,25 +50,46 @@ export default function RentEstimationPage() {
   });
   const [estimatedRent, setEstimatedRent] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // Add error state
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null); // Reset error
+    setEstimatedRent(null); // Reset previous estimate
+
+    // Prepare data for API (ensure types match RentEstimationRequest)
+    const requestData: RentEstimationRequest = {
+      property_type: formData.propertyType,
+      area: parseInt(formData.area, 10),
+      bedrooms: parseInt(formData.bedrooms, 10),
+      bathrooms: parseInt(formData.bathrooms, 10),
+      location: formData.location,
+      amenities: formData.amenities,
+      furnishing_status: formData.furnishingStatus
+    };
+
+    // Validate numeric fields
+    if (isNaN(requestData.area) || isNaN(requestData.bedrooms) || isNaN(requestData.bathrooms)) {
+      setError("Area, bedrooms, and bathrooms must be valid numbers.");
+      setLoading(false);
+      return;
+    }
 
     try {
-      // TODO: Integrate with actual rent estimation API
-      // For now, using a mock calculation
-      const baseRent = parseInt(formData.area) * 40; // ₹40 per sq ft
-      const bedroomMultiplier = parseInt(formData.bedrooms) * 5000;
-      const amenitiesMultiplier = formData.amenities.length * 2000;
-      const furnishingMultiplier = 
-        formData.furnishingStatus === 'fully_furnished' ? 15000 :
-        formData.furnishingStatus === 'semi_furnished' ? 8000 : 0;
+      // Call the API service
+      const response: RentEstimationResponse = await api.rentEstimation.estimateRent(requestData);
+      setEstimatedRent(response.estimated_rent); // Use the response from API
 
-      const estimated = baseRent + bedroomMultiplier + amenitiesMultiplier + furnishingMultiplier;
-      setEstimatedRent(estimated);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error estimating rent:', error);
+      let errorMessage = 'Failed to estimate rent. Please try again later.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'formattedMessage' in error) {
+        errorMessage = (error as { formattedMessage: string }).formattedMessage;
+      }
+      setError(errorMessage); // Set error message for display
     } finally {
       setLoading(false);
     }
@@ -179,13 +202,22 @@ export default function RentEstimationPage() {
           >
             {loading ? 'Estimating...' : 'Estimate Rent'}
           </button>
+
+          {/* Display API Error Message */}
+          {error && (
+            <div className="mt-4 text-center text-red-600 bg-red-50 p-3 rounded-lg">
+              {error}
+            </div>
+          )}
         </form>
 
         {/* Results Section */}
         <div className="bg-gray-50 rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-6">Estimated Rental Value</h2>
           
-          {estimatedRent ? (
+          {loading && <p className="text-center">Estimating...</p> } 
+
+          {estimatedRent !== null && !loading && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -219,9 +251,18 @@ export default function RentEstimationPage() {
                 </p>
               </div>
             </div>
-          ) : (
+          )}
+
+          {!loading && estimatedRent === null && !error && (
             <div className="text-center text-gray-500">
               <p>Fill in the property details to get an estimated rental value</p>
+            </div>
+          )}
+
+          {/* Display error in results section as well/instead? */}
+          {error && !loading && (
+             <div className="text-center text-red-500">
+              <p>Could not retrieve estimate: {error}</p>
             </div>
           )}
         </div>

@@ -1,68 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Profile } from '../types/profile';
+import { UserProfile, UserUpdate } from '../api/types';
+import api from '../api';
 
 export function useProfile() {
-  const { user, initialized } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { initialized } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async () => {
-    if (!user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (fetchError) {
-        if (fetchError.code === 'PGRST116') {
-          try {
-            const { data: newProfile, error: createError } = await supabase
-              .from('user_profiles')
-              .insert({ 
-                id: user.id, 
-                email: user.email,
-                created_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-            if (createError) {
-              throw new Error(createError.message || 'Failed to create profile');
-            }
-            
-            setProfile(newProfile);
-            return;
-          } catch (createErr) {
-            throw new Error(createErr instanceof Error ? createErr.message : 'Failed to create profile');
-          }
-        }
-        throw new Error(fetchError.message || 'Failed to fetch profile');
+      const fetchedProfile = await api.auth.getCurrentUserProfile();
+      setProfile(fetchedProfile);
+    } catch (err: unknown) {
+      console.error('Profile fetch error:', err);
+      let errorMessage = 'Failed to fetch profile';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null && 'formattedMessage' in err) {
+        errorMessage = (err as { formattedMessage: string }).formattedMessage;
       }
-
-      setProfile(data);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
-      console.error('Profile fetch error:', { error: err, message: errorMessage });
-      setError(new Error(errorMessage));
+      setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (initialized) {
@@ -74,5 +41,29 @@ export function useProfile() {
     return fetchProfile();
   }, [fetchProfile]);
 
-  return { profile, loading, error, refetch };
+  const updateProfile = useCallback(async (updateData: UserUpdate): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const updatedProfile = await api.auth.updateCurrentUserProfile(updateData);
+      setProfile(updatedProfile);
+      toast.success('Profile updated successfully!');
+      return true;
+    } catch (err: unknown) {
+      console.error('Profile update error:', err);
+      let errorMessage = 'Failed to update profile';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null && 'formattedMessage' in err) {
+        errorMessage = (err as { formattedMessage: string }).formattedMessage;
+      }
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { profile, loading, error, refetch, updateProfile };
 }

@@ -40,6 +40,7 @@ function adaptApiTenant(apiTenant: ApiTenant): FrontendTenant {
 export function useTenantsApi(propertyId?: string) {
   const { user } = useAuth();
   const [tenants, setTenants] = useState<FrontendTenant[]>([]);
+  const [totalTenants, setTotalTenants] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,10 +51,10 @@ export function useTenantsApi(propertyId?: string) {
       setLoading(true);
       setError(null);
 
-      const apiTenants = await api.tenant.getTenants(propertyId);
-      // Convert API tenants to frontend tenant model
-      const adaptedTenants = apiTenants.map(adaptApiTenant);
+      const response = await api.tenant.getTenants(propertyId);
+      const adaptedTenants = response.items.map(adaptApiTenant);
       setTenants(adaptedTenants);
+      setTotalTenants(response.total);
     } catch (error: unknown) {
       console.error('Error fetching tenants:', error);
       let errorMessage = 'Failed to fetch tenants';
@@ -68,17 +69,16 @@ export function useTenantsApi(propertyId?: string) {
     }
   };
 
-  // Remove tenant from local state
   const removeTenant = (tenantId: string) => {
     setTenants(prev => prev.filter(t => t.id !== tenantId));
+    setTotalTenants(prev => prev - 1);
   };
 
-  // Add tenant to local state
   const addTenant = (tenant: FrontendTenant) => {
     setTenants(prev => [...prev, tenant]);
+    setTotalTenants(prev => prev + 1);
   };
 
-  // Update tenant in local state
   const updateTenant = (tenantId: string, updatedTenant: Partial<FrontendTenant>) => {
     setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, ...updatedTenant } : t));
   };
@@ -91,6 +91,7 @@ export function useTenantsApi(propertyId?: string) {
 
   return { 
     tenants, 
+    totalTenants,
     loading, 
     error, 
     refetch: fetchTenants, 
