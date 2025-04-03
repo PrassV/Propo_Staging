@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useInvitationData } from '../../../hooks/useInvitationData';
-import { supabase } from '../../../lib/supabase';
 import { clearInvitationToken } from '../../../utils/token';
 import toast from 'react-hot-toast';
 import BasicInfoForm from './BasicInfoForm';
@@ -10,10 +9,13 @@ import AddressForm from './AddressForm';
 import IdVerificationForm from './IdVerificationForm';
 import { TenantFormData } from '../../../types/tenant';
 
+import { uploadFile } from '../../../api/services/uploadService';
+import { updateUserProfile, UserProfileUpdateData } from '../../../api/services/userService';
+
 export default function TenantOnboardingForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { invitationData, loading: invitationLoading } = useInvitationData();
+  const { invitationData } = useInvitationData();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<TenantFormData>({
     firstName: '',
@@ -35,7 +37,7 @@ export default function TenantOnboardingForm() {
   useEffect(() => {
     if (invitationData?.tenant) {
       const tenant = invitationData.tenant;
-      setFormData(prev => ({
+      setFormData((prev: TenantFormData) => ({
         ...prev,
         firstName: tenant.name.split(' ')[0] || '',
         lastName: tenant.name.split(' ').slice(1).join(' ') || '',
@@ -51,57 +53,46 @@ export default function TenantOnboardingForm() {
 
     setLoading(true);
     try {
-      // Upload ID proof
+      // Upload ID proof using service
       let idProofUrl = '';
       if (formData.idProof) {
-        const fileExt = formData.idProof.name.split('.').pop();
-        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('id-documents')
-          .upload(filePath, formData.idProof);
-
-        if (uploadError) throw uploadError;
-        idProofUrl = filePath;
+        idProofUrl = await uploadFile(formData.idProof, 'tenant_id_document', user.id);
       }
 
-      // Create/update profile
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          address_line1: formData.addressLine1,
-          address_line2: formData.addressLine2,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          id_type: formData.idType,
-          id_image_url: idProofUrl,
-          user_type: 'tenant'
-        });
+      // Create/update profile using service
+      const profileData: UserProfileUpdateData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+        address_line1: formData.addressLine1,
+        address_line2: formData.addressLine2,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        id_type: formData.idType,
+        id_image_url: idProofUrl,
+        user_type: 'tenant'
+      };
+      await updateUserProfile(profileData);
 
-      if (profileError) throw profileError;
-
-      // If this was from an invitation, update the invitation status
+      // Still clear token if it was part of an invitation flow
       if (invitationData) {
-        const { error: inviteError } = await supabase
-          .from('tenant_invitations')
-          .update({ status: 'accepted' })
-          .eq('id', invitationData.id);
-
-        if (inviteError) throw inviteError;
         clearInvitationToken();
       }
 
       toast.success('Profile created successfully!');
       navigate('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating profile:', error);
-      toast.error(error.message || 'Failed to create profile');
+      let errorMessage = 'Failed to create profile';
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

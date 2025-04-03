@@ -1,14 +1,14 @@
 import { formatDate } from '../../../utils/date';
+import { TenantWithProperty } from '../../../types/tenant';
 
 interface LeaseDetailsProps {
-  tenantData: any;
+  tenantData: TenantWithProperty;
 }
 
 export default function LeaseDetails({ tenantData }: LeaseDetailsProps) {
   const startDate = tenantData.rental_start_date || tenantData.lease_start_date;
   const endDate = tenantData.rental_end_date || tenantData.lease_end_date;
   const duration = tenantData.rental_type === 'rent' ? '24 Months' : 'Lease Period';
-  const evictionDate = new Date(endDate);
   const evictionNotice = '2 Weeks';
 
   return (

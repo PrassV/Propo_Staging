@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Path, Query
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, Field
 import uuid
 from datetime import datetime
 
@@ -8,6 +8,7 @@ from app.models.tenant import (
     Tenant, TenantCreate, TenantUpdate,
     PropertyTenantLink, TenantInvitationCreate, TenantInvitation
 )
+from app.models.user import User # Assuming User model exists for auth response
 
 # Importing placeholder models until properly defined
 from app.models.property import Property  # Assuming Property model exists
@@ -54,7 +55,49 @@ class PaymentStatusResponse(BaseModel):
     isOverdue: bool = False
     message: str = "Success"
 
+# --- Request Body Model for Verification ---
+class TenantVerifyLinkRequest(BaseModel):
+    property_id: UUID4 = Field(..., description="The ID of the property to verify association with.")
+
 # --- Tenant CRUD Endpoints ---
+
+@router.get("/me", response_model=TenantResponse)
+async def get_current_user_tenant(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get the tenant profile associated with the currently authenticated user.
+    """
+    try:
+        user_id_str = current_user.get("id")
+        if not user_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Authentication token invalid or missing user ID."
+            )
+        
+        user_id = uuid.UUID(user_id_str)
+        
+        tenant_data = await tenant_service.get_tenant_by_user_id(user_id)
+        
+        if not tenant_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No tenant profile found linked to the current user."
+            )
+        
+        return {
+            "tenant": tenant_data,
+            "message": "Current tenant profile retrieved successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Error retrieving tenant profile for user {user_id_str}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred retrieving tenant profile: {str(e)}"
+        )
 
 @router.get("/", response_model=TenantsListResponse)
 async def get_tenants(
@@ -271,6 +314,58 @@ async def invite_tenant(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating invitation: {str(e)}"
+        )
+
+# --- Tenant Linking/Verification ---
+
+@router.post("/verify-link", status_code=status.HTTP_200_OK)
+async def verify_and_link_tenant(
+    request_body: TenantVerifyLinkRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Verifies if the current authenticated user matches the tenant details 
+    associated with the given property ID and links the tenant record to the user ID.
+    """
+    try:
+        user_id_str = current_user.get("id")
+        user_email = current_user.get("email") # Assuming email is in the token payload
+        
+        if not user_id_str or not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Authentication token invalid or missing required user info (ID, email)."
+            )
+        
+        user_id = uuid.UUID(user_id_str)
+        property_id = request_body.property_id
+
+        success = await tenant_service.verify_and_link_tenant_by_property(
+            property_id=property_id,
+            user_id=user_id,
+            user_email=user_email,
+            # Pass other user details if needed for verification (e.g., name, phone)
+            # user_details=current_user 
+        )
+        
+        if success:
+            return {"message": "Tenant verified and linked successfully."}
+        else:
+            # The service layer should raise specific HTTPExceptions for not found or mismatch
+            # This path might not be reached if service layer raises correctly.
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Failed to verify or link tenant. Property ID might be invalid or tenant details do not match."
+            )
+
+    except HTTPException as http_exc:
+        # Re-raise exceptions raised from the service layer or auth
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Error during tenant verification/linking for user {user_id_str} and property {request_body.property_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during tenant verification: {str(e)}"
         )
 
 # --- Related Data Endpoints ---

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import InputField from '../auth/InputField';
-import { supabase } from '../../lib/supabase';
 import { ProfileFormData } from '../../types/profile';
 import { validateProfileForm } from '../../utils/profile-validation';
 import toast from 'react-hot-toast';
+import { updateUserProfile } from '../../api/services/userService';
 
 interface ProfileFormProps {
   initialData: Partial<ProfileFormData> & { id?: string };
@@ -50,26 +50,30 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          address_line1: formData.addressLine1,
-          address_line2: formData.addressLine2,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode
-        })
-        .eq('id', initialData.id);
+      await updateUserProfile({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone,
+        address_line1: formData.addressLine1,
+        address_line2: formData.addressLine2,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode
+      });
 
-      if (error) throw error;
       toast.success('Profile updated successfully');
       onSave();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating profile:', error);
-      toast.error(error.message || 'Failed to update profile');
+      let errorMessage = 'Failed to update profile';
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }

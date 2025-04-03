@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 import uuid
 import secrets # For invitation tokens
+from fastapi import HTTPException, status
 
 from ..models.tenant import (
     TenantCreate, TenantUpdate, Tenant, 
@@ -361,4 +362,113 @@ async def get_tenant_payment_tracking(
         return payments
     except Exception as e:
         logger.exception(f"Error in get_tenant_payment_tracking service: {str(e)}")
-        return [] 
+        return []
+
+async def verify_and_link_tenant_by_property(
+    property_id: uuid.UUID,
+    user_id: uuid.UUID,
+    user_email: str,
+    user_details: Optional[Dict[str, Any]] = None # For potential future checks (name, phone)
+) -> bool:
+    """
+    Finds a tenant associated with a property ID, verifies their email 
+    against the provided user email, and links the tenant record to the user ID.
+    
+    Raises HTTPException for specific failure reasons (not found, mismatch, already linked).
+    Returns True on successful verification and linking.
+    """
+    logger.info(f"Attempting to verify/link tenant for user {user_id} and property {property_id}")
+    
+    try:
+        # 1. Find the tenant associated with the property
+        # Assume tenant_db.get_tenant_by_property_id returns a Tenant-like object/dict or None
+        tenant_record = await tenants_db.get_tenant_by_property_id(property_id)
+        
+        if not tenant_record:
+            logger.warning(f"Verification failed: No tenant found for property_id {property_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No tenant association found for the provided Property ID."
+            )
+
+        # Extract tenant details for comparison (adjust field names based on actual db model)
+        tenant_id = tenant_record.get('id')
+        tenant_email = tenant_record.get('email')
+        existing_user_id = tenant_record.get('user_id')
+
+        if not tenant_id or not tenant_email:
+             logger.error(f"Verification failed: Tenant record {tenant_id} for property {property_id} is missing ID or email.")
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Incomplete tenant data found.")
+
+        # 2. Check if already linked to a DIFFERENT user
+        if existing_user_id and uuid.UUID(str(existing_user_id)) != user_id:
+            logger.warning(f"Verification failed: Tenant {tenant_id} already linked to different user {existing_user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This tenant profile is already linked to a different user account."
+            )
+        
+        # 3. Check if already linked to the SAME user (optional, can just succeed)
+        if existing_user_id and uuid.UUID(str(existing_user_id)) == user_id:
+            logger.info(f"Verification skipped: Tenant {tenant_id} already linked to user {user_id}")
+            return True # Already correctly linked, consider it a success
+
+        # 4. Verify tenant email matches the authenticated user's email
+        # Case-insensitive comparison is safer
+        if tenant_email.lower() != user_email.lower():
+            logger.warning(f"Verification failed: Email mismatch for tenant {tenant_id}. Expected '{tenant_email}', got '{user_email}'")
+            # Add more checks here if using user_details (name, phone)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenant details do not match the authenticated user."
+            )
+        
+        # 5. Link the tenant record to the user ID
+        logger.info(f"Verification successful for tenant {tenant_id}. Linking to user {user_id}")
+        # Assume tenant_db.update_tenant_user_id updates the record and returns success/failure
+        update_success = await tenants_db.update_tenant_user_id(tenant_id, user_id)
+        
+        if not update_success:
+            logger.error(f"Failed to update user_id for tenant {tenant_id} in database.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to link tenant account after verification."
+            )
+        
+        logger.info(f"Successfully linked tenant {tenant_id} to user {user_id}")
+        return True
+
+    except HTTPException as http_exc:
+        # Re-raise specific exceptions for API layer to handle
+        raise http_exc
+    except Exception as e:
+        # Catch unexpected errors (e.g., database connection issues)
+        logger.exception(f"Unexpected error during tenant verification/linking for property {property_id} and user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during the verification process: {str(e)}"
+        )
+
+async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
+    """
+    Retrieves a tenant profile linked to a specific user ID.
+    Returns the Tenant object or None if not found.
+    """
+    logger.info(f"Retrieving tenant profile for user_id {user_id}")
+    try:
+        # Call the corresponding DB/CRUD function
+        tenant_data = await tenants_db.get_tenant_by_user_id(user_id)
+        
+        if tenant_data:
+            logger.info(f"Found tenant profile {tenant_data.get('id')} for user {user_id}")
+            # Assuming tenant_data is a dict-like object that can be parsed into the Tenant model
+            # Add error handling if parsing fails
+            return Tenant(**tenant_data) 
+        else:
+            logger.info(f"No tenant profile found for user_id {user_id}")
+            return None
+    except Exception as e:
+        logger.exception(f"Unexpected error retrieving tenant by user_id {user_id}: {e}")
+        # Propagate the error or handle it (e.g., return None, raise specific exception)
+        # For now, re-raising might be simplest if the API layer catches it.
+        raise # Or raise HTTPException(status.HTTP_500...) depending on desired handling 

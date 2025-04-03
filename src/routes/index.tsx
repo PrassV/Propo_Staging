@@ -5,6 +5,8 @@ import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
 import AuthCallback from '../components/auth/AuthCallback';
 
+// Dashboard pages
+const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const OwnerDashboard = lazy(() => import('../components/dashboard/owner/OwnerDashboard'));
 const TenantDashboard = lazy(() => import('../components/dashboard/tenant/TenantDashboard'));
 const PropertyList = lazy(() => import('../pages/dashboard/PropertiesPage'));
@@ -35,8 +37,8 @@ export const routes: RouteObject[] = [
   {
     path: '/dashboard',
     element: (
-      <RouteGuard requireAuth requireProfile>
-        {withSuspense(OwnerDashboard)}
+      <RouteGuard requireAuth>
+        {withSuspense(DashboardPage)}
       </RouteGuard>
     )
   },

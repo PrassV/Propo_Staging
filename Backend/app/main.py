@@ -27,7 +27,8 @@ from .api import (
     agreement,
     document,
     reporting,
-    notification
+    notification,
+    uploads
 )
 
 # Setup logging
@@ -108,6 +109,7 @@ app.include_router(agreement)
 app.include_router(document, prefix="/documents", tags=["Documents"])
 app.include_router(reporting, prefix="/reports", tags=["Reports"])
 app.include_router(notification, prefix="/notifications", tags=["Notifications"])
+app.include_router(uploads)
 
 if __name__ == "__main__":
     import uvicorn

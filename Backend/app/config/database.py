@@ -1,8 +1,7 @@
-from supabase import create_client, Client, AsyncClient
+from supabase import create_client, Client
 from .settings import settings
 import logging
 import os
-import httpx # Import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -39,40 +38,35 @@ security_scheme = HTTPBearer()
 
 async def get_supabase_client_authenticated(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme)
-) -> AsyncClient:
+) -> Client:
     """
-    FastAPI dependency that provides an ASYNCHRONOUS Supabase client instance 
-    configured with authorization headers for the user's JWT token.
-    Ensures RLS policies based on auth.uid() work correctly in async contexts.
+    FastAPI dependency that provides a Supabase client instance configured
+    with the user's JWT token in the headers for RLS.
     """
     try:
         token = credentials.credentials
-        
-        # Create an EXPLICIT AsyncClient with the ANON key
-        request_client: AsyncClient = AsyncClient(
+
+        # Create a standard client instance for this request scope
+        # We use create_client, same as the global one
+        request_client: Client = create_client(
             settings.SUPABASE_URL,
-            settings.SUPABASE_KEY  # Use the anon key
+            settings.SUPABASE_KEY # Use the anon key for base client creation
         )
-        
-        # Set the Authorization header on the postgrest client's session
-        # This is the session that makes the actual database calls
-        # Access async session via request_client.postgrest.session
-        request_client.postgrest.session.headers.update({
-            "Authorization": f"Bearer {token}"
-        })
-        
-        # Also set it on any other client components that might be used (async way)
-        if hasattr(request_client, 'functions') and hasattr(request_client.functions, 'session'):
-            request_client.functions.session.headers.update({
-                "Authorization": f"Bearer {token}"
-            })
-        
-        logger.debug("Created request-scoped ASYNC Supabase client with Authorization headers on postgrest session")
-        yield request_client
-        
+
+        # IMPORTANT: Set the Authorization header on the client instance for the CURRENT request.
+        # This automatically applies the header to subsequent PostgREST calls made with this client instance.
+        # request_client.auth.session = lambda: {'access_token': token, 'token_type': 'bearer'} # REMOVED: This might conflict or be unnecessary
+        # Alternative/preferred way for newer versions might be directly setting headers on postgrest:
+        request_client.postgrest.auth(token) # Pass the token directly
+
+        # You might not need to yield if you return the client directly
+        # yield request_client
+        return request_client # Return the configured client
+
     except Exception as e:
-        logger.error(f"Failed to create authenticated ASYNC Supabase client: {str(e)}", exc_info=True)
+        logger.error(f"Failed to create authenticated Supabase client: {str(e)}", exc_info=True)
+        # Keep the original specific error detail for diagnosis
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create authenticated database client."
+            detail=f"Could not configure authenticated database client: {str(e)}" # Add original error detail
         ) 

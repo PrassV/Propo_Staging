@@ -1,59 +1,49 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { getMaintenanceRequestById } from '../../api/services/maintenanceService';
 import { updateMaintenanceRequest } from '../../utils/maintenance';
 import StatusTimeline from './StatusTimeline';
 import RequestMessages from './RequestMessages';
 import RequestInfo from './RequestInfo';
 import LoadingSpinner from '../common/LoadingSpinner';
 import toast from 'react-hot-toast';
+import { MaintenanceRequest, MaintenanceStatus } from '../../api/types';
 
 export default function RequestDetails() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [request, setRequest] = useState<any>(null);
+  const [request, setRequest] = useState<MaintenanceRequest | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (id) {
       fetchRequestDetails();
+    } else {
+      toast.error("Maintenance request ID is missing.");
+      setLoading(false);
+      setRequest(null);
     }
   }, [id]);
 
   const fetchRequestDetails = async () => {
+    if (!id) return;
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('maintenance_requests')
-        .select(`
-          *,
-          property:properties(
-            id,
-            property_name,
-            address_line1,
-            city
-          ),
-          tenant:tenants(
-            id,
-            name,
-            email,
-            phone
-          ),
-          vendor:maintenance_vendors(
-            id,
-            name,
-            phone,
-            email
-          )
-        `)
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const data = await getMaintenanceRequestById(id);
       setRequest(data);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching request details:', error);
-      toast.error('Failed to load request details');
+      let errorMessage = 'Failed to load request details';
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      toast.error(errorMessage);
+      setRequest(null);
     } finally {
       setLoading(false);
     }
@@ -61,8 +51,10 @@ export default function RequestDetails() {
 
   const handleUpdateStatus = async (status: string) => {
     if (!id) return;
-
-    const result = await updateMaintenanceRequest(id, { status });
+    
+    const updatePayload = { status: status as MaintenanceStatus };
+    
+    const result = await updateMaintenanceRequest(id, updatePayload);
     if (result.success) {
       toast.success('Status updated successfully');
       fetchRequestDetails();

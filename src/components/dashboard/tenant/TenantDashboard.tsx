@@ -1,37 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { supabase } from '../../../lib/supabase';
+// Removed Supabase import
+// import { supabase } from '../../../lib/supabase';
 import EmptyTenantState from './EmptyTenantState';
 import LeaseDetails from './LeaseDetails';
 import PaymentPlans from './PaymentPlans';
 import PaymentHistory from './PaymentHistory';
-import RoommateDetails from './RoommateDetails';
+// Removed unused import
+// import RoommateDetails from './RoommateDetails'; 
 import LoadingSpinner from '../../common/LoadingSpinner';
 // Imports for Overview
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getTenantPaymentStatus, RecentPaymentStatus } from '../../../api/services/paymentService';
 import { getOpenTenantRequestsCount } from '../../../api/services/maintenanceService';
 import { CalendarDays, Wrench, DollarSign, CreditCard } from 'lucide-react'; // Import icons
-import { Tenant } from '../../../types/tenant'; // Import Tenant type
-import { Property } from '../../../types/property'; // Import Property type
-import toast from 'react-hot-toast'; // Import toast
-import { Button } from "@/components/ui/button"; // Ensure Button is imported
-import { Link } from 'react-router-dom'; // Import Link
 
-// Define roommate type (adjust if different)
-interface Roommate {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  university?: string;
-}
+// Import the new service function and Tenant type
+import { getCurrentTenantProfile } from '../../../api/services/tenantService';
+import { Tenant, TenantWithProperty } from '../../../types/tenant';
+import { Property } from '../../../types/property'; 
 
-// Use Roommate[] for roommates field
-interface TenantDashboardData extends Tenant {
-    property?: Property; 
-    roommates?: Roommate[]; 
-}
+import toast from 'react-hot-toast'; 
+import { Button } from "@/components/ui/button"; 
+import { Link } from 'react-router-dom';
 
 // Helper to format date string
 const formatDate = (dateString?: string) => {
@@ -45,8 +36,8 @@ const formatDate = (dateString?: string) => {
 
 export default function TenantDashboard() {
   const { user } = useAuth();
-  // Use the extended type for state
-  const [tenantData, setTenantData] = useState<TenantDashboardData | null>(null);
+  // Use the potentially combined type
+  const [tenantData, setTenantData] = useState<TenantWithProperty | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // State for overview data
@@ -61,44 +52,14 @@ export default function TenantDashboard() {
     setError(null);
 
     try {
-      // Destructure with const first
-      const { data: initialTenantData, error: tenantError } = await supabase
-        .from('tenants')
-        .select('*, property_tenants!inner(property:properties(*))')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      // Re-declare fetchedTenantData with let for potential reassignment
-      let fetchedTenantData = initialTenantData; 
-
-      if (!fetchedTenantData && !tenantError) {
-        const { data: emailTenant, error: emailError } = await supabase
-           .from('tenants')
-           .select('*, property_tenants!inner(property:properties(*))')
-           .eq('email', user.email)
-           .maybeSingle();
-        if (emailError) throw emailError;
-        if (emailTenant) {
-          const { error: updateError } = await supabase.from('tenants').update({ user_id: user.id }).eq('id', emailTenant.id);
-          if (updateError) throw updateError;
-          fetchedTenantData = emailTenant; // Reassignment is valid
-        }
-      }
-
-      if (tenantError) throw tenantError;
-
-      const currentTenantData: TenantDashboardData | null = fetchedTenantData ? {
-          ...fetchedTenantData,
-          property: fetchedTenantData.property_tenants?.[0]?.property as Property | undefined,
-          // Assume fetchedTenantData.roommates matches Roommate[] structure
-          roommates: fetchedTenantData.roommates as Roommate[] | undefined 
-      } : null;
-      
-      setTenantData(currentTenantData);
+      // Call the new service function
+      const currentTenantData = await getCurrentTenantProfile();
+      setTenantData(currentTenantData as TenantWithProperty | null);
 
       // If tenant data exists, fetch overview details
       if (currentTenantData?.id) {
           try {
+              // Fetch overview data using existing services
               const [status, reqCount] = await Promise.all([
                   getTenantPaymentStatus(currentTenantData.id),
                   getOpenTenantRequestsCount(currentTenantData.id)
@@ -107,15 +68,35 @@ export default function TenantDashboard() {
               setOpenRequestsCount(reqCount);
           } catch (overviewError) {
               console.error("Error fetching tenant overview data:", overviewError);
-              // Handle overview fetch error separately? Maybe just log for now.
-              toast("Could not load some overview details.");
+              toast.error("Could not load some overview details."); // Changed toast message
           }
       }
     } catch (error: unknown) {
       console.error('Error fetching tenant data:', error);
-      // Add type check
-      const message = error instanceof Error ? error.message : 'Failed to fetch tenant data';
-      setError(message);
+      
+      let message = 'Failed to fetch tenant data';
+      let is404 = false;
+
+      // Type-safe check for API error structure
+      if (error && typeof error === 'object') {
+        if ('response' in error && error.response && typeof error.response === 'object') {
+          const response = error.response as { status?: number, data?: { detail?: string } };
+          if (response.status === 404) {
+            is404 = true;
+          }
+          if (response.data?.detail) {
+            message = response.data.detail;
+          }
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+      }
+      
+      if (is404) {
+          setError('No tenant profile is linked to your account yet.'); 
+      } else {
+          setError(message);
+      }
       setTenantData(null); // Clear data on error
     } finally {
       setLoading(false);
@@ -152,11 +133,23 @@ export default function TenantDashboard() {
     );
   }
 
-  if (!tenantData?.property) {
-    // Pass relevant parts to EmptyTenantState, ensure email is defined
+  if (!tenantData) {
+    // If error is already set (e.g., 404), show error message
+    // Otherwise, assume not linked and show EmptyTenantState
+    if (error) {
+       return (
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="bg-yellow-50 text-yellow-700 p-4 rounded-lg">
+              <p>{error}</p>
+              {/* Optionally add a button to retry or guide user */}
+            </div>
+          </div>
+        );
+    }
+    // No error, but no tenant data -> show empty state 
     const emptyStateData = {
-        name: tenantData?.name || user?.email?.split('@')[0] || 'User',
-        email: tenantData?.email || user?.email || ''
+        name: user?.email?.split('@')[0] || 'User',
+        email: user?.email || ''
     };
     return (
       <EmptyTenantState 
@@ -165,7 +158,19 @@ export default function TenantDashboard() {
     );
   }
 
-  // Extract property for convenience
+  // If tenantData exists, but property doesn't (adjust based on API response structure)
+  // This might indicate data inconsistency or incomplete setup
+  if (!tenantData.property) {
+      return (
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="bg-orange-50 text-orange-700 p-4 rounded-lg">
+              <p>Your tenant profile is linked, but property details are missing. Please contact support.</p>
+            </div>
+          </div>
+        );
+  }
+
+  // Extract property for convenience if nested
   const property = tenantData.property;
 
   // Placeholder click handlers for action buttons
@@ -274,16 +279,17 @@ export default function TenantDashboard() {
           </Card>
       </div>
 
-      {/* Existing Sections */} 
+      {/* Components using tenantData */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <LeaseDetails tenantData={tenantData} />
-        <RoommateDetails 
-          // No casting needed now if state type is correct
-          roommates={tenantData.roommates || []} 
-          propertyId={property.id}
-        />
-        <PaymentPlans tenantData={tenantData} />
-        <PaymentHistory tenantData={tenantData} />
+          {tenantData && (
+              <>
+                  {/* Pass the whole tenantData object as expected by children */}
+                  <LeaseDetails tenantData={tenantData} />
+                  <PaymentPlans tenantData={tenantData} /> 
+                  <PaymentHistory tenantData={tenantData} />
+                  {/* RoommateDetails remains commented out */}
+              </>
+          )}
       </div>
     </div>
   );

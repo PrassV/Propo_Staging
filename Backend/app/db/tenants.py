@@ -216,6 +216,122 @@ async def delete_tenant(tenant_id: uuid.UUID) -> bool:
         logger.error(f"Failed to delete tenant {tenant_id}: {str(e)}")
         return False
 
+async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a tenant by the linked user ID (auth ID).
+    
+    Args:
+        user_id: The user ID (UUID) linked to the tenant profile.
+        
+    Returns:
+        Tenant data or None if not found.
+    """
+    try:
+        response = supabase_client.table('tenants')\
+                        .select('*')\
+                        .eq('user_id', str(user_id))\
+                        .maybe_single()\
+                        .execute()
+        
+        # Check for explicit error (Supabase client v1/v2 difference might exist)
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching tenant by user_id {user_id}: {response.error.message}")
+            return None
+        
+        # maybe_single() returns None in data field if no row found, or the dict if found.
+        # Check response.data directly
+        if response.data:
+            return response.data
+        else:
+            return None # Explicitly return None if no data
+            
+    except Exception as e:
+        # Catch potential exceptions during client call or processing
+        logger.exception(f"Failed to get tenant by user_id {user_id}: {str(e)}")
+        return None
+
+async def get_tenant_by_property_id(property_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Gets the tenant details for a tenant associated with a specific property ID.
+    Assumes a single active tenant per property for simplicity, or returns the first found.
+
+    Args:
+        property_id: The ID of the property.
+
+    Returns:
+        Tenant data dictionary if found, otherwise None.
+    """
+    logger.info(f"Attempting to find tenant linked to property_id: {property_id}")
+    try:
+        # 1. Find the link in property_tenants table (using parentheses for chaining)
+        link_response = await (
+            supabase_client.table('property_tenants')
+            .select('tenant_id')
+            .eq('property_id', str(property_id))
+            .limit(1) # Assuming one tenant link per property for this use case
+            .execute()
+        )
+
+        if hasattr(link_response, 'error') and link_response.error:
+            logger.error(f"Error finding property_tenant link for property {property_id}: {link_response.error.message}")
+            return None
+
+        if not link_response.data:
+            logger.warning(f"No tenant link found for property_id: {property_id}")
+            return None
+        
+        tenant_id_str = link_response.data[0].get('tenant_id')
+        if not tenant_id_str:
+            logger.error(f"Found link for property {property_id} but tenant_id was null or missing.")
+            return None
+            
+        logger.info(f"Found tenant link: tenant_id {tenant_id_str} for property {property_id}")
+
+        # 2. Fetch the tenant details using the found tenant_id
+        tenant_id = uuid.UUID(tenant_id_str)
+        tenant_data = await get_tenant_by_id(tenant_id) # Reuse existing get_tenant_by_id
+
+        if not tenant_data:
+             logger.warning(f"Tenant link found ({tenant_id}) but failed to fetch tenant details.")
+             # This case might indicate inconsistent data
+             return None 
+             
+        logger.info(f"Successfully retrieved tenant details for tenant {tenant_id} linked to property {property_id}")
+        return tenant_data
+
+    except Exception as e:
+        logger.exception(f"Unexpected error retrieving tenant by property_id {property_id}: {e}")
+        return None
+
+async def update_tenant_user_id(tenant_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    """
+    Helper function to specifically update only the user_id of a tenant.
+    Uses the generic update_tenant function.
+
+    Args:
+        tenant_id: The ID of the tenant to update.
+        user_id: The user ID to link.
+
+    Returns:
+        True if update was successful (or seemed successful), False otherwise.
+    """
+    logger.info(f"Attempting to update user_id for tenant {tenant_id} to {user_id}")
+    try:
+        # Call the generic update function with only the user_id field
+        updated_tenant = await update_tenant(tenant_id, {"user_id": str(user_id)})
+        
+        # Check if the update function returned data (indicating success)
+        if updated_tenant:
+            logger.info(f"Successfully updated user_id for tenant {tenant_id}.")
+            return True
+        else:
+            # update_tenant logs its own errors, just log context here
+            logger.warning(f"Update_tenant call failed for tenant {tenant_id} when setting user_id.")
+            return False
+    except Exception as e:
+        logger.exception(f"Unexpected error in update_tenant_user_id for tenant {tenant_id}: {e}")
+        return False
+
 # --- Property-Tenant Link Functions ---
 
 async def create_property_tenant_link(link_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

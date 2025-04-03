@@ -1,31 +1,40 @@
 import { useState } from 'react';
-import { supabase } from '../../../lib/supabase';
+// Removed direct Supabase import
+// import { supabase } from '../../../lib/supabase'; 
 import { useAuth } from '../../../contexts/AuthContext';
-import { useProfile } from '../../../hooks/useProfile';
+// Removed unused import
+// import { useProfile } from '../../../hooks/useProfile'; 
 import InputField from '../../auth/InputField';
 import toast from 'react-hot-toast';
+// Import the new service function
+import { verifyTenantPropertyLink } from '../../../api/services/tenantService';
 
 interface PropertyVerificationFormProps {
-  tenant: {
-    name: string;
-    email: string;
-    phone: string;
-  };
+  // Removed tenant prop as it's no longer needed here
+  // tenant: {
+  //   name: string;
+  //   email: string;
+  //   phone: string;
+  // };
   onVerificationSuccess: () => void;
 }
 
-export default function PropertyVerificationForm({ tenant, onVerificationSuccess }: PropertyVerificationFormProps) {
-  const { user } = useAuth();
-  const { profile } = useProfile();
+export default function PropertyVerificationForm({ onVerificationSuccess }: PropertyVerificationFormProps) {
+  // Removed unused profile state, as verification is now backend-driven
+  const { user } = useAuth(); 
+  // const { profile } = useProfile(); 
   const [propertyId, setPropertyId] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !profile) return;
+    // Removed profile check
+    if (!user) return; 
 
     setLoading(true);
     try {
+      // Removed direct Supabase calls and client-side verification logic
+      /*
       // First verify the property exists and get tenant details
       const { data: propertyTenant, error: tenantError } = await supabase
         .from('tenants')
@@ -60,12 +69,29 @@ export default function PropertyVerificationForm({ tenant, onVerificationSuccess
         .eq('id', propertyTenant.id);
 
       if (updateError) throw updateError;
+      */
+
+      // Call the backend service function
+      await verifyTenantPropertyLink(propertyId);
 
       toast.success('Property verified successfully!');
       onVerificationSuccess();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Verification error:', error);
-      toast.error(error.message || 'Failed to verify property');
+      
+      // Default error message
+      let errorMessage = 'Failed to verify property';
+      
+      // Check if it looks like an HTTP error response (common pattern)
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -1,136 +1,221 @@
-import apiClient from '../client';
-// Import types from the central types file
+import apiClient from '../../client';
 import { 
   MaintenanceRequest, 
   MaintenanceRequestCreate, 
-  MaintenanceRequestUpdate 
-} from '../types';
+  MaintenanceRequestUpdate,
+  MaintenanceIssue
+} from '../../types';
 
-// Get all maintenance requests - Assume backend returns MaintenanceRequest[] directly
-export const getMaintenanceRequests = async (
-  filters?: {
-    property_id?: string;
-    tenant_id?: string;
-    status?: string;
-    priority?: string;
-  }
-): Promise<MaintenanceRequest[]> => {
-  const response = await apiClient.get<MaintenanceRequest[]>('/maintenance', { params: filters });
-  // Return the array directly
-  return response.data;
-};
+// Local interface for maintenance comment creation
+export interface MaintenanceCommentCreate {
+  message: string;
+  attachments?: string[]; // URLs of files uploaded separately
+}
 
-// Get a single maintenance request by ID - Assume backend returns MaintenanceRequest directly
-export const getMaintenanceRequestById = async (id: string): Promise<MaintenanceRequest> => {
-  const response = await apiClient.get<MaintenanceRequest>(`/maintenance/${id}`);
-  // Return the object directly
-  return response.data;
-};
+// Local interface for maintenance comments - will use the API response type
+export interface MaintenanceComment {
+  id: string;
+  request_id: string;
+  user_id: string;
+  user_name: string;
+  comment: string;
+  created_at: string;
+}
 
-// Create a new maintenance request - Assume backend returns the created MaintenanceRequest directly
-export const createMaintenanceRequest = async (requestData: MaintenanceRequestCreate): Promise<MaintenanceRequest> => {
-  const response = await apiClient.post<MaintenanceRequest>('/maintenance', requestData);
-  // Return the created object directly
-  return response.data;
-};
-
-// Update an existing maintenance request - Assume backend returns the updated MaintenanceRequest directly
-export const updateMaintenanceRequest = async (
-  id: string,
-  requestData: MaintenanceRequestUpdate
-): Promise<MaintenanceRequest> => {
-  const response = await apiClient.put<MaintenanceRequest>(`/maintenance/${id}`, requestData);
-  // Return the updated object directly
-  return response.data;
-};
-
-// Delete a maintenance request - Backend returns 200 OK with message (not 204)
-export const deleteMaintenanceRequest = async (id: string): Promise<void> => {
-  // Backend returns { message: "..." } on success, but we don't need it here yet.
-  await apiClient.delete(`/maintenance/${id}`);
-  // No return value needed for now.
-};
-
-/*
-// TODO: Rework image handling for maintenance requests.
-// Frontend tries to upload files directly, but backend endpoint POST /maintenance/{id}/images 
-// expects a form with `image_url` and `description` strings (for linking, not uploading).
-// Frontend should first upload the image (e.g., to Supabase storage), get the URL,
-// then call the backend endpoint with the URL.
-
-// Upload images for a maintenance request
-export const uploadMaintenanceImages = async (
-  requestId: string,
-  images: File[] // This needs to change to handle URLs
-): Promise<MaintenanceRequest> => {
-  // Logic to upload each file in `images` to storage first...
-  // const imageUrls = await uploadFilesToStorage(images);
-
-  // Then call the backend endpoint for each URL (or modify backend to accept multiple URLs)
-  // Example for one image URL:
-  const formData = new FormData();
-  // formData.append('image_url', imageUrls[0]);
-  // formData.append('description', 'Optional description'); // Add description if needed
-
-  const response = await apiClient.post<MaintenanceRequest>(
-    `/maintenance/${requestId}/images`,
-    formData,
-    {
-      // Headers might need to be 'application/x-www-form-urlencoded' or 'application/json' 
-      // depending on how the backend expects the form data (FastAPI often parses form data without this header).
-      // 'Content-Type': 'multipart/form-data' is likely incorrect if not uploading a file directly.
+/**
+ * Get maintenance requests for a specific unit
+ * Calls GET /maintenance endpoint with unit_id filter
+ */
+export const getMaintenanceByUnitId = async (unitId: string): Promise<MaintenanceIssue[]> => {
+  try {
+    const response = await apiClient.get<MaintenanceIssue[]>('/maintenance', {
+      params: { unit_id: unitId }
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching maintenance for unit ${unitId}:`, error);
+    let errorMessage = 'Failed to fetch maintenance requests';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
     }
-  );
-
-  return response.data;
+    throw new Error(errorMessage);
+  }
 };
-*/
 
-// Assign a maintenance request to a vendor - Send vendor_id as query param
+/**
+ * Get all maintenance requests with optional filters
+ * Calls GET /maintenance
+ */
+export const getMaintenanceRequests = async (params: {
+  property_id?: string;
+  tenant_id?: string;
+  status?: string;
+  priority?: string;
+  category?: string;
+  assigned_to?: string;
+  skip?: number;
+  limit?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+} = {}): Promise<{ items: MaintenanceRequest[], total: number }> => {
+  try {
+    const response = await apiClient.get<{ items: MaintenanceRequest[], total: number }>('/maintenance', {
+      params
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error fetching maintenance requests:', error);
+    let errorMessage = 'Failed to fetch maintenance requests';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get a specific maintenance request by ID
+ * Calls GET /maintenance/{id}
+ */
+export const getMaintenanceRequestById = async (id: string): Promise<MaintenanceRequest> => {
+  try {
+    const response = await apiClient.get<MaintenanceRequest>(`/maintenance/${id}`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching maintenance request ${id}:`, error);
+    let errorMessage = 'Failed to fetch maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Create a new maintenance request
+ * Calls POST /maintenance
+ */
+export const createMaintenanceRequest = async (data: MaintenanceRequestCreate): Promise<MaintenanceRequest> => {
+  try {
+    const response = await apiClient.post<MaintenanceRequest>('/maintenance', data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error creating maintenance request:', error);
+    let errorMessage = 'Failed to create maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Update a maintenance request
+ * Calls PUT /maintenance/{id}
+ */
+export const updateMaintenanceRequest = async (id: string, data: MaintenanceRequestUpdate): Promise<MaintenanceRequest> => {
+  try {
+    const response = await apiClient.put<MaintenanceRequest>(`/maintenance/${id}`, data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error updating maintenance request ${id}:`, error);
+    let errorMessage = 'Failed to update maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Delete a maintenance request
+ * Calls DELETE /maintenance/{id}
+ */
+export const deleteMaintenanceRequest = async (id: string): Promise<{ message: string }> => {
+  try {
+    const response = await apiClient.delete<{ message: string }>(`/maintenance/${id}`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error deleting maintenance request ${id}:`, error);
+    let errorMessage = 'Failed to delete maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get comments for a maintenance request
+ * Calls GET /maintenance/{id}/comments
+ */
+export const getMaintenanceComments = async (requestId: string): Promise<MaintenanceComment[]> => {
+  try {
+    const response = await apiClient.get<MaintenanceComment[]>(`/maintenance/${requestId}/comments`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching comments for maintenance request ${requestId}:`, error);
+    let errorMessage = 'Failed to fetch maintenance comments';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Add a comment to a maintenance request
+ * Calls POST /maintenance/{id}/comments
+ */
+export const addMaintenanceComment = async (requestId: string, comment: string): Promise<MaintenanceComment> => {
+  try {
+    const response = await apiClient.post<MaintenanceComment>(`/maintenance/${requestId}/comments`, { comment });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error adding comment to maintenance request ${requestId}:`, error);
+    let errorMessage = 'Failed to add comment';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Assign a maintenance request to a vendor
+ * Calls PUT /maintenance/{id}/assign
+ */
 export const assignMaintenanceRequest = async (
   requestId: string,
   vendorId: string
 ): Promise<MaintenanceRequest> => {
-  const response = await apiClient.post<MaintenanceRequest>(
-    `/maintenance/${requestId}/assign`, 
-    null, // No request body
-    { params: { vendor_id: vendorId } } // Send vendor_id as query parameter
-  );
-  
-  // Return the updated request object directly
-  return response.data;
-};
-
-/**
- * Get count of open maintenance requests for a tenant by calling the backend.
- */
-export const getOpenTenantRequestsCount = async (tenantId: string): Promise<number> => {
-    // console.warn(`getOpenTenantRequestsCount for ${tenantId} called - using mock data`);
-    // TODO: Ensure backend endpoint like GET /maintenance/requests/count?tenant_id=...&status=open exists
-    // TODO: Adjust endpoint and parameters as needed based on backend implementation.
-    try {
-        // Assuming endpoint returns an object like { count: number }
-        const response = await apiClient.get<{ count: number }>('/maintenance/requests/count', { 
-            params: { 
-                tenant_id: tenantId, 
-                // Backend uses 'new' instead of 'open'
-                status: 'new' // This matches the backend's status value
-            } 
-        });
-        return response.data.count ?? 0;
-    } catch (error: unknown) {
-        console.error(`Error fetching open requests count for tenant ${tenantId}:`, error);
-        // Return 0 or rethrow
-        // throw error;
-        return 0; // Return 0 for now on error
+  try {
+    const response = await apiClient.put<MaintenanceRequest>(`/maintenance/${requestId}/assign`, { vendor_id: vendorId });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error assigning maintenance request ${requestId} to vendor ${vendorId}:`, error);
+    let errorMessage = 'Failed to assign maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
     }
-};
-
-/**
- * Get open maintenance requests for a tenant (if needed for a list, not just count)
- * Placeholder - implement actual logic.
- */
-// export const getOpenTenantRequests = async (tenantId: string): Promise<MaintenanceRequest[]> => {
-//     // TODO: Implement query
-//     return [];
-// }; 
+    throw new Error(errorMessage);
+  }
+}; 

@@ -73,6 +73,7 @@ export interface Property {
   year_built?: number;
   owner_id: string;
   image_url?: string;
+  status: 'Rented' | 'Vacant' | 'For Sale' | 'Unknown';
   created_at: string;
   updated_at: string;
   tenants?: Tenant[];
@@ -112,6 +113,76 @@ export interface PropertyUpdate {
   area_unit?: string;
   year_built?: number;
   image_url?: string;
+}
+
+// Represents data collected from the Property Form (Expanded)
+export interface PropertyFormData {
+  propertyName: string;
+  propertyType: string; // Consider specific types: 'residential' | 'commercial' | 'land'
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  pincode: string; 
+  country: string; 
+  // Fields from sub-components (add as needed, verify names)
+  description: string;
+  numberOfUnits?: number; // From BasicDetails?
+  category: string;
+  listedIn: string;
+  status: string;
+  price: number;
+  yearlyTaxRate?: number; // From ListingDetails?
+  sizeSqft?: number; // From OverviewSection?
+  bedrooms?: number; // From OverviewSection?
+  bathrooms?: number; // From OverviewSection?
+  kitchens?: number; // From OverviewSection?
+  garages?: number; // From OverviewSection?
+  garageSize?: number; // From OverviewSection?
+  yearBuilt?: number; // From OverviewSection?
+  floors?: number; // From OverviewSection?
+  amenities?: string[]; // From AmenitiesSection? - Check data type
+  surveyNumber?: string; // From original form state
+  doorNumber?: string; // From original form state
+}
+
+// Represents the detailed data for a single Unit within a Property
+export interface UnitDetails {
+  id: string;
+  property_id: string;
+  unit_number: string;
+  status: 'Occupied' | 'Vacant' | 'Under Maintenance' | string;
+  current_tenant_id: string | null;
+  current_lease_id: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  area_sqft: number | null;
+  rent: number | null;
+  deposit: number | null;
+  // Add any other relevant unit details from API
+}
+
+// Represents the detailed data returned for a single property view
+export interface PropertyDetails extends Property {
+  image_urls: string[];
+  units: UnitDetails[];
+  documents: Document[];
+  description?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  area?: number | null;
+  year_built?: number | null;
+  // Add other detailed fields if needed
+}
+
+// Define Unit type (as used in propertyService)
+export interface PropertyUnit {
+    id: string;
+    property_id: string;
+    unit_number: string;
+    tenant_id?: string;
+    // Add other relevant unit fields returned by GET /properties/{id}/units
+    // e.g., beds?: number; baths?: number;
 }
 
 // Tenant types
@@ -156,6 +227,7 @@ export interface TenantUpdate {
 
 // Dashboard types
 export interface DashboardSummary {
+  // Owner Dashboard Fields
   total_properties: number;
   total_tenants: number;
   occupied_units: number;
@@ -163,6 +235,11 @@ export interface DashboardSummary {
   total_revenue: number;
   pending_rent: number;
   maintenance_requests: number;
+  
+  // Tenant Dashboard Fields
+  next_due_date?: string;
+  next_due_amount?: number;
+  lease_end?: string;
 }
 
 // Payment record in dashboard
@@ -258,18 +335,30 @@ export interface PaymentCreate {
   tenant_id: string;
 }
 
-// Maintenance types
+// Define Maintenance Status Type
+export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+// Define Maintenance Priority Type
+export type MaintenancePriority = 'low' | 'medium' | 'high' | 'emergency';
+
+// Define Maintenance Category Type (add more specific categories as needed)
+export type MaintenanceCategory = 
+    'plumbing' | 'electrical' | 'hvac' | 'appliances' | 
+    'painting' | 'carpentry' | 'landscaping' | 'cleaning' | 
+    'pest_control' | 'roofing' | 'general' | 'other';
+
+// Maintenance Request Types
 export interface MaintenanceRequest {
   id: string;
   property_id: string;
   tenant_id?: string;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'emergency';
-  category: string;
-  images?: string[]; // Assuming backend provides image URLs
-  assigned_to?: string; // Might be vendor_id from backend
+  status: MaintenanceStatus;
+  priority: MaintenancePriority; // Use the defined type
+  category: MaintenanceCategory; // Use the defined type
+  images?: string[];
+  assigned_to?: string;
   created_at: string;
   updated_at: string;
 }
@@ -279,19 +368,18 @@ export interface MaintenanceRequestCreate {
   tenant_id?: string;
   title: string;
   description: string;
-  priority: 'low' | 'medium' | 'high' | 'emergency';
-  category: string;
-  // Frontend might add image URLs here after uploading them separately
+  priority: MaintenancePriority; // Use the defined type
+  category: MaintenanceCategory; // Use the defined type
+  // images?: string[]; // Add if API expects image URLs during creation
 }
 
 export interface MaintenanceRequestUpdate {
   title?: string;
   description?: string;
-  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority?: 'low' | 'medium' | 'high' | 'emergency';
-  category?: string;
-  assigned_to?: string; // Might be vendor_id from backend
-  // Frontend might add/remove image URLs here
+  status?: MaintenanceStatus;
+  priority?: MaintenancePriority; // Use the defined type
+  category?: MaintenanceCategory; // Use the defined type
+  assigned_to?: string; 
 }
 
 // Add other related types if needed, e.g., for Comments, Vendors etc. 
@@ -315,7 +403,25 @@ export interface RentEstimationResponse {
   comparable_properties?: unknown[]; // Use unknown instead of any
 }
 
-// Document types (matching backend models/responses)
+// ############# DOCUMENT TYPES START #############
+
+// Matches backend DocumentType enum
+export type DocumentType = 
+    'lease_agreement' | 
+    'id_proof' | 
+    'payment_receipt' | 
+    'maintenance_invoice' | 
+    'maintenance_photo' | 
+    'property_photo' | 
+    'other';
+
+// Matches backend DocumentStatus enum
+export type DocumentStatus = 'active' | 'archived' | 'pending_review';
+
+// Matches backend DocumentAccess enum
+export type DocumentAccess = 'private' | 'shared_link' | 'shared_user';
+
+// Document types (Consolidated Definition)
 export interface Document {
   id: string;
   title: string;
@@ -323,60 +429,70 @@ export interface Document {
   owner_id: string;
   property_id?: string;
   tenant_id?: string;
+  maintenance_request_id?: string; // Added missing from first def
+  payment_id?: string; // Added missing from first def
   file_url: string;
-  file_name: string;
-  file_type: string;
+  file_name: string; // Renamed from document_name for consistency?
+  file_type: string; // Changed from mime_type? Check backend
+  file_path?: string; // Added
+  file_extension?: string; // Added
   file_size?: number;
-  document_type: string; // Use string or define frontend enum matching backend
-  access_level: string; // Use string or define frontend enum matching backend
-  status: string; // Use string or define frontend enum matching backend
+  document_type?: DocumentType; // Use specific type
+  access_level: DocumentAccess; // Use specific type, make non-optional?
+  status?: DocumentStatus; // Use specific type, optional
   tags?: string[];
-  created_at: string; // Use string for dates from API
-  updated_at: string;
+  version?: number; // Added
+  created_at: string; 
+  updated_at?: string; // Make optional
 }
 
+// --- Document Create Payload Type --- 
+// Aligned with DB schema + necessary frontend fields
 export interface DocumentCreate {
-  title: string;
-  description?: string;
-  property_id?: string;
-  tenant_id?: string;
+  document_name: string; // Required by DB (use original filename)
+  file_url: string; // Required by DB
+  property_id?: string; 
+  tenant_id?: string;   
   maintenance_request_id?: string;
   payment_id?: string;
-  file_url: string;
-  file_name: string;
-  file_type?: string;
+  document_type?: DocumentType;
+  mime_type?: string; // Use mime_type (from fileInfo.fileType)
+  file_extension?: string;
   file_size?: number;
-  document_type?: string; // Use string or define frontend enum matching backend
-  access_level?: string; // Use string or define frontend enum matching backend
-  tags?: string[];
+  description?: string;
+  title?: string; // Optional: Keep for potential display differentiation
+  file_name?: string; // Optional: Keep original filename if different from document_name
+  file_path?: string; // Optional: Keep path if needed by frontend/backend logic
+  access_level?: DocumentAccess; // Keep, assuming DB will be updated
+  tags?: string[]; // Keep, assuming DB will be updated
 }
 
 export interface DocumentUpdate {
-  title?: string;
+  title?: string; // Changed from document_name
   description?: string;
-  property_id?: string;
-  tenant_id?: string;
-  file_url?: string;
-  file_name?: string;
-  file_type?: string;
-  file_size?: number;
-  document_type?: string; // Use string or define frontend enum matching backend
-  access_level?: string; // Use string or define frontend enum matching backend
+  document_type?: DocumentType;
+  property_id?: string | null; 
+  tenant_id?: string | null;   
+  maintenance_request_id?: string | null;
+  payment_id?: string | null;
+  access_level?: DocumentAccess;
   tags?: string[];
 }
 
 // Backend response structure for single document
 export interface DocumentResponse {
   document: Document;
-  message: string;
+  message?: string;
 }
 
 // Backend response structure for document list
 export interface DocumentsResponse {
   documents: Document[];
   count: number;
-  message: string;
+  message?: string;
 }
+
+// ############# DOCUMENT TYPES END #############
 
 // Type for updating user profile
 export interface UserUpdate {
@@ -577,3 +693,50 @@ export interface VendorUpdate {
 }
 
 // Add specific response types if needed, e.g., for stats or jobs 
+
+// Lease Agreement Type
+export interface LeaseAgreement {
+    id: string;
+    property_id: string;
+    unit_id: string;
+    tenant_id: string;
+    start_date: string; // ISO date string
+    end_date: string;   // ISO date string
+    rent_amount: number;
+    rent_frequency: 'monthly' | 'quarterly' | 'annually' | string; // Allow other frequencies?
+    deposit_amount?: number;
+    status: 'active' | 'inactive' | 'expired' | 'terminated' | string;
+    document_url?: string | null; // Link to the signed document file
+    created_at: string;
+    updated_at: string;
+    // Add other relevant fields like termination details, clauses etc.
+}
+
+// Maintenance Comment Type (Add if missing)
+export interface MaintenanceComment {
+    id: string;
+    request_id: string;
+    user_id: string;
+    user_name: string; // Denormalized?
+    comment: string;
+    created_at: string;
+    // Add other fields like attachments if supported
+}
+
+// Add UnitCreate Type
+export interface UnitCreate {
+    unit_number?: string;
+    status?: 'Occupied' | 'Vacant' | 'Under Maintenance' | string;
+    bedrooms?: number | null;
+    bathrooms?: number | null;
+    area_sqft?: number | null;
+    rent?: number | null;
+    deposit?: number | null;
+    // Add other fields required/allowed for creating a unit
+}
+
+// Add UnitResponse Type (adjust based on actual API response)
+export interface UnitResponse {
+    unit: UnitDetails;
+    message?: string;
+} 

@@ -1,100 +1,70 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
-import BasicDetails from './form-sections/BasicDetails';
-import AddressDetails from './form-sections/AddressDetails';
-import ListingDetails from './form-sections/ListingDetails';
-import OverviewSection from './form-sections/OverviewSection';
-import AmenitiesSection from './form-sections/AmenitiesSection';
-import ImageUploadSection from './ImageUploadSection';
-import DocumentUploadSection from './form-sections/DocumentUpload';
-import { PropertyFormData } from '../../types/property';
-import { useAuth } from '../../contexts/AuthContext';
-import { uploadPropertyImages } from '../../utils/storage';
+import React, { useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PropertyFormData } from '@/api/types';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Checkbox } from "@/components/ui/checkbox";
+import { X } from "lucide-react";
 
 interface PropertyFormProps {
-  initialData?: Partial<PropertyFormData> & { 
-    id?: string;
-    image_urls?: string[];
-    image_paths?: string[];
-  };
-  onSubmit: (property: PropertyFormData & { 
-    images?: File[],
-    image_urls?: string[],
-    image_paths?: string[] 
-  }) => Promise<void>;
+  initialData?: Partial<PropertyFormData> & { id?: string };
+  onSubmit: (propertyData: PropertyFormData, images: File[]) => Promise<void>;
   onCancel: () => void;
 }
+
+const amenitiesList = [
+  'Air Conditioning', 'Heating', 'Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 
+  'Stove', 'Oven', 'Microwave', 'Balcony/Patio', 'Pool', 'Gym', 'Parking', 
+  'Fireplace', 'Hardwood Floors', 'Pet Friendly', 'Furnished', 'Wheelchair Accessible'
+];
 
 export default function PropertyForm({ initialData, onSubmit, onCancel }: PropertyFormProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [formState, setFormState] = useState<{
-    data: PropertyFormData;
-    images: File[];
-    existingImages: { urls: string[]; paths: string[] };
-  }>({
-    data: {
-      propertyName: initialData?.propertyName || '',
-      propertyType: initialData?.propertyType || 'residential',
-      numberOfUnits: initialData?.numberOfUnits || 1,
-      addressLine1: initialData?.addressLine1 || '',
-      addressLine2: initialData?.addressLine2 || '',
-      city: initialData?.city || '',
-      state: initialData?.state || '',
-      pincode: initialData?.pincode || '',
-      surveyNumber: initialData?.surveyNumber || '',
-      doorNumber: initialData?.doorNumber || '',
-      description: initialData?.description || '',
-      category: initialData?.category || '',
-      listedIn: initialData?.listedIn || '',
-      price: initialData?.price || 0,
-      yearlyTaxRate: initialData?.yearlyTaxRate || 0,
-      sizeSqft: initialData?.sizeSqft || 0,
-      bedrooms: initialData?.bedrooms || 0,
-      bathrooms: initialData?.bathrooms || 0,
-      kitchens: initialData?.kitchens || 0,
-      garages: initialData?.garages || 0,
-      garageSize: initialData?.garageSize || 0,
-      yearBuilt: initialData?.yearBuilt || 0,
-      floors: initialData?.floors || 0,
-      amenities: initialData?.amenities || [],
-      document: null,
-      units: initialData?.units || []
-    },
-    images: [],
-    existingImages: {
-      urls: initialData?.image_urls || [],
-      paths: initialData?.image_paths || []
-    }
-  });
+  const [formData, setFormData] = useState<PropertyFormData>(() => ({
+    propertyName: initialData?.propertyName || '',
+    propertyType: initialData?.propertyType || 'residential',
+    addressLine1: initialData?.addressLine1 || '',
+    addressLine2: initialData?.addressLine2 || '',
+    city: initialData?.city || '',
+    state: initialData?.state || '',
+    pincode: initialData?.pincode || '',
+    country: initialData?.country || '',
+    description: initialData?.description || '',
+    numberOfUnits: initialData?.numberOfUnits || 1,
+    category: initialData?.category || '',
+    listedIn: initialData?.listedIn || '',
+    price: initialData?.price || 0,
+    yearlyTaxRate: initialData?.yearlyTaxRate || 0,
+    sizeSqft: initialData?.sizeSqft || 0,
+    bedrooms: initialData?.bedrooms || 0,
+    bathrooms: initialData?.bathrooms || 0,
+    kitchens: initialData?.kitchens || 0,
+    garages: initialData?.garages || 0,
+    garageSize: initialData?.garageSize || 0,
+    yearBuilt: initialData?.yearBuilt || 0,
+    floors: initialData?.floors || 0,
+    amenities: initialData?.amenities || [],
+    surveyNumber: initialData?.surveyNumber || '',
+    doorNumber: initialData?.doorNumber || '',
+    status: initialData?.status || '',
+  }));
+  
+  const [newImages, setNewImages] = useState<File[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || !user) return;
+    if (loading) return;
     
     setLoading(true);
     try {
-      let imageUrls = formState.existingImages.urls;
-      let imagePaths = formState.existingImages.paths;
-
-      // Only upload new images if there are any
-      if (formState.images.length > 0) {
-        if (initialData?.id) {
-          // If editing, upload images directly
-          const uploadResult = await uploadPropertyImages(formState.images, initialData.id);
-          imageUrls = [...formState.existingImages.urls, ...uploadResult.urls];
-          imagePaths = [...formState.existingImages.paths, ...uploadResult.paths];
-        }
-        // If creating new property, images will be handled by the edge function
-      }
-
-      await onSubmit({
-        ...formState.data,
-        images: formState.images,
-        image_urls: imageUrls,
-        image_paths: imagePaths
-      });
+      await onSubmit(formData, newImages);
+      setNewImages([]);
     } catch (error: unknown) {
       console.error('Error in form submission:', error);
       let errorMessage = 'Failed to submit form';
@@ -107,93 +77,256 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     }
   };
 
-  const handleImagesChange = (newImages: File[]) => {
-    setFormState(prev => ({ ...prev, images: newImages }));
-  };
-
-  const handleExistingImagesChange = (urls: string[], paths: string[]) => {
-    setFormState(prev => ({
-      ...prev,
-      existingImages: { urls, paths }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setFormData(prev => ({ 
+        ...prev, 
+        [name]: type === 'number' ? Number(value) || 0 : value 
     }));
   };
 
+  const handleSelectChange = (name: keyof PropertyFormData) => (value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setNewImages(Array.from(event.target.files));
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setNewImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handler for checkbox changes (amenities)
+  const handleAmenityChange = (amenity: string, checked: boolean | 'indeterminate') => {
+    setFormData(prev => {
+      const currentAmenities = prev.amenities || [];
+      if (checked === true) {
+        return { ...prev, amenities: [...currentAmenities, amenity] };
+      } else {
+        return { ...prev, amenities: currentAmenities.filter(item => item !== amenity) };
+      }
+    });
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 bg-card p-6 md:p-8 rounded-lg shadow-sm">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">
-          {initialData ? 'Edit Property' : 'Add New Property'}
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-gray-500 hover:text-gray-700"
-        >
-          <X size={24} />
-        </button>
-      </div>
+    <Card className="border-none shadow-none p-0">
+        <CardContent className="p-0">
+           <form onSubmit={handleSubmit} className="space-y-6">
+            <h3 className="text-lg font-semibold border-b pb-2">Basic Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                    <Label htmlFor="propertyName">Property Name *</Label>
+                    <Input id="propertyName" name="propertyName" value={formData.propertyName} onChange={handleInputChange} required disabled={loading} />
+                </div>
+                 <div className="space-y-1.5">
+                    <Label htmlFor="propertyType">Property Type *</Label>
+                    <Select value={formData.propertyType} onValueChange={(v) => handleSelectChange('propertyType')(v)} disabled={loading}>
+                        <SelectTrigger><SelectValue placeholder="Select Type..." /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="residential">Residential</SelectItem>
+                            <SelectItem value="commercial">Commercial</SelectItem>
+                            <SelectItem value="land">Land</SelectItem>
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="space-y-1.5">
+                    <Label htmlFor="numberOfUnits">Number of Units</Label>
+                    <Input id="numberOfUnits" name="numberOfUnits" type="number" value={formData.numberOfUnits} onChange={handleInputChange} disabled={loading} min={1} />
+                </div>
+            </div>
+            
+            <h3 className="text-lg font-semibold border-b pb-2">Address</h3>
+             <div className="space-y-4">
+                <div className="space-y-1.5">
+                    <Label htmlFor="addressLine1">Address Line 1 *</Label>
+                    <Input id="addressLine1" name="addressLine1" value={formData.addressLine1} onChange={handleInputChange} required disabled={loading} />
+                </div>
+                 <div className="space-y-1.5">
+                    <Label htmlFor="addressLine2">Address Line 2</Label>
+                    <Input id="addressLine2" name="addressLine2" value={formData.addressLine2} onChange={handleInputChange} disabled={loading} />
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="city">City *</Label>
+                        <Input id="city" name="city" value={formData.city} onChange={handleInputChange} required disabled={loading} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="state">State *</Label>
+                        <Input id="state" name="state" value={formData.state} onChange={handleInputChange} required disabled={loading} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="pincode">Pincode / Zip *</Label>
+                        <Input id="pincode" name="pincode" value={formData.pincode} onChange={handleInputChange} required disabled={loading} />
+                    </div>
+                 </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="country">Country *</Label>
+                    <Input id="country" name="country" value={formData.country} onChange={handleInputChange} required disabled={loading} />
+                </div>
+             </div>
+             
+             <h3 className="text-lg font-semibold border-b pb-2">Images</h3>
+             <div className="space-y-1.5">
+                <Label htmlFor="images">Upload Images</Label>
+                <Input 
+                    id="images" 
+                    name="images" 
+                    type="file" 
+                    multiple 
+                    onChange={handleImageChange} 
+                    disabled={loading} 
+                    accept="image/png, image/jpeg, image/webp"
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                />
+                {newImages.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                        <p className="text-sm font-medium">Selected files:</p>
+                        <ul className="list-disc list-inside text-sm space-y-1">
+                            {newImages.map((file, index) => (
+                                <li key={index} className="flex items-center justify-between">
+                                    <span>{file.name}</span>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => handleRemoveImage(index)} 
+                                        disabled={loading}
+                                        className="p-1 h-auto"
+                                      >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+             </div>
 
-      <div className="space-y-6">
-        <ImageUploadSection
-          images={formState.images}
-          existingImages={formState.existingImages}
-          onChange={handleImagesChange}
-          onExistingImagesChange={handleExistingImagesChange}
-          disabled={loading}
-        />
+             {/* Overview Section */}
+             <h3 className="text-lg font-semibold border-b pb-2">Overview</h3>
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <div className="space-y-1.5">
+                     <Label htmlFor="sizeSqft">Size (sqft)</Label>
+                     <Input id="sizeSqft" name="sizeSqft" type="number" value={formData.sizeSqft} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="bedrooms">Bedrooms</Label>
+                     <Input id="bedrooms" name="bedrooms" type="number" value={formData.bedrooms} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="bathrooms">Bathrooms</Label>
+                     <Input id="bathrooms" name="bathrooms" type="number" value={formData.bathrooms} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="kitchens">Kitchens</Label>
+                     <Input id="kitchens" name="kitchens" type="number" value={formData.kitchens} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="floors">Floors</Label>
+                     <Input id="floors" name="floors" type="number" value={formData.floors} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                  <div className="space-y-1.5">
+                     <Label htmlFor="garages">Garages</Label>
+                     <Input id="garages" name="garages" type="number" value={formData.garages} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                  <div className="space-y-1.5">
+                     <Label htmlFor="garageSize">Garage Size (sqft)</Label>
+                     <Input id="garageSize" name="garageSize" type="number" value={formData.garageSize} onChange={handleInputChange} disabled={loading} min={0} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="yearBuilt">Year Built</Label>
+                     <Input id="yearBuilt" name="yearBuilt" type="number" value={formData.yearBuilt} onChange={handleInputChange} disabled={loading} min={1800} max={new Date().getFullYear()} />
+                 </div>
+             </div>
 
-        <BasicDetails
-          value={formState.data}
-          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-          disabled={loading}
-        />
+             {/* Listing Section */}
+             <h3 className="text-lg font-semibold border-b pb-2">Listing Details</h3>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div className="space-y-1.5">
+                     <Label htmlFor="category">Category</Label>
+                     <Select name="category" value={formData.category} onValueChange={handleSelectChange('category')} disabled={loading}>
+                         <SelectTrigger id="category">
+                             <SelectValue placeholder="Select category" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             <SelectItem value="Apartment">Apartment</SelectItem>
+                             <SelectItem value="House">House</SelectItem>
+                             <SelectItem value="Condo">Condo</SelectItem>
+                             <SelectItem value="Townhouse">Townhouse</SelectItem>
+                             <SelectItem value="Villa">Villa</SelectItem>
+                             {/* Add more categories as needed */}
+                         </SelectContent>
+                     </Select>
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="listedIn">Listed In</Label>
+                     <Select name="listedIn" value={formData.listedIn} onValueChange={handleSelectChange('listedIn')} disabled={loading}>
+                         <SelectTrigger id="listedIn">
+                             <SelectValue placeholder="Select listing type" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             <SelectItem value="For Sale">For Sale</SelectItem>
+                             <SelectItem value="For Rent">For Rent</SelectItem>
+                         </SelectContent>
+                     </Select>
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="status">Status</Label>
+                      <Select name="status" value={formData.status} onValueChange={handleSelectChange('status')} disabled={loading}>
+                         <SelectTrigger id="status">
+                             <SelectValue placeholder="Select status" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             <SelectItem value="Active">Active</SelectItem>
+                             <SelectItem value="Inactive">Inactive</SelectItem>
+                             <SelectItem value="Sold">Sold</SelectItem>
+                             <SelectItem value="Rented">Rented</SelectItem>
+                         </SelectContent>
+                     </Select>
+                 </div>
+             </div>
+             <div className="space-y-1.5">
+                 <Label htmlFor="price">Price ($)</Label>
+                 <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} disabled={loading} min={0} step="0.01"/>
+             </div>
+             <div className="space-y-1.5">
+                 <Label htmlFor="description">Description</Label>
+                 <Textarea id="description" name="description" value={formData.description} onChange={handleInputChange} disabled={loading} placeholder="Enter property description..." rows={5}/>
+             </div>
 
-        <AddressDetails
-          value={formState.data}
-          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-          disabled={loading}
-        />
+             {/* Amenities Section */}
+             <h3 className="text-lg font-semibold border-b pb-2">Amenities</h3>
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+               {amenitiesList.map((amenity) => (
+                 <div key={amenity} className="flex items-center space-x-2">
+                   <Checkbox 
+                     id={`amenity-${amenity.replace(/\s+/g, '-')}`} 
+                     checked={formData.amenities?.includes(amenity)} 
+                     onCheckedChange={(checked) => handleAmenityChange(amenity, checked)}
+                     disabled={loading}
+                   />
+                   <Label htmlFor={`amenity-${amenity.replace(/\s+/g, '-')}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                     {amenity}
+                   </Label>
+                 </div>
+               ))}
+             </div>
 
-        <OverviewSection
-          value={formState.data}
-          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-          disabled={loading}
-        />
-
-        <ListingDetails
-          value={formState.data}
-          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-          disabled={loading}
-        />
-
-        <AmenitiesSection
-          value={formState.data}
-          onChange={(data) => setFormState(prev => ({ ...prev, data: { ...prev.data, ...data } }))}
-          disabled={loading}
-        />
-        
-        {initialData?.id && (
-          <DocumentUploadSection propertyId={initialData.id} />
-        )}
-      </div>
-
-      <div className="flex justify-end space-x-4 pt-4 border-t border-border">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-          disabled={loading}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
-          disabled={loading}
-        >
-          {loading ? (initialData ? 'Updating...' : 'Adding...') : (initialData ? 'Update Property' : 'Add Property')}
-        </button>
-      </div>
-    </form>
+             {/* TODO: Document Upload Section */}
+             
+             <div className="flex justify-end space-x-4 pt-6 border-t">
+                 <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+                   Cancel
+                 </Button>
+                 <Button type="submit" disabled={loading}>
+                   {loading ? (initialData ? 'Updating...' : 'Adding...') : (initialData ? 'Update Property' : 'Add Property')}
+                 </Button>
+             </div>
+           </form>
+        </CardContent>
+    </Card>
   );
 } 

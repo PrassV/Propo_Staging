@@ -1,8 +1,8 @@
 import { Building, User } from 'lucide-react';
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { updateUserProfile } from '../../api/services/userService';
 
 interface UserTypeSelectionProps {
   onSelect: (type: 'owner' | 'tenant') => void;
@@ -17,19 +17,19 @@ const UserTypeSelection = ({ onSelect }: UserTypeSelectionProps) => {
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          user_type: type,
-          email: user.email
-        });
-
-      if (error) throw error;
+      await updateUserProfile({ user_type: type });
       onSelect(type);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error setting user type:', error);
-      toast.error('Failed to set user type. Please try again.');
+      let errorMessage = 'Failed to set user type. Please try again.';
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -1,80 +1,120 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { FormControl, InputLabel, Select, MenuItem, CircularProgress, FormHelperText, SelectChangeEvent } from '@mui/material';
+// Remove Supabase import
+// import { supabase } from '../../../lib/supabase';
+
+// Import service and type
+import { getTenants } from '@/api/services/tenantService';
+import { Tenant } from '@/api/types';
 
 interface TenantSelectProps {
-  propertyId: string;
-  unitNumber?: string;
+  propertyId: string | null | undefined;
+  unitNumber?: string | null | undefined;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (event: SelectChangeEvent<string>) => void;
   disabled?: boolean;
+  error?: boolean;
+  helperText?: string;
 }
 
-export default function TenantSelect({ propertyId, unitNumber, value, onChange, disabled }: TenantSelectProps) {
-  const [tenants, setTenants] = useState<Array<{ id: string; name: string }>>([]);
-  const [loading, setLoading] = useState(true);
+const TenantSelect: React.FC<TenantSelectProps> = ({ 
+    propertyId, 
+    unitNumber, 
+    value, 
+    onChange, 
+    disabled, 
+    error,
+    helperText
+}) => {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState<boolean>(false); // Don't start loading initially
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTenants = async () => {
+      // Only fetch if propertyId is present
       if (!propertyId) {
         setTenants([]);
         setLoading(false);
+        setFetchError(null);
         return;
       }
 
+      setLoading(true);
+      setFetchError(null);
       try {
-        let query = supabase
-          .from('property_tenants')
-          .select(`
-            tenant_id,
-            tenant:tenants(id, name)
-          `)
-          .eq('property_id', propertyId);
-
+        // Prepare filters, include unit_number only if it has a value
+        const filters: { property_id: string; unit_number?: string } = { 
+          property_id: propertyId 
+        };
         if (unitNumber) {
-          query = query.eq('unit_number', unitNumber);
+          filters.unit_number = unitNumber;
         }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        const formattedTenants = data
-          .map(pt => pt.tenant)
-          .filter(Boolean)
-          .map(t => ({ id: t.id, name: t.name }));
-
-        setTenants(formattedTenants);
-      } catch (error) {
-        console.error('Error fetching tenants:', error);
+        
+        // Call the service function with filters
+        const response = await getTenants(filters);
+        setTenants(response.items || []);
+      } catch (err: unknown) {
+        console.error('Error fetching tenants:', err);
+        setFetchError(err instanceof Error ? err.message : 'Failed to load tenants.');
+        setTenants([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchTenants();
-  }, [propertyId, unitNumber]);
-
-  if (loading) {
-    return (
-      <select disabled className="w-full p-3 border rounded-lg">
-        <option>Loading tenants...</option>
-      </select>
-    );
-  }
+  }, [propertyId, unitNumber]); // Re-fetch if property or unit changes
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-      required
-      disabled={disabled || !propertyId}
-    >
-      <option value="">Select Tenant</option>
-      {tenants.map((tenant) => (
-        <option key={tenant.id} value={tenant.id}>
-          {tenant.name}
-        </option>
-      ))}
-    </select>
+    <FormControl fullWidth error={error || !!fetchError}>
+      <InputLabel id="tenant-select-label">Tenant</InputLabel>
+      <Select
+        labelId="tenant-select-label"
+        id="tenant-select"
+        value={loading || fetchError || !propertyId ? '' : value} // Clear selection if loading, error, or no property
+        label="Tenant"
+        onChange={onChange}
+        disabled={disabled || loading || !!fetchError || !propertyId}
+        required // Keep if necessary
+      >
+        {/* Handle Loading state */}
+        {loading && (
+          <MenuItem value="" disabled>
+            <CircularProgress size={20} style={{ marginRight: '8px' }} />
+            Loading tenants...
+          </MenuItem>
+        )}
+        {/* Handle Error state */}
+        {fetchError && (
+          <MenuItem value="" disabled>
+            Error loading tenants
+          </MenuItem>
+        )}
+        {/* Handle No Property state */}
+        {!loading && !fetchError && !propertyId && (
+            <MenuItem value="" disabled>
+                Select a property first
+            </MenuItem>
+        )}
+        {/* Handle No Tenants Found state */}
+        {!loading && !fetchError && tenants.length === 0 && propertyId && (
+            <MenuItem value="" disabled>
+                No tenants found for this selection
+            </MenuItem>
+        )}
+        {/* Tenant options */}
+        {!loading && !fetchError && propertyId && tenants.map((tenant) => (
+          <MenuItem key={tenant.id} value={tenant.id}>
+            {tenant.name} {tenant.email ? `(${tenant.email})` : ''}
+          </MenuItem>
+        ))}
+      </Select>
+      {(helperText || fetchError) && (
+        <FormHelperText error={!!fetchError}>{fetchError || helperText}</FormHelperText>
+      )}
+    </FormControl>
   );
-}
+};
+
+export default TenantSelect;

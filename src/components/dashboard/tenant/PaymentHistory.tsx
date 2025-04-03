@@ -1,57 +1,65 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatCurrency } from '../../../utils/format';
+import { formatDate } from '../../../utils/date';
 
-interface Payment {
-  id: string;
-  plan: 'Card' | 'Mobile';
-  reason: string;
-  date: string;
-  amount: number;
-}
+import { getPaymentHistory } from '../../../api/services/paymentService';
+import { Payment } from '../../../api/types';
 
 interface PaymentHistoryProps {
-  tenantData: any;
+  tenantId: string;
 }
 
-export default function PaymentHistory({ tenantData }: PaymentHistoryProps) {
-  const [payments] = useState<Payment[]>([
-    {
-      id: '1',
-      plan: 'Card',
-      reason: 'Rent',
-      date: '2022-12-28',
-      amount: 10000
-    },
-    {
-      id: '2',
-      plan: 'Mobile',
-      reason: 'WiFi subscription',
-      date: '2022-12-28',
-      amount: 3500
-    }
-  ]);
+export default function PaymentHistory({ tenantId }: PaymentHistoryProps) {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      if (!tenantId) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const fetchedPayments = await getPaymentHistory(tenantId, 'rent');
+        setPayments(fetchedPayments || []);
+      } catch (fetchError: unknown) {
+        console.error("Error fetching payment history:", fetchError);
+        const message = fetchError instanceof Error ? fetchError.message : "Failed to load payment history.";
+        setError(message);
+        setPayments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayments();
+  }, [tenantId]);
+
+  if (loading) return <p>Loading payment history...</p>;
+  if (error) return <p className="text-red-500">{error}</p>;
+  if (payments.length === 0) return <p>No payment history found.</p>;
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      <h2 className="text-xl font-semibold mb-4">Your Payments</h2>
-      <p className="text-sm text-gray-600 mb-4">Payment made in the last 12 months</p>
+      <h2 className="text-xl font-semibold mb-4">Your Rent Payments</h2>
 
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="text-left">
-              <th className="pb-3 text-sm font-medium text-gray-600">Payment Plan</th>
-              <th className="pb-3 text-sm font-medium text-gray-600">Reason</th>
-              <th className="pb-3 text-sm font-medium text-gray-600">Date</th>
+              <th className="pb-3 text-sm font-medium text-gray-600">Type</th>
+              <th className="pb-3 text-sm font-medium text-gray-600">Description</th>
+              <th className="pb-3 text-sm font-medium text-gray-600">Due Date</th>
+              <th className="pb-3 text-sm font-medium text-gray-600">Status</th>
               <th className="pb-3 text-sm font-medium text-gray-600">Amount</th>
             </tr>
           </thead>
           <tbody>
             {payments.map((payment) => (
               <tr key={payment.id} className="border-t">
-                <td className="py-3 text-sm">{payment.plan}</td>
-                <td className="py-3 text-sm">{payment.reason}</td>
-                <td className="py-3 text-sm">{new Date(payment.date).toLocaleDateString()}</td>
+                <td className="py-3 text-sm capitalize">{payment.payment_type}</td>
+                <td className="py-3 text-sm">{payment.description || 'N/A'}</td>
+                <td className="py-3 text-sm">{formatDate(payment.due_date)}</td>
+                <td className="py-3 text-sm capitalize">{payment.status}</td>
                 <td className="py-3 text-sm font-medium">{formatCurrency(payment.amount)}</td>
               </tr>
             ))}

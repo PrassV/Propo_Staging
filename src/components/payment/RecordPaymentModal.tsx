@@ -1,16 +1,17 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent } from 'react';
 import { X } from 'lucide-react';
 import InputField from '../auth/InputField';
 import toast from 'react-hot-toast';
 import api from '../../api';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PaymentCreate, DocumentCreate, Payment } from '../../api/types';
+import { PaymentCreate, DocumentCreate, Payment, Tenant } from '../../api/types';
+import { getTenants } from '../../api/services/tenantService';
+import { uploadFile } from '../../api/services/uploadService';
 
-interface UnitTenantInfo {
-  property_tenant_id: string;
-  unit_number: string;
-  tenant: { id: string; name: string };
+interface TenantDisplayInfo {
+  id: string;
+  name: string;
+  unitNumber?: string;
 }
 
 interface UploadedFileInfo {
@@ -29,8 +30,8 @@ interface RecordPaymentModalProps {
 export default function RecordPaymentModal({ propertyId, onClose, onSubmitSuccess }: RecordPaymentModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [loadingUnits, setLoadingUnits] = useState(true);
-  const [units, setUnits] = useState<UnitTenantInfo[]>([]);
+  const [loadingTenants, setLoadingTenants] = useState(true);
+  const [tenantOptions, setTenantOptions] = useState<TenantDisplayInfo[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   
@@ -43,37 +44,45 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
   });
 
   useEffect(() => {
-    fetchUnitsForProperty(propertyId);
+    fetchTenantData(propertyId);
   }, [propertyId]);
 
-  const fetchUnitsForProperty = async (propId: string) => {
+  const fetchTenantData = async (propId: string) => {
     if (!propId) return;
-    setLoadingUnits(true);
+    setLoadingTenants(true);
     setError(null);
+    setTenantOptions([]);
     try {
-      console.warn("Mocking unit/tenant fetch in RecordPaymentModal");
-      const mockData: UnitTenantInfo[] = [
-        { property_tenant_id: 'link1', unit_number: '101', tenant: { id: 'tenant-abc', name: 'John Tenant' } },
-        { property_tenant_id: 'link2', unit_number: '102', tenant: { id: 'tenant-xyz', name: 'Jane Tenant' } },
-      ];
-      setUnits(mockData);
+      const tenantsResponse = await getTenants({ property_id: propId });
+      const tenants = tenantsResponse.items || [];
+
+      const displayOptions: TenantDisplayInfo[] = tenants.map(tenant => ({
+          id: tenant.id,
+          name: tenant.name,
+          unitNumber: tenant.unit_number
+      }));
+      
+      setTenantOptions(displayOptions);
+
     } catch (err) {
-      console.error('Error fetching units/tenants:', err);
-      setError('Failed to load unit/tenant information.');
-      toast.error('Failed to load unit/tenant information.');
+      console.error('Error fetching tenants:', err);
+      const message = err instanceof Error ? err.message : 'Failed to load tenant information.';
+      setError(message);
+      toast.error(message);
+      setTenantOptions([]);
     } finally {
-      setLoadingUnits(false);
+      setLoadingTenants(false);
     }
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      setFiles(e.target.files.length > 0 ? [e.target.files[0]] : []);
     }
   };
 
-  const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = () => {
+    setFiles([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,38 +91,27 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
       toast.error('Please select a tenant and enter an amount.');
       return;
     }
-    if (!user) {
-        toast.error('User not authenticated.');
+    if (!user || !propertyId) {
+        toast.error('User not authenticated or property not provided.');
         return;
     }
 
     setLoading(true);
     setError(null);
     let createdPayment: Payment | null = null;
-    const uploadedFileUrls: UploadedFileInfo[] = [];
+    let uploadedFileInfo: UploadedFileInfo | null = null;
 
     try {
       if (files.length > 0) {
         toast.loading('Uploading file...');
         const file = files[0]; 
-        const fileExt = file.name.split('.').pop();
-        const filePath = `payment-files/${user.id}/${propertyId}/${Date.now()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('payment-files')
-          .upload(filePath, file);
-
-        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-        const { data: urlData } = supabase.storage.from('payment-files').getPublicUrl(filePath);
-        if (!urlData?.publicUrl) throw new Error('Could not get public URL for uploaded file.');
-
-        uploadedFileUrls.push({ 
-            url: urlData.publicUrl, 
+        const url = await uploadFile(file, 'payment_document', formData.tenantId);
+        uploadedFileInfo = { 
+            url: url, 
             fileName: file.name, 
             fileType: file.type, 
             size: file.size 
-        });
+        };
         toast.dismiss();
       }
 
@@ -130,9 +128,9 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
       createdPayment = await api.payment.createPayment(paymentAPIData);
       toast.dismiss();
 
-      if (createdPayment?.id && uploadedFileUrls.length > 0) {
+      if (createdPayment?.id && uploadedFileInfo) {
         toast.loading('Linking document...');
-        const fileInfo = uploadedFileUrls[0];
+        const fileInfo = uploadedFileInfo;
         const docData: DocumentCreate = {
           title: fileInfo.fileName,
           payment_id: createdPayment.id,
@@ -142,8 +140,8 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
           file_name: fileInfo.fileName,
           file_type: fileInfo.fileType,
           file_size: fileInfo.size,
-          document_type: 'RECEIPT',
-          access_level: 'PRIVATE',
+          document_type: 'payment_receipt',
+          access_level: 'private',
         };
         await api.document.createDocument(docData);
         toast.dismiss();
@@ -203,12 +201,12 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
               onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
               className="mt-1 w-full p-3 border rounded-lg focus:outline-none focus:border-black"
               required
-              disabled={loading || loadingUnits}
+              disabled={loading || loadingTenants}
             >
-              <option value="">{loadingUnits ? 'Loading...' : 'Select Tenant'}</option>
-              {units.map((unit) => (
-                <option key={unit.tenant.id} value={unit.tenant.id}>
-                  {unit.tenant.name} (Unit {unit.unit_number})
+              <option value="">{loadingTenants ? 'Loading...' : 'Select Tenant'}</option>
+              {tenantOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name} {option.unitNumber ? `(Unit ${option.unitNumber})` : ''}
                 </option>
               ))}
             </select>
@@ -261,7 +259,7 @@ export default function RecordPaymentModal({ propertyId, onClose, onSubmitSucces
                     <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
                     <button 
                       type="button" 
-                      onClick={() => removeFile(index)} 
+                      onClick={removeFile} 
                       className="text-red-500 hover:text-red-700"
                       disabled={loading}
                     >

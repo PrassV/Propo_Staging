@@ -1,217 +1,105 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, Heart, MapPin, Star } from 'lucide-react';
-import { usePropertiesApi } from '../hooks/usePropertiesApi';
-import LoadingSpinner from '../components/common/LoadingSpinner';
-import NewRequestModal from '../components/maintenance/NewRequestModal';
-import RecordPaymentModal from '../components/payment/RecordPaymentModal';
-import PropertyForm from '../components/property/PropertyForm';
-import PropertyMap from '../components/property/PropertyMap';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
+import { PropertyDetails, UnitDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
+import { api } from '@/api/apiClient';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
-import { getDocuments, deleteDocument } from '../api/services/documentService';
-import { useAuth } from '../contexts/AuthContext';
-import DocumentUploadForm from '../components/documents/DocumentUploadForm';
-import { Loader2, FileText, Trash2, UploadCloud } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Document } from '../types/document';
-import { 
-    Dialog, 
-    DialogContent, 
-    DialogHeader, 
-    DialogTitle, 
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Edit, Plus } from 'lucide-react'; // Removed unused icons
+import { usePropertyDialog } from '@/contexts/PropertyDialogContext';
+import ImageGallery from '@/components/property/ImageGallery'; // Import the new component
+import UnitCard from '@/components/property/UnitCard'; // Import UnitCard
+import TenantInfoTab from '@/components/property/details/TenantInfoTab'; // Import the tab component
+import LeaseInfoTab from '@/components/property/details/LeaseInfoTab'; // Import Lease tab
+import MaintenanceListTab from '@/components/property/details/MaintenanceListTab'; // Import Maintenance tab
+import PaymentListTab from '@/components/property/details/PaymentListTab'; // Import Payment tab
+import DocumentList from '@/components/documents/DocumentList'; // Import DocumentList
+import AddUnitForm from '@/components/property/AddUnitForm'; // Import the AddUnitForm component
+// Import other potential components needed (assumed locations):
+// import ImageGallery from '@/components/property/ImageGallery';
+// import UnitCard from '@/components/property/UnitCard'; 
+// import DocumentList from '@/components/documents/DocumentList'; 
+// import AddUnitForm from '@/components/property/AddUnitForm'; // etc.
 
-// Define extended property type to handle new API properties
-interface EnhancedProperty {
-  id: string;
-  property_name: string;
-  property_type: string;
-  address_line1: string;
-  address_line2?: string;
-  city: string;
-  state: string;
-  pincode?: string;
-  zip_code?: string; // Provided by the API
-  image_url?: string;
-  description?: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  size_sqft?: number;
-  year_built?: number;
-  tenants?: unknown[];
-  amenities?: string[];
-  number_of_units?: number;
-}
-
-// Component specifically for tenant documents on this page
-function TenantPropertyDocuments({ propertyId, tenantId }: { propertyId: string, tenantId: string }) {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-
-  const fetchTenantPropertyDocuments = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await getDocuments({ property_id: propertyId, tenant_id: tenantId });
-      setDocuments(response.documents || []);
-    } catch (err) {
-      console.error("Error fetching tenant-property documents:", err);
-      setError('Failed to load your documents for this property.');
-      setDocuments([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (propertyId && tenantId) {
-        fetchTenantPropertyDocuments();
-    } else {
-        setDocuments([]);
-    }
-  }, [propertyId, tenantId]);
-
-  const handleUploadSuccess = (newDocument: Document) => {
-    setDocuments((prevDocs) => [...prevDocs, newDocument]);
-    setIsUploadDialogOpen(false);
-    toast.success('Document uploaded successfully!');
-  };
-
-  const handleDeleteDocument = async (documentId: string) => {
-    if (!window.confirm("Are you sure you want to delete this document?")) {
-      return;
-    }
-    setDeletingId(documentId);
-    const toastId = toast.loading('Deleting document...');
-    try {
-      await deleteDocument(documentId);
-      setDocuments(docs => docs.filter(d => d.id !== documentId));
-      toast.success('Document deleted successfully', { id: toastId });
-    } catch (err: unknown) {
-      console.error("Error deleting document:", err);
-      let message = 'Failed to delete document.';
-      if (err instanceof Error) message = err.message;
-      toast.error(message, { id: toastId });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  return (
-    <div className="mt-10 p-6 border rounded-lg bg-card text-card-foreground shadow-sm">
-      <div className="flex justify-between items-center mb-4">
-          <div>
-             <h2 className="text-xl font-semibold">My Documents for this Property</h2>
-             <p className="text-sm text-muted-foreground">
-                Manage your receipts, agreements, etc. for this property.
-             </p>
-          </div>
-         <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-             <DialogTrigger asChild>
-                 <Button size="sm">
-                     <UploadCloud className="mr-2 h-4 w-4" />
-                     Upload New
-                 </Button>
-             </DialogTrigger>
-             <DialogContent className="sm:max-w-[600px]">
-                 <DialogHeader>
-                     <DialogTitle>Upload New Document</DialogTitle>
-                 </DialogHeader>
-                 <DocumentUploadForm 
-                     propertyId={propertyId} 
-                     tenantId={tenantId} 
-                     onUploadSuccess={handleUploadSuccess} 
-                     onCancel={() => setIsUploadDialogOpen(false)}
-                 />
-             </DialogContent>
-         </Dialog>
-      </div>
-      
-      <div className="space-y-3 mb-6">
-        <h4 className="font-medium text-base">Uploaded Documents</h4>
-        {isLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading...</div>}
-        {error && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-        {!isLoading && !error && documents.length === 0 && <p className="text-sm text-muted-foreground italic">You haven't uploaded any documents for this property yet.</p>}
-        {!isLoading && !error && documents.length > 0 && (
-          <ul className="space-y-2 list-none p-0">
-            {documents.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between p-2 border rounded-md bg-background text-sm">
-                <div className="flex items-center space-x-2 overflow-hidden">
-                  <FileText className="h-5 w-5 flex-shrink-0 text-primary" />
-                  <a href={doc.file_url} target="_blank" rel="noopener noreferrer" title={doc.description || doc.document_name} className="truncate hover:underline text-foreground">
-                    {doc.document_name}
-                  </a>
-                  {doc.document_type && <span className="text-xs text-muted-foreground flex-shrink-0">({doc.document_type.replace(/_/g, ' ')})</span>}
-                </div>
-                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 h-7 px-2 disabled:opacity-50" onClick={() => handleDeleteDocument(doc.id)} title="Delete Document" disabled={deletingId === doc.id}>
-                  {deletingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
+// Import Dialog components - we'll use these for the Add Unit dialog
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function PropertyDetailsPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const tenantId = user?.id;
-  const [selectedImage, setSelectedImage] = useState(0);
-  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  
-  const { properties, loading: propertiesLoading, error: propertiesError } = usePropertiesApi();
-  const property = id ? properties.find(p => p.id === id) as EnhancedProperty | undefined : undefined;
+    const { id: propertyId } = useParams<{ id: string }>();
+    // const navigate = useNavigate(); // Removed unused
+    const [property, setProperty] = useState<PropertyDetails | null>(null);
+    const [documents, setDocuments] = useState<ApiDocument[]>([]); // State for documents
+    const [documentsLoading, setDocumentsLoading] = useState(true); // Loading state for documents
+    const [documentsError, setDocumentsError] = useState<string | null>(null); // Error state for documents
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedUnit, setSelectedUnit] = useState<UnitDetails | null>(null);
+    const [addUnitDialogOpen, setAddUnitDialogOpen] = useState(false); // State for dialog visibility
+    const [addingUnit, setAddingUnit] = useState(false); // Loading state for unit creation
+    
+    const { openDialog: openEditPropertyDialog } = usePropertyDialog();
+
+    const fetchPropertyDetails = async () => {
+        if (!propertyId) {
+            setError('Property ID is missing.');
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            // Replace placeholder with actual (placeholder) API call
+            const fetchedProperty = await api.property.getPropertyById(propertyId);
+            setProperty(fetchedProperty);
+            setSelectedUnit(fetchedProperty.units?.[0] || null); // Select first unit initially
+            
+            // **** Remove Placeholder Data ****
+            // console.warn("Using placeholder data for PropertyDetailsPage");
+            // await new Promise(resolve => setTimeout(resolve, 500)); 
+            // const placeholder: PropertyDetails = { /* ... placeholder object ... */ };
+            // setProperty(placeholder);
+            // setSelectedUnit(placeholder.units?.[0] || null); 
+            // **** End Placeholder Data Removal ****
+            
+        } catch (err: unknown) {
+            console.error("Error fetching property details:", err);
+            if (err instanceof Error && (err.message.includes('404') || err.message.includes('not found'))) {
+                 setError('Property not found.');
+            } else {
+                setError(err instanceof Error ? err.message : 'Failed to load property details.');
+            }
+            setProperty(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch Documents Function
+    const fetchDocuments = async () => {
+        if (!propertyId) return; // Don't fetch if no property ID
+        setDocumentsLoading(true);
+        setDocumentsError(null);
+        try {
+            const response = await api.document.getDocuments({ property_id: propertyId });
+      setDocuments(response.documents || []);
+    } catch (err) {
+            console.error("Error fetching documents:", err);
+            setDocumentsError(err instanceof Error ? err.message : 'Failed to load documents.');
+      setDocuments([]);
+    } finally {
+            setDocumentsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!propertiesLoading && !property && id) {
-      toast.error('Property not found');
-      navigate('/dashboard');
-    }
-  }, [property, propertiesLoading, id, navigate]);
+        fetchPropertyDetails();
+        fetchDocuments(); // Fetch documents when component mounts or propertyId changes
+    }, [propertyId]);
 
-  if (propertiesLoading) return <LoadingSpinner />;
-  if (propertiesError) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-          <p>Error loading property details: {propertiesError}</p>
-          <button onClick={() => navigate('/dashboard')} className="underline mt-2">
-            Return to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (!property) return null;
-
-  const propertyId = property.id;
-
-  const images = property?.image_url 
-    ? [property.image_url]
-    : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1073&q=80"];
-
-  const fullAddress = [
-    property.address_line1,
-    property.address_line2,
-    property.city,
-    property.state,
-    property.pincode || property.zip_code
-  ].filter(Boolean).join(', ');
-
-  // Prepare initialData for PropertyForm - only compute if property exists
-  const propertyFormDataForEdit = property ? {
+    const handleEditClick = () => {
+        if (!property) return;
+        const formData: Partial<PropertyFormData> & { id: string } = {
       id: property.id,
       propertyName: property.property_name,
       propertyType: property.property_type,
@@ -219,206 +107,201 @@ export default function PropertyDetailsPage() {
       addressLine2: property.address_line2,
       city: property.city,
       state: property.state,
-      pincode: property.pincode,
+            pincode: property.zip_code, 
+            country: property.country,
       description: property.description,
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
-      sizeSqft: property.size_sqft,
+            sizeSqft: property.area, 
       yearBuilt: property.year_built,
-      amenities: property.amenities,
-      numberOfUnits: property.number_of_units,
-      image_urls: property.image_url ? [property.image_url] : [], 
-      image_paths: [], 
-      // --- Fields required by PropertyFormData but potentially missing in EnhancedProperty ---
-      // Provide defaults or map from EnhancedProperty if available
-      category: '', // Example default
-      listedIn: '', // Example default
-      price: 0,      // Example default
-      yearlyTaxRate: 0, // Example default
-      kitchens: 0,   // Example default
-      garages: 0,    // Example default
-      garageSize: 0, // Example default
-      floors: 0,     // Example default
-      document: null,// Required by PropertyFormData
-      units: [],     // Required by PropertyFormData
-      surveyNumber: '', // Example default
-      doorNumber: '',   // Example default
-  } : undefined;
+            category: '', // Placeholder
+            listedIn: '', // Placeholder
+            status: property.status, // Assuming PropertyDetails has status
+            price: 0, // Placeholder
+        };
+        openEditPropertyDialog(formData, fetchPropertyDetails);
+    };
 
-  // Function to handle successful property update from the form
-  const handlePropertyUpdate = async (/* updatedData: TBD */) => { // Parameter type might be needed depending on onSubmit signature in PropertyForm
-      setShowEditModal(false);
-      toast.success("Property updated successfully!");
-      // TODO: Ideally, update the local properties state via a callback from usePropertiesApi or refetch
-      // navigate(0); // Avoid full page reload
-  };
+    // Handler to add a new unit
+    const handleAddUnit = async (unitData: UnitCreate) => {
+        if (!propertyId) return;
+        try {
+            setAddingUnit(true);
+            const response = await api.property.createUnit(propertyId, unitData);
+            console.log('Unit created:', response);
+            fetchPropertyDetails(); // Refresh property details to get the new unit
+            setAddUnitDialogOpen(false); // Close the dialog
+        } catch (error) {
+            console.error('Error creating unit:', error);
+            // Handle error (could show toast notification)
+        } finally {
+            setAddingUnit(false);
+        }
+    };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <button onClick={() => navigate('/dashboard')} className="flex items-center text-gray-600 hover:text-black">
-          <ArrowLeft size={20} className="mr-2" />
-          Back to Dashboard
-        </button>
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setShowEditModal(true)}
-            className="flex items-center space-x-2 text-gray-600 hover:text-black"
-          >
-            <Star size={20} />
-            <span>Edit Property</span>
-          </button>
-          <button className="flex items-center space-x-2 text-gray-600 hover:text-black">
-            <Share2 size={20} />
-            <span>Share</span>
-          </button>
-          <button 
-            onClick={() => setIsSaved(!isSaved)}
-            className={`flex items-center space-x-2 ${isSaved ? 'text-red-500' : 'text-gray-600 hover:text-black'}`}
-          >
-            <Heart size={20} fill={isSaved ? 'currentColor' : 'none'} />
-            <span>Save</span>
-          </button>
+    // --- Loading / Error / Not Found States --- 
+    if (loading) return <div className="p-6 flex justify-center"><LoadingSpinner /></div>;
+    if (error) return (
+        <div className="p-6 text-center">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button variant="outline" asChild>
+                <Link to="/dashboard/properties"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Properties</Link>
+            </Button>
         </div>
-      </div>
+    );
+    if (!property) return <div className="p-6 text-center">Property data is unavailable.</div>; // Should ideally be covered by error state
 
-      {/* Image Gallery */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <div className="col-span-2 row-span-2 relative">
-          <img
-            src={images[selectedImage]}
-            alt={property.property_name}
-            className="w-full h-full object-cover rounded-lg"
-          />
-          {images.length > 1 && (
-            <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
-              {selectedImage + 1} / {images.length}
+    // --- Main Render --- 
+    return (
+        <div className="p-6 space-y-6">
+            {/* Back Button & Edit Button */}
+            <div className="flex justify-between items-center">
+                <Button variant="outline" size="sm" asChild>
+                    <Link to="/dashboard/properties">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Link>
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleEditClick}>
+                    <Edit className="mr-2 h-4 w-4" /> Edit Property
+                </Button>
             </div>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-4 col-span-2">
-          {images.slice(1, 5).map((image, index) => (
-            <img
-              key={index}
-              src={image}
-              alt={`${property.property_name} ${index + 2}`}
-              className="w-full h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setSelectedImage(index + 1)}
+
+            {/* Property Header & Image Gallery */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-3xl">{property.property_name}</CardTitle>
+                    <CardDescription>{`${property.address_line1}, ${property.city}, ${property.state}`}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     {/* Use the ImageGallery component */}
+                     <ImageGallery 
+                        imageUrls={property.image_urls} 
+                        propertyName={property.property_name}
+                        className="mb-6" // Add margin if needed
+                     />
+                </CardContent>
+            </Card>
+
+            {/* Units Selection & Details Tabs */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Units List */} 
+                <div className="lg:col-span-1 space-y-3"> {/* Reduced space-y */} 
+                    <h2 className="text-xl font-semibold px-1">Units</h2> {/* Added padding */} 
+                     <Button variant="outline" className="w-full" onClick={() => setAddUnitDialogOpen(true)}>
+                         <Plus className="mr-2 h-4 w-4" /> Add Unit
+                     </Button>
+                    {property.units.length === 0 && <p className="text-muted-foreground text-sm px-1">No units added yet.</p>}
+                    {property.units.map(unit => (
+                        // Use the UnitCard component
+                        <UnitCard 
+                            key={unit.id} 
+                            unit={unit}
+                            isSelected={selectedUnit?.id === unit.id}
+                            onClick={() => setSelectedUnit(unit)}
             />
           ))}
+      </div>
+
+                {/* Unit Details Tabs */} 
+                <div className="lg:col-span-2">
+                   {selectedUnit ? (
+                     <Tabs defaultValue="tenant" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4 mb-4"> {/* Adjust grid-cols based on tabs */}
+                            <TabsTrigger value="tenant">Tenant</TabsTrigger>
+                            <TabsTrigger value="lease">Lease</TabsTrigger>
+                            <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+                            <TabsTrigger value="payments">Payments</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="tenant">
+                            <Card>
+                                <CardHeader><CardTitle>Tenant Information</CardTitle></CardHeader>
+                                <CardContent>
+                                   {selectedUnit.status === 'Occupied' && selectedUnit.current_tenant_id ? (
+                                       // Use the TenantInfoTab component
+                                       <TenantInfoTab tenantId={selectedUnit.current_tenant_id} />
+                                   ) : (
+                                       <div className="space-y-4">
+                                           <p className="text-muted-foreground">This unit is vacant.</p>
+                                           <Button variant="outline">
+                                               <Plus className="mr-2 h-4 w-4" /> Assign Tenant
+                                           </Button>
+                                       </div>
+                                   )}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                        <TabsContent value="lease">
+                            <Card>
+                                <CardHeader><CardTitle>Lease Agreement</CardTitle></CardHeader>
+                                <CardContent>
+                                   {/* Use the LeaseInfoTab component */} 
+                                   <LeaseInfoTab unitId={selectedUnit.id} /> 
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                        <TabsContent value="maintenance">
+                             <Card>
+                                <CardHeader><CardTitle>Maintenance History</CardTitle></CardHeader>
+                                <CardContent>
+                                   {/* Use the MaintenanceListTab component */} 
+                                   <MaintenanceListTab unitId={selectedUnit.id} /> 
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                         <TabsContent value="payments">
+                             <Card>
+                                <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
+                                <CardContent>
+                                    {/* Use the PaymentListTab component */} 
+                                    <PaymentListTab unitId={selectedUnit.id} tenantId={selectedUnit.current_tenant_id} />
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
+                   ) : (
+                       <Card className="flex items-center justify-center h-64">
+                           <p className="text-muted-foreground">Select a unit to view details.</p>
+                       </Card>
+                   )}
+              </div>
+            </div>
+            
+            {/* Property-Level Documents */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Property Documents</CardTitle>
+                    <CardDescription>Deeds, insurance, or other property-wide documents.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {/* Document list with upload button */}
+                    <div className="space-y-4">
+                        <Button variant="outline" className="w-full sm:w-auto">
+                            <Plus className="mr-2 h-4 w-4" /> Upload Document
+                        </Button>
+                        
+                        <DocumentList 
+                            documents={documents} 
+                            isLoading={documentsLoading}
+                            error={documentsError}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Add Unit Dialog */}
+            <Dialog open={addUnitDialogOpen} onOpenChange={setAddUnitDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Add New Unit</DialogTitle>
+                        <DialogDescription>
+                            Create a new unit for this property. Fill in the details below.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {/* Add the AddUnitForm component */}
+                    <AddUnitForm onSubmit={handleAddUnit} isLoading={addingUnit} />
+                </DialogContent>
+            </Dialog>
         </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-12">
-        <div className="col-span-2">
-          {/* Property Title & Location */}
-          <div className="border-b pb-6 mb-6">
-            <h1 className="text-3xl font-bold mb-2">{property.property_name}</h1>
-            <div className="flex items-center text-gray-600">
-              <MapPin size={18} className="mr-2" />
-              <span>{fullAddress}</span>
-            </div>
-          </div>
-
-          {/* Property Details */}
-          <div className="grid grid-cols-3 gap-6 mb-8">
-            {property.bedrooms && (
-              <div>
-                <h3 className="font-semibold">Bedrooms</h3>
-                <p>{property.bedrooms}</p>
-              </div>
-            )}
-            {property.bathrooms && (
-              <div>
-                <h3 className="font-semibold">Bathrooms</h3>
-                <p>{property.bathrooms}</p>
-              </div>
-            )}
-            {property.size_sqft && (
-              <div>
-                <h3 className="font-semibold">Area</h3>
-                <p>{property.size_sqft} sq.ft</p>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">About this property</h2>
-            <p className="text-gray-600 whitespace-pre-line">{property.description}</p>
-          </div>
-
-          {/* Amenities */}
-          {property.amenities && (
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">What this place offers</h2>
-              <div className="grid grid-cols-2 gap-4">
-                {property.amenities.map((amenity) => (
-                  <div key={amenity} className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-black rounded-full" />
-                    <span className="capitalize">{amenity.replace(/_/g, ' ')}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Map */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Location</h2>
-            {property && fullAddress && (
-              <PropertyMap 
-                address={fullAddress}
-                className="h-[400px] rounded-lg overflow-hidden"
-              />
-            )}
-          </div>
-
-          {/* Tenants Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Current Tenants</h2>
-            {/* <TenantList 
-              property={property}
-            /> */}
-          </div>
-          
-          {/* Tenant Documents Section - Ensure correct placement */}
-          {tenantId && propertyId && (
-              <TenantPropertyDocuments propertyId={propertyId} tenantId={tenantId} />
-          )}
-
-        </div> {/* End of col-span-2 */} 
-
-        {/* Sidebar */}
-        <aside className="col-span-1">
-           {/* ... sidebar content ... */} 
-        </aside>
-      </div>
-
-      {/* Modals */}
-      {showMaintenanceModal && (
-        <NewRequestModal
-          onClose={() => setShowMaintenanceModal(false)}
-          onSubmitSuccess={() => { /* Optional: Add logic like refetching requests */ }}
-        />
-      )}
-
-      {showPaymentModal && property && (
-        <RecordPaymentModal
-          propertyId={property.id}
-          onClose={() => setShowPaymentModal(false)}
-          onSubmitSuccess={() => { /* Optional: Add logic like refetching payments */ }}
-        />
-      )}
-
-      {showEditModal && propertyFormDataForEdit && (
-        <PropertyForm 
-          initialData={propertyFormDataForEdit}
-          onCancel={() => setShowEditModal(false)} 
-          onSubmit={handlePropertyUpdate} 
-        />
-      )}
-    </div>
-  );
+    );
 }

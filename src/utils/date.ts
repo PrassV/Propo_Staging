@@ -11,11 +11,23 @@ export const calculateAge = (dob: string): number => {
   return age;
 };
 
-export const formatDate = (date: string): string => {
-  if (!date) return '';
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+/**
+ * Formats a date string into a locale-specific date string.
+ * Returns 'N/A' if the input is undefined, null, or invalid.
+ */
+export const formatDate = (dateString: string | undefined | null): string => {
+  if (!dateString) {
+    return 'N/A';
+  }
+  try {
+    // Check for invalid date string explicitly
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    return date.toLocaleDateString(); // Use locale-specific format
+  } catch (error) {
+    console.error("Error formatting date:", dateString, error);
+    return 'Invalid Date'; // Return 'Invalid Date' on error
+  }
 };

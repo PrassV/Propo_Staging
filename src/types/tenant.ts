@@ -34,6 +34,7 @@ export interface Tenant {
   property_tax_responsibility?: BillResponsibility;
   created_at: string;
   updated_at?: string;
+  property?: Property;
 }
 
 export interface TenantUpdate {
@@ -94,4 +95,27 @@ export interface TenantCreate {
   water_responsibility?: BillResponsibility;
   property_tax_responsibility?: BillResponsibility;
   tenancy_end_date?: string;
+}
+
+import { Property } from './property';
+
+export interface TenantWithProperty extends Tenant {
+  property?: Property;
+}
+
+// Define the structure for the tenant onboarding form state
+export interface TenantFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  familySize: string; // Or number if parsed
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  idType: string; // Consider defining specific ID types: 'aadhaar' | 'pan_card' | 'passport'
+  idNumber: string;
+  idProof: File | null;
 }

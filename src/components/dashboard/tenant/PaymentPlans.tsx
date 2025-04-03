@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CreditCard, Smartphone } from 'lucide-react';
+import { TenantWithProperty } from '../../../types/tenant';
 
 interface PaymentPlan {
   type: 'card' | 'mobile';
@@ -10,7 +11,7 @@ interface PaymentPlan {
 }
 
 interface PaymentPlansProps {
-  tenantData: any;
+  tenantData: TenantWithProperty;
 }
 
 export default function PaymentPlans({ tenantData }: PaymentPlansProps) {

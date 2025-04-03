@@ -4,8 +4,10 @@ import { Upload } from 'lucide-react';
 import InputField from '../auth/InputField';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../hooks/useProfile';
-import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+
+import { uploadFile } from '../../api/services/uploadService';
+import { updateUserProfile, UserProfileUpdateData } from '../../api/services/userService';
 
 export default function OwnerOnboardingForm() {
   const navigate = useNavigate();
@@ -42,25 +44,14 @@ export default function OwnerOnboardingForm() {
     setLoading(true);
 
     try {
-      // Upload ID image
       let idImageUrl = '';
       if (formData.idImage) {
-        const fileExt = formData.idImage.name.split('.').pop();
-        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('id-documents')
-          .upload(filePath, formData.idImage);
-
-        if (uploadError) throw uploadError;
-        idImageUrl = filePath;
+        idImageUrl = await uploadFile(formData.idImage, 'id_document', user.id);
       }
 
-      const profileData = {
-        id: user.id,
+      const profileData: UserProfileUpdateData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
-        email: formData.email,
         phone: formData.phone,
         address_line1: formData.addressLine1,
         address_line2: formData.addressLine2,
@@ -72,22 +63,22 @@ export default function OwnerOnboardingForm() {
         user_type: 'owner'
       };
 
-      // Use upsert to handle both insert and update cases
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert(profileData, {
-          onConflict: 'id',
-          ignoreDuplicates: false
-        });
-
-      if (profileError) throw profileError;
+      await updateUserProfile(profileData);
 
       await refetch();
       toast.success('Profile created successfully!');
       navigate('/dashboard');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating profile:', error);
-      toast.error(error.message || 'Failed to create profile');
+      let errorMessage = 'Failed to create profile';
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+           errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+           errorMessage = error.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -123,6 +114,7 @@ export default function OwnerOnboardingForm() {
           value={formData.email}
           disabled
           required
+          onChange={() => {}}
         />
 
         <InputField

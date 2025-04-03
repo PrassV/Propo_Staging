@@ -1,15 +1,29 @@
-import { useState, ChangeEvent } from 'react';
-import { X } from 'lucide-react';
-import { MaintenanceCategory, MaintenancePriority } from '../../types/maintenance';
+import React, { useState, ChangeEvent, useEffect } from 'react';
+import { MaintenanceCategory, MaintenancePriority, MaintenanceRequestCreate, DocumentCreate, MaintenanceRequest, Property, PropertyUnit, Tenant } from '../../api/types';
 import { useAuth } from '../../contexts/AuthContext';
-import PropertySelect from './forms/PropertySelect';
-import UnitSelect from './forms/UnitSelect';
-import TenantSelect from './forms/TenantSelect';
-import InputField from '../auth/InputField';
 import toast from 'react-hot-toast';
 import api from '../../api';
-import { supabase } from '../../lib/supabase';
-import { MaintenanceRequestCreate, DocumentCreate, MaintenanceRequest } from '../../api/types';
+import { uploadFile } from '../../api/services/uploadService';
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { getProperties, getUnitsForProperty } from '@/api/services/propertyService';
+import { getTenants } from '@/api/services/tenantService';
 
 interface UploadedFileInfo {
   url: string;
@@ -19,11 +33,12 @@ interface UploadedFileInfo {
 }
 
 interface NewRequestModalProps {
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSubmitSuccess: () => void;
 }
 
-const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => {
+const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModalProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<{
@@ -40,10 +55,99 @@ const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => 
     tenantId: '',
     title: '',
     description: '',
-    priority: 'normal',
+    priority: 'medium',
     category: '',
   });
   const [files, setFiles] = useState<File[]>([]);
+
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loadingProperties, setLoadingProperties] = useState<boolean>(false);
+  const [propertyError, setPropertyError] = useState<string | null>(null);
+
+  const [units, setUnits] = useState<PropertyUnit[]>([]);
+  const [loadingUnits, setLoadingUnits] = useState<boolean>(false);
+  const [unitError, setUnitError] = useState<string | null>(null);
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loadingTenants, setLoadingTenants] = useState<boolean>(false);
+  const [tenantError, setTenantError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProperties = async () => {
+      setLoadingProperties(true);
+      setPropertyError(null);
+      try {
+        const response = await getProperties();
+        setProperties(response.items || []);
+      } catch (err: unknown) {
+        console.error('Error fetching properties:', err);
+        setPropertyError(err instanceof Error ? err.message : 'Failed to load properties.');
+        setProperties([]);
+      } finally {
+        setLoadingProperties(false);
+      }
+    };
+    fetchProperties();
+  }, []);
+
+  useEffect(() => {
+    const fetchUnits = async () => {
+      if (!formData.propertyId) {
+        setUnits([]);
+        setTenants([]); 
+        setFormData(prev => ({ ...prev, unitNumber: '', tenantId: '' })); 
+        return;
+      }
+      setLoadingUnits(true);
+      setUnitError(null);
+      setTenants([]); 
+      setFormData(prev => ({ ...prev, unitNumber: '', tenantId: '' })); 
+      try {
+        const fetchedUnits = await getUnitsForProperty(formData.propertyId);
+        setUnits(fetchedUnits || []);
+      } catch (err: unknown) {
+        console.error('Error fetching units:', err);
+        setUnitError(err instanceof Error ? err.message : 'Failed to load units.');
+        setUnits([]);
+      } finally {
+        setLoadingUnits(false);
+      }
+    };
+    fetchUnits();
+  }, [formData.propertyId]);
+
+  useEffect(() => {
+    const fetchTenantsForProperty = async () => {
+      if (!formData.propertyId) {
+         setTenants([]);
+         return;
+      }
+      if (loadingUnits || unitError) {
+          setTenants([]); 
+          return;
+      }
+      setLoadingTenants(true);
+      setTenantError(null);
+      try {
+        const response = await getTenants({ property_id: formData.propertyId });
+        setTenants(response.items || []);
+      } catch (err: unknown) {
+        console.error('Error fetching tenants:', err);
+        setTenantError(err instanceof Error ? err.message : 'Failed to load tenants.');
+        setTenants([]);
+      } finally {
+        setLoadingTenants(false);
+      }
+    };
+    fetchTenantsForProperty();
+  }, [formData.propertyId, loadingUnits, unitError]); 
+  
+  const availableTenantsForUnit = React.useMemo(() => {
+    if (!formData.unitNumber) return [];
+    const selectedUnit = units.find(u => u.unit_number === formData.unitNumber);
+    if (!selectedUnit || !selectedUnit.tenant_id) return []; 
+    return tenants.filter(t => t.id === selectedUnit.tenant_id);
+  }, [formData.unitNumber, tenants, units]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -64,31 +168,18 @@ const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => 
     
     setLoading(true);
     let createdRequest: MaintenanceRequest | null = null;
-    const uploadedFileUrls: UploadedFileInfo[] = [];
+    const uploadedFileInfos: UploadedFileInfo[] = [];
 
     try {
       if (files.length > 0) {
         toast.loading('Uploading files...');
         const uploadPromises = files.map(async (file) => {
-           const fileExt = file.name.split('.').pop();
-           const filePath = `maintenance-files/${user.id}/${formData.propertyId}/${Date.now()}.${fileExt}`;
-           const { error: uploadError } = await supabase.storage
-            .from('maintenance-files') 
-            .upload(filePath, file);
-           if (uploadError) throw new Error(`Upload failed for ${file.name}: ${uploadError.message}`);
-           const { data: urlData } = supabase.storage.from('maintenance-files').getPublicUrl(filePath);
-           if (!urlData?.publicUrl) {
-               console.warn(`Could not get public URL for ${filePath}`);
-               return null;
-           }
-           return { url: urlData.publicUrl, fileName: file.name, fileType: file.type, size: file.size };
+           const url = await uploadFile(file, 'maintenance_request', formData.propertyId);
+           return { url: url, fileName: file.name, fileType: file.type, size: file.size };
         });
-        const uploadResults = await Promise.all(uploadPromises);
-        uploadedFileUrls.push(...uploadResults.filter(f => f !== null) as UploadedFileInfo[]);
+        const results = await Promise.all(uploadPromises);
+        uploadedFileInfos.push(...results);
         toast.dismiss();
-        if (uploadedFileUrls.length !== files.length) {
-             toast.error('Some files failed to upload or retrieve URL.');
-        }
       }
 
       const requestAPIData: MaintenanceRequestCreate = {
@@ -96,28 +187,30 @@ const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => 
         tenant_id: formData.tenantId || undefined,
         title: formData.title,
         description: formData.description,
-        priority: mapPriority(formData.priority),
-        category: formData.category,
+        priority: formData.priority,
+        category: formData.category as MaintenanceCategory,
       };
 
       toast.loading('Creating request...');
       createdRequest = await api.maintenance.createMaintenanceRequest(requestAPIData);
       toast.dismiss();
 
-      if (createdRequest?.id && uploadedFileUrls.length > 0) { 
+      if (createdRequest?.id && uploadedFileInfos.length > 0) { 
         toast.loading('Linking files...');
-        const linkPromises = uploadedFileUrls.map(fileInfo => {
+        const linkPromises = uploadedFileInfos.map(fileInfo => {
           const docData: DocumentCreate = {
+            document_name: fileInfo.fileName,
             title: fileInfo.fileName,
             maintenance_request_id: createdRequest!.id,
             property_id: formData.propertyId,
             tenant_id: formData.tenantId || undefined,
             file_url: fileInfo.url,
             file_name: fileInfo.fileName,
-            file_type: fileInfo.fileType,
+            mime_type: fileInfo.fileType,
             file_size: fileInfo.size,
-            document_type: fileInfo.fileType.startsWith('image/') ? 'MAINTENANCE_IMAGE' : 'MAINTENANCE_DOCUMENT',
-            access_level: 'PRIVATE',
+            file_extension: fileInfo.fileName.split('.').pop(),
+            document_type: fileInfo.fileType.startsWith('image/') ? 'maintenance_photo' : 'other',
+            access_level: 'private',
           };
           return api.document.createDocument(docData);
         });
@@ -127,7 +220,7 @@ const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => 
 
       toast.success('Maintenance request created successfully');
       onSubmitSuccess();
-      onClose();
+      onOpenChange(false);
 
     } catch (error: unknown) {
       toast.dismiss();
@@ -138,167 +231,236 @@ const NewRequestModal = ({ onClose, onSubmitSuccess }: NewRequestModalProps) => 
       setLoading(false);
     }
   };
-  
-  const mapPriority = (priority: MaintenancePriority): 'low' | 'medium' | 'high' | 'emergency' => {
-    switch (priority) {
-      case 'normal': return 'medium';
-      case 'urgent': return 'high';
-      case 'emergency': return 'emergency';
-      case 'low': return 'low';
-      default: return 'medium';
+
+  const handleClose = () => {
+    if (!loading) {
+        onOpenChange(false);
+        setFormData({ 
+            propertyId: '', unitNumber: '', tenantId: '', title: '', 
+            description: '', priority: 'medium', category: '' 
+        });
+        setFiles([]);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">New Maintenance Request</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X size={24} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">New Maintenance Request</DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Property</label>
-              <PropertySelect
-                value={formData.propertyId}
-                onChange={(value) => setFormData({ ...formData, propertyId: value, unitNumber: '', tenantId: '' })}
-                disabled={loading}
-              />
+            <div className="space-y-2">
+              <Label htmlFor="property">Property *</Label>
+              <Select 
+                value={formData.propertyId} 
+                onValueChange={(value) => {
+                  setFormData({ ...formData, propertyId: value, unitNumber: '', tenantId: '' });
+                }}
+                disabled={loadingProperties || loading}
+              >
+                <SelectTrigger id="property">
+                  <SelectValue placeholder="Select Property..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingProperties && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                  {propertyError && <SelectItem value="error" disabled>Error loading</SelectItem>}
+                  {!loadingProperties && !propertyError && properties.length === 0 && (
+                    <SelectItem value="no-props" disabled>No properties found</SelectItem>
+                  )}
+                  {!loadingProperties && !propertyError && properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      {property.property_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {propertyError && <p className="text-xs text-red-600">{propertyError}</p>}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-              <UnitSelect
-                propertyId={formData.propertyId}
-                value={formData.unitNumber}
-                onChange={(value) => setFormData({ ...formData, unitNumber: value, tenantId: '' })}
-                disabled={loading}
-              />
-            </div>
+            <div className="space-y-2">
+               <Label htmlFor="unit">Unit</Label>
+               <Select 
+                 value={formData.unitNumber}
+                 onValueChange={(value) => {
+                     setFormData({ ...formData, unitNumber: value, tenantId: '' });
+                 }}
+                 disabled={!formData.propertyId || loadingUnits || !!unitError || loading}
+               >
+                 <SelectTrigger id="unit"><SelectValue placeholder="Select Unit..." /></SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="placeholder" disabled>Select property first</SelectItem>
+                   {loadingUnits && <SelectItem value="loading" disabled>Loading units...</SelectItem>}
+                   {unitError && <SelectItem value="error" disabled>Error loading units</SelectItem>}
+                   {!loadingUnits && !unitError && units.length === 0 && formData.propertyId && (
+                     <SelectItem value="no-units" disabled>No units found</SelectItem>
+                   )}
+                   {!loadingUnits && !unitError && !formData.propertyId && (
+                     <SelectItem value="placeholder" disabled>Select property first</SelectItem>
+                   )}
+                   {!loadingUnits && !unitError && units.map((unit) => (
+                     <SelectItem key={unit.id} value={unit.unit_number}>
+                       {unit.unit_number}
+                     </SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+               {unitError && <p className="text-xs text-red-600">{unitError}</p>}
+             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tenant</label>
-            <TenantSelect
-              propertyId={formData.propertyId}
-              unitNumber={formData.unitNumber}
-              value={formData.tenantId}
-              onChange={(value) => setFormData({ ...formData, tenantId: value })}
-              disabled={loading}
-            />
-          </div>
-
-          <InputField
-            label="Title"
-            type="text"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
-            disabled={loading}
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-              rows={4}
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value as MaintenancePriority })}
-                className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
+           <div className="space-y-2">
+             <Label htmlFor="tenant">Tenant</Label>
+             <Select 
+                value={formData.tenantId}
+                onValueChange={(value) => {
+                    setFormData({ ...formData, tenantId: value });
+                }}
+                disabled={!formData.unitNumber || loadingTenants || !!tenantError || loading} 
+              >
+               <SelectTrigger id="tenant"><SelectValue placeholder="Select Tenant..." /></SelectTrigger>
+               <SelectContent>
+                  <SelectItem value="placeholder" disabled>Select unit first</SelectItem>
+                  {loadingTenants && <SelectItem value="loading" disabled>Loading tenants...</SelectItem>}
+                  {tenantError && <SelectItem value="error" disabled>Error loading tenants</SelectItem>}
+                  {!loadingTenants && !tenantError && !formData.unitNumber && (
+                    <SelectItem value="placeholder" disabled>Select unit first</SelectItem>
+                  )}
+                  {!loadingTenants && !tenantError && availableTenantsForUnit.length === 0 && formData.unitNumber && (
+                    <SelectItem value="no-tenant" disabled>No tenant found for this unit</SelectItem>
+                  )}
+                  {!loadingTenants && !tenantError && availableTenantsForUnit.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+               </SelectContent>
+             </Select>
+             {tenantError && <p className="text-xs text-red-600">{tenantError}</p>}
+           </div>
+           
+           <div className="space-y-2">
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title" 
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
                 disabled={loading}
-              >
-                <option value="normal">Normal</option>
-                <option value="urgent">Urgent</option>
-                <option value="emergency">Emergency</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
+                placeholder="e.g., Leaking faucet in kitchen"
+              />
+           </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value as MaintenanceCategory })}
-                className="w-full p-3 border rounded-lg focus:outline-none focus:border-black"
-                required
-                disabled={loading}
-              >
-                <option value="">Select Category</option>
-                <option value="plumbing">Plumbing</option>
-                <option value="electrical">Electrical</option>
-                <option value="carpentry">Carpentry</option>
-                <option value="painting">Painting</option>
-                <option value="appliance">Appliance</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+           <div className="space-y-2">
+             <Label htmlFor="description">Description *</Label>
+             <Textarea
+               id="description"
+               value={formData.description}
+               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+               rows={4}
+               required
+               disabled={loading}
+               placeholder="Provide details about the issue..."
+             />
+           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div className="space-y-2">
+               <Label htmlFor="priority">Priority *</Label>
+               <Select 
+                 value={formData.priority} 
+                 onValueChange={(value: MaintenancePriority) => {
+                    setFormData({ ...formData, priority: value });
+                 }}
+                 disabled={loading}
+                >
+                 <SelectTrigger id="priority">
+                   <SelectValue placeholder="Select Priority..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="emergency">Emergency</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+
+            <div className="space-y-2">
+               <Label htmlFor="category">Category *</Label>
+               <Select 
+                  value={formData.category} 
+                  onValueChange={(value: MaintenanceCategory | '') => {
+                      setFormData({ ...formData, category: value });
+                  }}
+                  disabled={loading}
+                >
+                 <SelectTrigger id="category">
+                    <SelectValue placeholder="Select Category..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                    <SelectItem value="plumbing">Plumbing</SelectItem>
+                    <SelectItem value="electrical">Electrical</SelectItem>
+                    <SelectItem value="hvac">HVAC</SelectItem>
+                    <SelectItem value="appliances">Appliances</SelectItem>
+                    <SelectItem value="painting">Painting</SelectItem>
+                    <SelectItem value="carpentry">Carpentry</SelectItem>
+                    <SelectItem value="landscaping">Landscaping</SelectItem>
+                    <SelectItem value="cleaning">Cleaning</SelectItem>
+                    <SelectItem value="pest_control">Pest Control</SelectItem>
+                    <SelectItem value="roofing">Roofing</SelectItem>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Upload Images/Documents (Optional)</label>
-            <input
-              type="file"
-              multiple
-              onChange={handleFileChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-700 disabled:opacity-50"
-              disabled={loading}
-            />
-            {files.length > 0 && (
-              <div className="mt-2 space-y-1">
-                <p className="text-xs font-medium">Selected files:</p>
-                {files.map((file, index) => (
-                  <div key={index} className="flex justify-between items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                    <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
-                    <button 
-                      type="button" 
-                      onClick={() => removeFile(index)}
-                      className="text-red-500 hover:text-red-700"
-                      disabled={loading}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+           <div className="space-y-2">
+             <Label htmlFor="files">Upload Images/Documents (Optional)</Label>
+             <Input
+               id="files"
+               type="file"
+               multiple
+               onChange={handleFileChange}
+               disabled={loading}
+               className="pt-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+             />
+             {files.length > 0 && ( 
+               <div className="mt-2 space-y-1 text-xs text-muted-foreground"> 
+                 {files.map((file, index) => (
+                   <div key={index} className="flex justify-between items-center">
+                     <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                     <Button 
+                       type="button" 
+                       variant="ghost" 
+                       size="sm" 
+                       onClick={() => removeFile(index)}
+                       disabled={loading}
+                       className="text-destructive hover:text-destructive/80 h-auto p-0"
+                     >
+                       &times;
+                     </Button>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
 
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-              disabled={loading}
-            >
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
-              disabled={loading}
-            >
+            </Button>
+            <Button type="submit" disabled={loading}>
               {loading ? 'Creating...' : 'Create Request'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
