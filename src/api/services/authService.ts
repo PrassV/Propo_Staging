@@ -44,8 +44,22 @@ export const getCurrentUser = async (): Promise<UserProfile> => {
 
 // Update user profile
 export const updateUserProfile = async (profileData: Partial<UserProfile>): Promise<UserProfile> => {
-  const response = await apiClient.put<ApiResponse<UserProfile>>('/auth/profile', profileData);
-  return response.data.data;
+  try {
+    // First try the /users/me endpoint (our primary endpoint)
+    const response = await apiClient.put<ApiResponse<UserProfile>>('/users/me', profileData);
+    return response.data.data;
+  } catch (error) {
+    console.error("Error updating profile with /users/me, trying fallback endpoint", error);
+    
+    // If first attempt fails, try the /auth/profile endpoint as fallback
+    try {
+      const fallbackResponse = await apiClient.put<ApiResponse<UserProfile>>('/auth/profile', profileData);
+      return fallbackResponse.data.data;
+    } catch (fallbackError) {
+      console.error("Both profile update endpoints failed", fallbackError);
+      throw fallbackError; // Rethrow the last error
+    }
+  }
 };
 
 // Logout user

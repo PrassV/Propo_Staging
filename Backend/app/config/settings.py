@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         "https://localhost:3000",
         "https://localhost:5173",
         "https://propo-staging.vercel.app",  # Production frontend URL
+        "https://propostaging-production.up.railway.app",  # Railway deployed backend
     ]
     
     # Supabase Configuration

@@ -291,8 +291,15 @@ async def update_profile(
             detail="Could not validate credentials"
         )
     
-    user_id = current_user.get("id")
+    # Handle different current_user structures (object vs dict)
+    user_id = None
+    if isinstance(current_user, dict):
+        user_id = current_user.get("id")
+    else:
+        user_id = getattr(current_user, "id", None)
+    
     if not user_id:
+        logger.error(f"User ID missing in current_user: {current_user}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials - User ID missing"
