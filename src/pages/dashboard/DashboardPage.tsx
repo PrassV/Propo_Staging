@@ -72,18 +72,18 @@ export default function DashboardPage() {
     );
   }
 
-  // Redirect based on user type
-  if (!profile?.user_type) {
+  // Check ROLE instead of user_type
+  if (!profile?.role) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
         <Card className="p-6">
           <CardContent className="pt-6">
-            <h1 className="text-2xl font-bold mb-4">User Type Not Found</h1>
+            <h1 className="text-2xl font-bold mb-4">User Role Not Set</h1>
             <p className="mb-4">
-              We couldn't determine if you are a property owner or a tenant.
+              Please complete your profile to specify your role (Owner or Tenant).
             </p>
             <Button onClick={handleSetupProfile}>
-              Update Profile
+              Go to Profile
             </Button>
           </CardContent>
         </Card>
@@ -109,7 +109,7 @@ export default function DashboardPage() {
       {dashboardData ? (
         <DashboardSummaryCards 
           summaryData={dashboardData} 
-          userType={profile.user_type as 'owner' | 'tenant'} 
+          userType={profile.role as 'owner' | 'tenant'}
         />
       ) : (
         <div className="text-center p-4">
@@ -125,8 +125,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Conditional rendering based on user type */}
-      {profile.user_type === 'owner' ? (
+      {/* Conditional rendering based on ROLE */}
+      {profile.role === 'owner' ? (
         // Owner-specific dashboard content
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="col-span-2">
@@ -146,7 +146,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      ) : (
+      ) : profile.role === 'tenant' ? (
         // Tenant-specific dashboard content
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="col-span-2">
@@ -164,6 +164,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      ) : (
+        <p>Dashboard view for role '{profile.role}' is not available.</p>
       )}
     </div>
   );

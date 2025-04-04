@@ -10,4 +10,5 @@ export * as documentService from './documentService';
 export * as reportingService from './reportingService';
 export * as notificationService from './notificationService';
 export * as agreementService from './agreementService';
-export * as vendorService from './vendorService'; 
+export * as vendorService from './vendorService';
+export * as userService from './userService'; 

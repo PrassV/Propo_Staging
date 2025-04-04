@@ -5,9 +5,13 @@ import { useNavigate } from 'react-router-dom';
 // import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../hooks/useProfile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import UserTypeSwitch from '../components/onboarding/UserTypeSwitch';
+// Remove UserTypeSwitch import
+// import UserTypeSwitch from '../components/onboarding/UserTypeSwitch'; 
 import ProfileView from '../components/profile/ProfileView';
 import ProfileForm from '../components/profile/ProfileForm';
+import api from '../api'; // Import api client
+import toast from 'react-hot-toast'; // Import toast
+import { ProfileFormData } from '@/types/profile'; // Import form data type
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -16,17 +20,51 @@ export default function Profile() {
   const { profile, loading, refetch } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
 
+  // Automatically enter edit mode if role is missing after loading
   useEffect(() => {
-    if (!loading && !profile?.role) {
-      // If loading is done and role is still missing, force edit mode?
-      // Or rely on UserTypeSwitch to handle this visually?
-      // For now, let's assume UserTypeSwitch handles the visual cue.
-      // setIsEditing(true); 
+    if (!loading && profile && !profile.role) {
+      setIsEditing(true);
     }
   }, [loading, profile]);
 
   if (loading) return <LoadingSpinner />;
   if (!profile) return <div className="p-6">Error loading profile data.</div>;
+
+  // Handle profile update API call
+  const handleSave = async (formData: Partial<ProfileFormData>) => {
+    if (!profile) return;
+    
+    const updatePayload = { ...formData };
+
+    toast.loading('Updating profile...');
+    try {
+      await api.user.updateProfile(profile.id, updatePayload);
+      toast.dismiss();
+      toast.success('Profile updated successfully!');
+      setIsEditing(false);
+      await refetch();
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+      toast.dismiss();
+      
+      // Refined error message extraction without 'any'
+      let message = 'Failed to update profile.';
+      if (error && typeof error === 'object') {
+        if ('response' in error) {
+          const errorResponse = error.response as { data?: { detail?: string } };
+          if (errorResponse.data?.detail) {
+            message = errorResponse.data.detail;
+          } else if (error instanceof Error) {
+            message = error.message; // Fallback to generic error message if detail missing
+          }
+        } else if (error instanceof Error) {
+           message = error.message; // Handle errors that aren't API responses
+        }
+      }
+      
+      toast.error(message);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -41,23 +79,26 @@ export default function Profile() {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h1 className="text-2xl font-bold mb-8">Profile Settings</h1>
 
-        <UserTypeSwitch 
-          currentType={profile.role === 'admin' ? null : profile.role}
-          onSwitch={() => navigate('/onboarding')} 
-        />
+        {/* Removed UserTypeSwitch */}
 
         <div className="mt-8">
           {isEditing ? (
             <ProfileForm
+              // Pass initial data including role
               initialData={{
+                id: profile.id,
                 firstName: profile.first_name || '', 
                 lastName: profile.last_name || '',
                 phone: profile.phone || '',
+                // Add address fields if they exist in profile object
+                // addressLine1: profile.address_line1 || '', 
+                // addressLine2: profile.address_line2 || '',
+                // city: profile.city || '', 
+                // state: profile.state || '', 
+                // pincode: profile.pincode || '',
+                role: profile.role, // Pass role
               }}
-              onSave={async () => {
-                setIsEditing(false);
-                await refetch();
-              }}
+              onSave={handleSave} // Use the new handler
               onCancel={() => setIsEditing(false)}
             />
           ) : (

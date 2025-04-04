@@ -3,11 +3,12 @@ import InputField from '../auth/InputField';
 import { ProfileFormData } from '../../types/profile';
 import { validateProfileForm } from '../../utils/profile-validation';
 import toast from 'react-hot-toast';
-import { updateUserProfile } from '../../api/services/userService';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 interface ProfileFormProps {
-  initialData: Partial<ProfileFormData> & { id?: string };
-  onSave: () => void;
+  initialData: Partial<ProfileFormData> & { id?: string; role?: 'owner' | 'tenant' | 'admin' | null };
+  onSave: (updatedData: Partial<ProfileFormData>) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
 }
@@ -21,12 +22,16 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
     addressLine2: '',
     city: '',
     state: '',
-    pincode: ''
+    pincode: '',
+    role: 'owner',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof ProfileFormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    const currentRole = initialData.role;
+    const defaultRole = (currentRole === 'owner' || currentRole === 'tenant') ? currentRole : 'owner';
+
     setFormData({
       firstName: initialData.firstName || '',
       lastName: initialData.lastName || '',
@@ -35,13 +40,20 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
       addressLine2: initialData.addressLine2 || '',
       city: initialData.city || '',
       state: initialData.state || '',
-      pincode: initialData.pincode || ''
+      pincode: initialData.pincode || '',
+      role: defaultRole,
     });
   }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!initialData.role && !formData.role) {
+        toast.error("Please select your role (Owner or Tenant).");
+        setErrors(prev => ({ ...prev, role: 'Role is required.'}));
+        return;
+    }
+
     const validationErrors = validateProfileForm(formData);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -50,19 +62,20 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
 
     setSubmitting(true);
     try {
-      await updateUserProfile({
+      const apiData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
         phone: formData.phone,
         address_line1: formData.addressLine1,
-        address_line2: formData.addressLine2,
+        address_line2: formData.addressLine2 || null,
         city: formData.city,
         state: formData.state,
-        pincode: formData.pincode
-      });
+        pincode: formData.pincode,
+        role: formData.role,
+      };
 
-      toast.success('Profile updated successfully');
-      onSave();
+      await onSave(apiData);
+
     } catch (error: unknown) {
       console.error('Error updating profile:', error);
       let errorMessage = 'Failed to update profile';
@@ -79,10 +92,17 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
     }
   };
 
-  const handleInputChange = (field: keyof ProfileFormData, value: string) => {
+  const handleInputChange = (field: keyof Omit<ProfileFormData, 'role'>, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const handleRoleChange = (value: 'owner' | 'tenant') => {
+     setFormData(prev => ({ ...prev, role: value }));
+     if (errors.role) {
+      setErrors(prev => ({ ...prev, role: '' }));
     }
   };
 
@@ -167,6 +187,26 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
             disabled={isDisabled}
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className={`${errors.role ? 'text-red-600' : ''}`}>Select Role *</Label>
+        <RadioGroup 
+          value={formData.role as string} 
+          onValueChange={handleRoleChange} 
+          className="flex space-x-4"
+          disabled={isDisabled}
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="owner" id="role-owner" disabled={isDisabled} />
+            <Label htmlFor="role-owner">Property Owner</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="tenant" id="role-tenant" disabled={isDisabled} />
+            <Label htmlFor="role-tenant">Tenant</Label>
+          </div>
+        </RadioGroup>
+        {errors.role && <p className="text-sm text-red-600 mt-1">{errors.role}</p>}
       </div>
 
       <div className="flex justify-end space-x-4">

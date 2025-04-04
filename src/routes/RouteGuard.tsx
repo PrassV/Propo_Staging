@@ -12,7 +12,7 @@ interface RouteGuardProps {
 export default function RouteGuard({ 
   children, 
   requireAuth = true,
-  requireProfile = true 
+  requireProfile = false 
 }: RouteGuardProps) {
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();

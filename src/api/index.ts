@@ -19,6 +19,7 @@ const api = {
   notification: services.notificationService,
   agreement: services.agreementService,
   vendor: services.vendorService,
+  user: services.userService,
 };
 
 export default api; 

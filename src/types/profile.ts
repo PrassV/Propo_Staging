@@ -1,6 +1,6 @@
 export interface Profile {
   id: string;
-  user_type?: 'owner' | 'tenant' | null;
+  role?: 'owner' | 'tenant' | 'admin' | null;
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -17,8 +17,9 @@ export interface ProfileFormData {
   lastName: string;
   phone: string;
   addressLine1: string;
-  addressLine2: string;
+  addressLine2?: string;
   city: string;
   state: string;
   pincode: string;
+  role: 'owner' | 'tenant' | null;
 }
