@@ -113,7 +113,7 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
             <label className="flex items-center">
                 <input 
                     type="radio" 
-                    name="userType" 
+                    name="userType"
                     value="owner" 
                     checked={formData.user_type === 'owner'}
                     onChange={() => setFormData({ ...formData, user_type: 'owner' })}

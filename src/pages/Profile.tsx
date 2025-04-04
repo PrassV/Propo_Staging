@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+// Remove unused useAuth import if user is not needed
+// import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../hooks/useProfile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import UserTypeSwitch from '../components/onboarding/UserTypeSwitch';
@@ -10,13 +11,22 @@ import ProfileForm from '../components/profile/ProfileForm';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // Removed unused user variable
+  // const { user } = useAuth();
   const { profile, loading, refetch } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
-  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !profile?.role) {
+      // If loading is done and role is still missing, force edit mode?
+      // Or rely on UserTypeSwitch to handle this visually?
+      // For now, let's assume UserTypeSwitch handles the visual cue.
+      // setIsEditing(true); 
+    }
+  }, [loading, profile]);
 
   if (loading) return <LoadingSpinner />;
-  if (!profile) return null;
+  if (!profile) return <div className="p-6">Error loading profile data.</div>;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -32,7 +42,7 @@ export default function Profile() {
         <h1 className="text-2xl font-bold mb-8">Profile Settings</h1>
 
         <UserTypeSwitch 
-          currentType={profile.user_type} 
+          currentType={profile.role === 'admin' ? null : profile.role}
           onSwitch={() => navigate('/onboarding')} 
         />
 
@@ -40,22 +50,15 @@ export default function Profile() {
           {isEditing ? (
             <ProfileForm
               initialData={{
-                id: user?.id,
-                firstName: profile.first_name,
-                lastName: profile.last_name,
-                phone: profile.phone,
-                addressLine1: profile.address_line1,
-                addressLine2: profile.address_line2,
-                city: profile.city,
-                state: profile.state,
-                pincode: profile.pincode
+                firstName: profile.first_name || '', 
+                lastName: profile.last_name || '',
+                phone: profile.phone || '',
               }}
               onSave={async () => {
                 setIsEditing(false);
                 await refetch();
               }}
               onCancel={() => setIsEditing(false)}
-              loading={updating}
             />
           ) : (
             <ProfileView 

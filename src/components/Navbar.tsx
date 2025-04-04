@@ -44,7 +44,7 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
   const handleLoginSuccess = (loginResponse: LoginResponse) => {
     setShowAuthModal(false);
     const userProfile = loginResponse.user;
-    if (userProfile && userProfile.user_type) {
+    if (userProfile && userProfile.role) {
       navigate('/dashboard');
     } else {
       navigate('/profile');

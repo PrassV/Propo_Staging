@@ -43,7 +43,7 @@ export interface UserProfile {
   first_name?: string;
   last_name?: string;
   phone?: string;
-  user_type: 'owner' | 'tenant' | 'admin';
+  role: 'owner' | 'tenant' | 'admin' | null;
   created_at: string;
   updated_at: string;
 }

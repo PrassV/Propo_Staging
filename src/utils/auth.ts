@@ -12,7 +12,8 @@ interface SignupData {
   email: string;
   phone?: string;
   password: string;
-  user_type: 'owner' | 'tenant'; // Assuming registration needs user type
+  // Revert back to user_type as expected by /auth/register endpoint
+  user_type: 'owner' | 'tenant'; 
 }
 
 // Use LoginRequest type directly
