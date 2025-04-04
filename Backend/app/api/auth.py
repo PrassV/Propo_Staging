@@ -21,7 +21,8 @@ class UserLogin(BaseModel):
 class UserSignup(BaseModel):
     email: EmailStr
     password: str
-    full_name: str
+    first_name: str
+    last_name: str
     phone: str = None
 
 class TokenResponse(BaseModel):
@@ -167,13 +168,18 @@ async def signup(signup_data: UserSignup):
         HTTPException: If signup fails
     """
     try:
+        # Combine first name and last name
+        full_name = f"{signup_data.first_name} {signup_data.last_name}".strip()
+        
         # Use Supabase authentication directly
         response = supabase_client.auth.sign_up({
             "email": signup_data.email,
             "password": signup_data.password,
             "options": {
                 "data": {
-                    "full_name": signup_data.full_name,
+                    "first_name": signup_data.first_name,
+                    "last_name": signup_data.last_name,
+                    "full_name": full_name,
                     "phone": signup_data.phone,
                 }
             }
@@ -195,6 +201,8 @@ async def signup(signup_data: UserSignup):
             "user": {
                 "id": user.id,
                 "email": user.email,
+                "first_name": user.user_metadata.get("first_name", ""),
+                "last_name": user.user_metadata.get("last_name", ""),
                 "full_name": user.user_metadata.get("full_name", ""),
                 "phone": user.user_metadata.get("phone", ""),
             }
