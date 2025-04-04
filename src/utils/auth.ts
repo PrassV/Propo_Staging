@@ -1,76 +1,55 @@
-import { supabase } from '@/lib/supabase';
+import api from '@/api'; // Use central API client
 import toast from 'react-hot-toast';
+// Import types from central location
+import { LoginRequest, UserProfile } from '@/api/types'; 
 
-interface LoginData {
-  email: string;
-  password: string;
-}
+// Removed redundant LoginData interface, use LoginRequest directly
 
+// Define SignupData based on api.auth.register requirements
 interface SignupData {
-  name: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  phone: string;
+  phone?: string;
   password: string;
+  user_type: 'owner' | 'tenant'; // Assuming registration needs user type
 }
 
-export const handleLogin = async ({ email, password }: LoginData) => {
+// Use LoginRequest type directly
+export const handleLogin = async ({ email, password }: LoginRequest) => { 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const loginResponse = await api.auth.login({ email, password }); 
 
-    if (error) {
-      toast.error(error.message);
-      return { success: false, error };
+    if (!loginResponse?.access_token) {
+       throw new Error("Login failed: No access token received.");
     }
-
+    
     toast.success('Successfully logged in!');
-    return { success: true, data };
-  } catch (error) {
-    toast.error('An unexpected error occurred');
+    return { success: true, data: loginResponse }; 
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Login failed due to an unexpected error';
+    toast.error(message);
     return { success: false, error };
   }
 };
 
-export const handleSignup = async ({ email, password, name, phone }: SignupData) => {
+// Refactor handleSignup to use api.auth.register
+export const handleSignup = async (signupData: SignupData) => {
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-          phone: phone,
-        },
-      },
-    });
+    // Call the register service function
+    const userProfile: UserProfile = await api.auth.register(signupData);
 
-    if (error) {
-      toast.error(error.message);
-      return { success: false, error };
-    }
-
-    toast.success('Successfully signed up! Please check your email for verification.');
-    return { success: true, data };
-  } catch (error) {
-    toast.error('An unexpected error occurred');
+    toast.success('Successfully signed up! You can now log in.'); 
+    // Return success and the created user profile
+    return { success: true, data: userProfile };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Signup failed due to an unexpected error';
+    toast.error(message);
     return { success: false, error };
   }
 };
 
-export const handleLogout = async () => {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error(error.message);
-      return { success: false, error };
-    }
-
-    toast.success('Successfully logged out!');
-    return { success: true };
-  } catch (error) {
-    toast.error('An unexpected error occurred');
-    return { success: false, error };
-  }
-};
+// handleLogout can be removed or left unused, as AuthContext handles it now.
+// export const handleLogout = async () => {
+//   // ... (logic using api.auth.logout if needed elsewhere, but likely redundant)
+// };
