@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
 interface LoginData {

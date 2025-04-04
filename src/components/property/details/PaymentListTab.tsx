@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RecentPayment } from '@/api/types';
-import { api } from '@/api/apiClient'; // Use actual api client
+import { getPaymentsByUnitId } from '@/api/services/paymentService'; // Import service function
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,8 @@ export default function PaymentListTab({ unitId, tenantId }: PaymentListTabProps
         if (tenantId) {
             params.tenantId = tenantId;
         }
-        const data = await api.payment.getPaymentsByUnitId(unitId, params); 
+        // Use imported service function
+        const data = await getPaymentsByUnitId(unitId, params); 
         setPayments(data || []); // API service returns RecentPayment[]
       } catch (err) {
         console.error("Error fetching payments:", err); 

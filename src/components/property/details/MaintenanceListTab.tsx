@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MaintenanceIssue } from '@/api/types';
-import { api } from '@/api/apiClient';
+import { getMaintenanceByUnitId } from '@/api/services/maintenanceService';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
             setError(null);
             
             try {
-                const data = await api.maintenance.getMaintenanceByUnitId(unitId);
+                const data = await getMaintenanceByUnitId(unitId);
                 setIssues(data || []);
             } catch (err) {
                 console.error("Error fetching maintenance issues:", err);

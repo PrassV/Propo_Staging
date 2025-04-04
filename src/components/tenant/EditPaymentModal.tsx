@@ -1,84 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency } from '@/utils/format';
 import toast from 'react-hot-toast';
+import api from '@/api';
+import { Payment, PaymentUpdate } from '@/api/types';
 
 interface EditPaymentModalProps {
-  tenantId: string;
-  periodStart: string;
-  periodEnd: string;
-  rentAmount: number;
-  maintenanceAmount: number;
-  status: 'pending' | 'paid';
+  payment: Payment;
   onClose: () => void;
   onSave: () => void;
 }
 
 export default function EditPaymentModal({
-  tenantId,
-  periodStart,
-  periodEnd,
-  rentAmount,
-  maintenanceAmount,
-  status,
+  payment,
   onClose,
   onSave
 }: EditPaymentModalProps) {
   const [loading, setLoading] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState(status);
-  const [paymentDate, setPaymentDate] = useState(
-    status === 'paid' ? new Date().toISOString().split('T')[0] : ''
-  );
+  const [paymentStatus, setPaymentStatus] = useState(payment.status);
+
+  useEffect(() => {
+    setPaymentStatus(payment.status);
+  }, [payment]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // First check if a record exists
-      const { data: existingPayment } = await supabase
-        .from('payment_history')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('period_start', periodStart)
-        .eq('period_end', periodEnd)
-        .maybeSingle();
+      const updateData: PaymentUpdate = {
+        status: paymentStatus,
+      };
 
-      if (existingPayment) {
-        // Update existing record
-        const { error: updateError } = await supabase
-          .from('payment_history')
-          .update({
-            payment_status: paymentStatus,
-            payment_date: paymentStatus === 'paid' ? paymentDate : null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingPayment.id);
-
-        if (updateError) throw updateError;
-      } else {
-        // Create new record
-        const { error: insertError } = await supabase
-          .from('payment_history')
-          .insert({
-            tenant_id: tenantId,
-            period_start: periodStart,
-            period_end: periodEnd,
-            rent_amount: rentAmount,
-            maintenance_amount: maintenanceAmount,
-            payment_status: paymentStatus,
-            payment_date: paymentStatus === 'paid' ? paymentDate : null
-          });
-
-        if (insertError) throw insertError;
-      }
+      await api.payment.updatePayment(payment.id, updateData);
 
       toast.success('Payment status updated successfully');
       onSave();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating payment:', error);
-      toast.error(error.message || 'Failed to update payment');
+      const message = error instanceof Error ? error.message : 'Failed to update payment';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -97,19 +58,35 @@ export default function EditPaymentModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Period
+              Due Date
             </label>
             <p className="text-lg font-medium">
-              {new Date(periodStart).toLocaleDateString()} - {new Date(periodEnd).toLocaleDateString()}
+              {new Date(payment.due_date).toLocaleDateString()}
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Total Amount
+              Amount
             </label>
-            <p className="text-lg font-medium">{formatCurrency(rentAmount + maintenanceAmount)}</p>
+            <p className="text-lg font-medium">{formatCurrency(payment.amount)}</p>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type
+            </label>
+            <p className="text-base capitalize">{payment.payment_type}</p>
+          </div>
+
+          {payment.description && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <p className="text-sm text-gray-600">{payment.description}</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -117,32 +94,17 @@ export default function EditPaymentModal({
             </label>
             <select
               value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value as 'pending' | 'paid')}
+              onChange={(e) => setPaymentStatus(e.target.value as Payment['status'])}
               className="w-full p-2 border rounded-lg"
               required
               disabled={loading}
             >
               <option value="pending">Pending</option>
               <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
-
-          {paymentStatus === 'paid' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Date
-              </label>
-              <input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-full p-2 border rounded-lg"
-                required
-                disabled={loading}
-                max={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-          )}
 
           <div className="flex justify-end space-x-4 mt-6">
             <button

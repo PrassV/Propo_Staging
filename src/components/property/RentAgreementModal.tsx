@@ -1,10 +1,9 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
-import { Property } from '../../types/property';
-import { Tenant } from '../../types/tenant';
+import { Property, Tenant, RentAgreementFormData, AgreementGenerationResponse } from '@/api/types';
 import RentAgreementForm from '../rentAgreement/RentAgreementForm';
-import { generateAgreement } from '../../utils/agreement';
-import { useProfile } from '../../hooks/useProfile';
+import { generateAgreement } from '@/utils/agreement';
+import { useProfile } from '@/hooks/useProfile';
 import LoadingSpinner from '../common/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -18,10 +17,10 @@ export default function RentAgreementModal({ property, tenant, onClose }: RentAg
   const [loading, setLoading] = useState(false);
   const { profile, loading: profileLoading } = useProfile();
 
-  const handleSubmit = async (formData: any) => {
+  const handleSubmit = async (formData: RentAgreementFormData) => { 
     setLoading(true);
     try {
-      const result = await generateAgreement(formData);
+      const result: AgreementGenerationResponse = await generateAgreement(formData);
       
       // Create a text file with the agreement
       const blob = new Blob([result.agreement], { type: 'text/plain' });
@@ -38,9 +37,10 @@ export default function RentAgreementModal({ property, tenant, onClose }: RentAg
 
       toast.success('Rent agreement generated successfully!');
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating agreement:', error);
-      toast.error(error.message || 'Failed to generate agreement');
+      const message = error instanceof Error ? error.message : 'Failed to generate agreement';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -57,34 +57,30 @@ export default function RentAgreementModal({ property, tenant, onClose }: RentAg
     );
   }
 
-  // Pre-fill form data from property and tenant details
-  const initialData = {
-    // Landlord details from profile
+  // Correct initialData using fields from @/api/types
+  const initialData: RentAgreementFormData = {
     landlordName: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : '',
-    landlordAddress: profile?.address_line1 || '',
+    landlordAddress: '',
     landlordPhone: profile?.phone || '',
 
-    // Property details
     propertyAddress: [
       property?.address_line1,
       property?.address_line2,
       property?.city,
       property?.state,
-      property?.pincode
+      property?.zip_code
     ].filter(Boolean).join(', '),
     propertyType: property?.property_type || 'residential',
 
-    // Tenant details
     tenantName: tenant?.name || '',
     tenantEmail: tenant?.email || '',
     tenantPhone: tenant?.phone || '',
-    tenantAddress: tenant?.permanentAddress || '',
+    tenantAddress: '',
 
-    // Rental details
-    monthlyRent: tenant?.rental_amount?.toString() || '',
-    maintenanceCharges: tenant?.maintenance_fee?.toString() || '',
-    startDate: tenant?.rental_start_date || tenant?.lease_start_date || '',
-    leaseDuration: tenant?.rental_type === 'lease' ? '11' : '12'
+    monthlyRent: tenant?.rent_amount?.toString() || '',
+    maintenanceCharges: '',
+    startDate: tenant?.move_in_date || '',
+    leaseDuration: '11',
   };
 
   return (

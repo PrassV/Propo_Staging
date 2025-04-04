@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, UploadFile, 
 from pydantic import BaseModel, Field
 import logging
 import uuid
+from datetime import datetime
 
 from app.models.maintenance import (
     MaintenanceRequest,
@@ -412,6 +413,10 @@ async def add_comment(
         comment_data.user_id = user_id
         comment_data.user_type = user_type
         
+        # Log comment and attachments (if any)
+        logger.info(f"Mock adding comment for request {request_id}: {comment_data.comment} Attachments: {comment_data.attachments}")
+        
+        # Need to update the actual service to handle comment_data
         # Add the comment
         created_comment = await maintenance_service.add_maintenance_comment(comment_data)
         

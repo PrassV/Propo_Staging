@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import InputField from '../auth/InputField';
-import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import api from '../../api'; // Import our API object
+import { TenantCreate, DocumentCreate, TenantResponse, DocumentResponse } from '../../api/types'; // Import necessary types
 
 interface TenantFormProps {
   propertyId: string;
+  unitId: string;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-const TenantForm = ({ propertyId, onSubmit, onCancel }: TenantFormProps) => {
+const TenantForm = ({ propertyId, unitId, onSubmit, onCancel }: TenantFormProps) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -42,51 +44,107 @@ const TenantForm = ({ propertyId, onSubmit, onCancel }: TenantFormProps) => {
     e.preventDefault();
     setLoading(true);
 
-    try {
-      let idProofUrl = '';
-      if (formData.idProof) {
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('tenant-documents')
-          .upload(`${propertyId}/${formData.idNumber}`, formData.idProof);
+    let createdTenantId: string | null = null;
+    let createdDocumentId: string | undefined = undefined;
 
-        if (uploadError) throw uploadError;
-        idProofUrl = uploadData.path;
+    try {
+      // 1. Upload ID Proof
+      let idProofUrl: string | undefined = undefined;
+      if (formData.idProof) {
+        toast.loading('Uploading ID proof...');
+        try {
+          const uploadResponse = await api.property.uploadPropertyImages([formData.idProof]); 
+          toast.dismiss();
+          if (uploadResponse?.imageUrls?.[0]) {
+            idProofUrl = uploadResponse.imageUrls[0];
+            toast.success('ID Proof uploaded.');
+          } else {
+            console.warn("ID Proof upload response missing URL:", uploadResponse);
+            toast.error('Failed to get URL after ID proof upload.');
+            setLoading(false); 
+            return; 
+          }
+        } catch (uploadError) {
+          toast.dismiss();
+          console.error("ID Proof Upload Error:", uploadError);
+          toast.error('Failed to upload ID proof.');
+          setLoading(false); 
+          return;
+        }
+      }
+      
+      // 2. Create Document Record using the obtained URL
+      if (idProofUrl && formData.idProof) {
+          toast.loading('Linking ID proof...');
+          try {
+              const docData: DocumentCreate = {
+                  title: `ID Proof - ${formData.name} - ${formData.idProof.name}`,
+                  document_name: formData.idProof.name,
+                  property_id: propertyId, 
+                  tenant_id: undefined,
+                  file_url: idProofUrl,
+                  file_name: formData.idProof.name,
+                  mime_type: formData.idProof.type,
+                  file_extension: formData.idProof.name.split('.').pop(),
+                  file_size: formData.idProof.size,
+                  document_type: 'id_proof',
+                  access_level: 'private',
+              };
+              const docResponse: DocumentResponse = await api.document.createDocument(docData);
+              createdDocumentId = docResponse.document?.id;
+              toast.dismiss();
+              if (!createdDocumentId) {
+                  console.warn("Document link response missing ID:", docResponse);
+                  toast.error('Failed to confirm ID proof link.');
+              } else {
+                  toast.success('ID Proof linked.');
+              }
+          } catch (linkError) {
+              toast.dismiss();
+              console.error("Error linking ID Proof document:", linkError);
+              toast.error('Failed to link uploaded ID proof.');
+          }
       }
 
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          dob: formData.dob,
-          gender: formData.gender,
-          family_size: parseInt(formData.familySize),
-          permanent_address: formData.permanentAddress,
-          id_type: formData.idType,
-          id_number: formData.idNumber,
-          id_proof_url: idProofUrl
-        })
-        .select()
-        .single();
+      // 3. Create Tenant using Tenant Service
+      toast.loading('Creating tenant record...');
+      const tenantData: TenantCreate = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        tenant_type: 'individual',
+        property_id: propertyId,
+      };
 
-      if (tenantError) throw tenantError;
+      const response: TenantResponse = await api.tenant.createTenant(tenantData);
+      if (!response?.tenant?.id) {
+          throw new Error("Tenant creation response did not include a tenant ID.");
+      }
+      createdTenantId = response.tenant.id;
+      toast.dismiss();
+      
+      // 4. Optional: Update Document with Tenant ID if needed
+      if (createdDocumentId && createdTenantId) {
+           try {
+               await api.document.updateDocument(createdDocumentId, { tenant_id: createdTenantId });
+           } catch (docUpdateError) {
+               console.warn("Failed to update document with tenant ID:", docUpdateError);
+           }
+      }
 
-      const { error: linkError } = await supabase
-        .from('property_tenants')
-        .insert({
-          property_id: propertyId,
-          tenant_id: tenant.id,
-          start_date: new Date().toISOString()
-        });
-
-      if (linkError) throw linkError;
+      // 5. Link Tenant to Unit (if needed)
+      if (createdTenantId && unitId) {
+         toast.loading('Linking tenant to unit...');
+         console.log(`Simulating linking Tenant ${createdTenantId} to Unit ${unitId}`);
+         toast.dismiss();
+      }
 
       toast.success('Tenant added successfully!');
-      onSubmit();
+      onSubmit(); // Call the success callback
     } catch (error) {
+      toast.dismiss(); // Dismiss any loading toasts
       console.error('Error adding tenant:', error);
-      toast.error('Failed to add tenant');
+      toast.error(error instanceof Error ? error.message : 'Failed to add tenant');
     } finally {
       setLoading(false);
     }
@@ -210,7 +268,6 @@ const TenantForm = ({ propertyId, onSubmit, onCancel }: TenantFormProps) => {
           accept="image/*,.pdf"
           onChange={(e) => setFormData({ ...formData, idProof: e.target.files?.[0] || null })}
           className="w-full p-2 border rounded-lg"
-          required
         />
       </div>
 

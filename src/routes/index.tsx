@@ -3,7 +3,6 @@ import { RouteObject } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
-import AuthCallback from '../components/auth/AuthCallback';
 
 // Dashboard pages
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -29,10 +28,6 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <LandingPage />
-  },
-  {
-    path: '/auth/callback',
-    element: <AuthCallback />
   },
   {
     path: '/dashboard',

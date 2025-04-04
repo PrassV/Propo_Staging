@@ -5,7 +5,7 @@ import TenantForm from '../property/TenantForm';
 import toast from 'react-hot-toast';
 // import { Property, TenantCreate } from '@/api/types'; // TenantCreate no longer needed here
 import { Property } from '@/api/types';
-import { api } from '@/api/apiClient'; 
+import { deleteProperty } from '@/api/services/propertyService'; // Import service function
 import { 
     Table, 
     TableBody, 
@@ -35,7 +35,7 @@ export default function PropertyTable({ properties, onUpdate }: PropertyTablePro
     }
     setLoadingDelete(propertyId);
     try {
-        await api.property.deleteProperty(propertyId);
+        await deleteProperty(propertyId);
         toast.success('Property deleted successfully');
         onUpdate(); 
     } catch (error) {

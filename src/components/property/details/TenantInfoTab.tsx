@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tenant } from '@/api/types';
-import { api } from '@/api/apiClient'; // Use the actual api client
+import { getTenantById } from '@/api/services/tenantService'; // Import service function
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 // import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'; // Not used
 import { Link } from 'react-router-dom';
@@ -24,8 +24,8 @@ export default function TenantInfoTab({ tenantId }: TenantInfoTabProps) {
       setLoading(true);
       setError(null);
       try {
-        // Use the actual API call from tenantService
-        const response = await api.tenant.getTenantById(tenantId);
+        // Use the imported service function
+        const response = await getTenantById(tenantId);
         if (response && response.tenant) {
             setTenant(response.tenant);
         } else {

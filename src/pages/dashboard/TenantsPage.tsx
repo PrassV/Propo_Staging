@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../api'; // Import API client
+import { Property, Tenant } from '../../api/types'; // Import types
 import TenantList from '../../components/tenant/TenantList';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // Use Alert component
 
 export default function TenantsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -22,32 +24,33 @@ export default function TenantsPage() {
       setLoading(true);
       setError(null);
 
-      // Get all properties owned by the user
-      const { data: propertiesData, error: propertiesError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('owner_id', user?.id);
+      // 1. Fetch properties owned by the user
+      // Assuming getProperties doesn't need owner_id (uses token)
+      // or adjust params if it does: await api.property.getProperties({ owner_id: user?.id });
+      const propertiesResponse = await api.property.getProperties();
+      const fetchedProperties = propertiesResponse.items || [];
+      setProperties(fetchedProperties);
 
-      if (propertiesError) throw propertiesError;
-      setProperties(propertiesData);
-
-      // Get all tenants for these properties
-      const propertyIds = propertiesData.map(p => p.id);
-      const { data: tenantsData, error: tenantsError } = await supabase
-        .from('tenants')
-        .select(`
-          *,
-          property_tenants!inner(
-            property:properties(*)
-          )
-        `)
-        .in('property_tenants.property_id', propertyIds);
-
-      if (tenantsError) throw tenantsError;
-      setTenants(tenantsData);
-    } catch (error: any) {
-      console.error('Error fetching data:', error);
-      setError(error.message);
+      // 2. Fetch tenants for these properties
+      const propertyIds = fetchedProperties.map(p => p.id);
+      if (propertyIds.length === 0) {
+        setTenants([]); // No properties, no tenants
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch all tenants and filter client-side, OR 
+      // update backend to accept property_ids filter
+      const tenantsResponse = await api.tenant.getTenants(); // Fetch all
+      const filteredTenants = tenantsResponse.items.filter(t => 
+          propertyIds.includes(t.property_id)
+      );
+      setTenants(filteredTenants);
+      
+    } catch (err: unknown) {
+      console.error('Error fetching data:', err);
+      const message = err instanceof Error ? err.message : 'Failed to load tenant data';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -64,15 +67,18 @@ export default function TenantsPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-          <p>{error}</p>
-          <button 
-            onClick={fetchData}
-            className="mt-2 text-sm underline"
-          >
-            Try again
-          </button>
-        </div>
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {error}
+            <button 
+              onClick={fetchData}
+              className="mt-2 text-sm underline block"
+            >
+              Try again
+            </button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -84,15 +90,17 @@ export default function TenantsPage() {
         <p className="text-gray-600">Manage your tenants across all properties</p>
       </div>
 
+      {properties.length === 0 && (
+          <p>You haven't added any properties yet.</p> // Add message for no properties
+      )}
+
       {properties.map(property => (
-        <div key={property.id} className="mb-8">
+        <div key={property.id} className="mb-8 bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">{property.property_name}</h2>
           <TenantList
-            tenants={tenants.filter(t => 
-              t.property_tenants.some((pt: any) => pt.property.id === property.id)
-            )}
+            tenants={tenants.filter(t => t.property_id === property.id)}
             property={property}
-            onUpdate={fetchData}
+            onUpdate={fetchData} // Refresh data on updates
             showFullDetails
           />
         </div>

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Mail, Lock } from 'lucide-react';
 import InputField from './InputField';
 import { handleLogin } from '../../utils/auth';
-import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface LoginFormProps {
@@ -32,20 +31,11 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
+      const oauthUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/oauth/google/login`;
+      window.location.href = oauthUrl;
     } catch (error) {
-      console.error('Error signing in with Google:', error);
-      toast.error('Failed to sign in with Google');
-    } finally {
+      console.error('Error initiating Google Sign-In:', error);
+      toast.error('Failed to start Google Sign-In');
       setLoading(false);
     }
   };

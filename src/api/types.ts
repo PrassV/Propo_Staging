@@ -124,7 +124,7 @@ export interface PropertyFormData {
   city: string;
   state: string;
   pincode: string; 
-  country: string; 
+  country: string;
   // Fields from sub-components (add as needed, verify names)
   description: string;
   numberOfUnits?: number; // From BasicDetails?
@@ -335,6 +335,13 @@ export interface PaymentCreate {
   tenant_id: string;
 }
 
+export interface PaymentUpdate {
+  status?: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  // Add other updatable fields if needed, e.g., description
+  description?: string;
+  // Note: payment_date is NOT part of the Payment model, so cannot be updated here
+}
+
 // Define Maintenance Status Type
 export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -499,7 +506,14 @@ export interface UserUpdate {
   first_name?: string;
   last_name?: string;
   phone?: string;
-  // Add other updatable fields matching backend model
+  // Can add other fields users are allowed to update
+}
+
+// Upload response type
+export interface UploadResponse {
+  message: string;
+  imageUrls?: string[];
+  fileUrl?: string; // For single file uploads
 }
 
 // Reporting types (Define based on backend models)
@@ -739,4 +753,29 @@ export interface UnitCreate {
 export interface UnitResponse {
     unit: UnitDetails;
     message?: string;
+}
+
+// Interface for Rent Agreement Form Data
+export interface RentAgreementFormData { 
+    landlordName?: string;
+    landlordAddress?: string;
+    landlordPhone?: string;
+    propertyAddress?: string;
+    propertyType?: string;
+    tenantName?: string;
+    tenantEmail?: string;
+    tenantPhone?: string;
+    tenantAddress?: string;
+    monthlyRent?: string;
+    maintenanceCharges?: string;
+    startDate?: string;
+    leaseDuration?: string;
+    // Add other fields from the form as needed
+}
+
+// Interface for the response from the agreement generation utility/API
+export interface AgreementGenerationResponse {
+    agreement: string; // The generated agreement text
+    success?: boolean; // Optional success flag
+    // Add other potential response fields from the API
 } 

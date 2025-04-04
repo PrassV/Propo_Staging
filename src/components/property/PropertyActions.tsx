@@ -1,8 +1,7 @@
 import { FileText, Download } from 'lucide-react';
 import { useState } from 'react';
 import RentAgreementModal from './RentAgreementModal';
-import { Property } from '../../types/property';
-import { Tenant } from '../../types/tenant';
+import { Property, Tenant } from '@/api/types';
 
 interface PropertyActionsProps {
   property: Property;

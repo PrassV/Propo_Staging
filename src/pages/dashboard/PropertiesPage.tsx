@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Property } from '@/api/types';
-import { api } from '@/api/apiClient';
+import { getProperties } from '@/api/services/propertyService';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ export default function PropertyList() {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.property.getProperties(); 
+            const response = await getProperties(); 
             setProperties(response.items || []);
         } catch (err: unknown) {
             console.error("Error fetching properties:", err);

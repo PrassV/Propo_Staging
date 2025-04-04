@@ -1,10 +1,10 @@
-import apiClient from '../../client';
+import apiClient from '../client';
 import { 
   MaintenanceRequest, 
   MaintenanceRequestCreate, 
   MaintenanceRequestUpdate,
   MaintenanceIssue
-} from '../../types';
+} from '../types';
 
 // Local interface for maintenance comment creation
 export interface MaintenanceCommentCreate {
@@ -181,10 +181,10 @@ export const getMaintenanceComments = async (requestId: string): Promise<Mainten
  * Add a comment to a maintenance request
  * Calls POST /maintenance/{id}/comments
  */
-export const addMaintenanceComment = async (requestId: string, comment: string): Promise<MaintenanceComment> => {
+export const addMaintenanceComment = async (requestId: string, data: { comment: string; attachments?: string[] }): Promise<MaintenanceComment> => {
   try {
-    const response = await apiClient.post<MaintenanceComment>(`/maintenance/${requestId}/comments`, { comment });
-    return response.data;
+    const response = await apiClient.post<{ comment: MaintenanceComment }>(`/maintenance/${requestId}/comments`, data);
+    return response.data.comment;
   } catch (error: unknown) {
     console.error(`Error adding comment to maintenance request ${requestId}:`, error);
     let errorMessage = 'Failed to add comment';
@@ -211,6 +211,31 @@ export const assignMaintenanceRequest = async (
   } catch (error: unknown) {
     console.error(`Error assigning maintenance request ${requestId} to vendor ${vendorId}:`, error);
     let errorMessage = 'Failed to assign maintenance request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get the count of open maintenance requests for a specific tenant
+ * Calls GET /maintenance/requests/count?tenant_id={tenantId}&status=new
+ */
+export const getOpenTenantRequestsCount = async (tenantId: string): Promise<number> => {
+  try {
+    const response = await apiClient.get<{ count: number }>('/maintenance/requests/count', {
+      params: { 
+        tenant_id: tenantId,
+        status: 'new' // Assuming 'new' corresponds to 'open' requests
+       }
+    });
+    return response.data.count ?? 0;
+  } catch (error: unknown) {
+    console.error(`Error fetching open maintenance request count for tenant ${tenantId}:`, error);
+    let errorMessage = 'Failed to fetch request count';
     if (error && typeof error === 'object' && 'formattedMessage' in error) {
       errorMessage = (error as { formattedMessage: string }).formattedMessage;
     } else if (error instanceof Error) {

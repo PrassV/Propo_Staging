@@ -5,7 +5,7 @@ import FileUpload from './FileUpload';
 import { formatDate } from '../../utils/date';
 import toast from 'react-hot-toast';
 
-import { getCommentsForRequest, postCommentToRequest, MaintenanceComment } from '../../api/services/maintenanceService';
+import { getMaintenanceComments, addMaintenanceComment, MaintenanceComment } from '../../api/services/maintenanceService';
 import { uploadFile } from '../../api/services/uploadService';
 
 interface RequestMessagesProps {
@@ -27,7 +27,7 @@ export default function RequestMessages({ requestId }: RequestMessagesProps) {
   const fetchMessages = async () => {
     setLoadingMessages(true);
     try {
-      const data = await getCommentsForRequest(requestId);
+      const data = await getMaintenanceComments(requestId);
       setMessages(data || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -50,8 +50,8 @@ export default function RequestMessages({ requestId }: RequestMessagesProps) {
         fileUrls.push(url);
       }
 
-      await postCommentToRequest(requestId, {
-        message: newMessage,
+      await addMaintenanceComment(requestId, {
+        comment: newMessage,
         attachments: fileUrls.length > 0 ? fileUrls : undefined
       });
 
@@ -88,16 +88,16 @@ export default function RequestMessages({ requestId }: RequestMessagesProps) {
           messages.map((message) => (
             <div 
               key={message.id}
-              className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${message.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`max-w-[80%] ${
-                message.sender_id === user?.id 
+                message.user_id === user?.id 
                   ? 'bg-black text-white' 
                   : 'bg-gray-100'
               } rounded-lg p-3`}>
-                <p>{message.message}</p>
+                <p>{message.comment}</p>
                 <div className="flex items-center justify-between text-xs mt-1 opacity-70">
-                  <span>{message.sender_type}</span>
+                  <span>{message.user_name}</span>
                   <span>{formatDate(message.created_at)}</span>
                 </div>
               </div>

@@ -90,6 +90,7 @@ class MaintenanceComment(BaseModel):
     comment: str
     user_type: Optional[str] = "owner"  # owner, tenant, vendor
     created_at: Optional[datetime] = None
+    attachments: Optional[List[str]] = None
 
     class Config:
         from_attributes = True 

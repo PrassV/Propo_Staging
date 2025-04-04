@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { User, Mail, Phone, Edit2 } from 'lucide-react';
-import { Tenant } from '../../types/tenant';
-import { Property } from '../../types/property';
+import { Tenant, Property } from '@/api/types';
 import TenantRentalInfo from './TenantRentalInfo';
 import TenantUtilityInfo from './TenantUtilityInfo';
 import InviteTenantButton from './InviteTenantButton';
 import PropertyActions from '../property/PropertyActions';
 import PaymentDetailsSection from '../payment/PaymentDetailsSection';
 import EditTenantForm from './EditTenantForm';
-import { formatDate } from '../../utils/date';
+import { formatDate } from '@/utils/date';
 
 interface TenantCardProps {
   tenant: Tenant;
@@ -34,14 +33,13 @@ export default function TenantCard({ tenant, property, onUpdate, showFullDetails
                 <Mail size={16} className="mr-2" />
                 {tenant.email}
               </div>
-              <div className="flex items-center">
-                <Phone size={16} className="mr-2" />
-                {tenant.phone}
-              </div>
-              <p>Added on: {formatDate(tenant.created_at || '')}</p>
-              {tenant.unit_number && (
-                <p className="font-medium">Unit: {tenant.unit_number}</p>
+              {tenant.phone && (
+                <div className="flex items-center">
+                  <Phone size={16} className="mr-2" />
+                  {tenant.phone}
+                </div>
               )}
+              <p>Added on: {formatDate(tenant.created_at)}</p>
             </div>
           </div>
         </div>
@@ -69,11 +67,10 @@ export default function TenantCard({ tenant, property, onUpdate, showFullDetails
           <TenantRentalInfo tenant={tenant} />
           <TenantUtilityInfo tenant={tenant} />
           
-          {/* Payment Details */}
           <PaymentDetailsSection
             propertyId={property.id}
             tenantId={tenant.id}
-            unitNumber={tenant.unit_number}
+            unitNumber={null}
             tenantName={tenant.name}
             tenantEmail={tenant.email}
           />

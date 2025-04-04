@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
 import { PropertyDetails, UnitDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
-import { api } from '@/api/apiClient';
+import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -99,6 +99,7 @@ export default function PropertyDetailsPage() {
 
     const handleEditClick = () => {
         if (!property) return;
+        // Define formData type explicitly
         const formData: Partial<PropertyFormData> & { id: string } = {
       id: property.id,
       propertyName: property.property_name,
@@ -112,12 +113,23 @@ export default function PropertyDetailsPage() {
       description: property.description,
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
-            sizeSqft: property.area, 
-      yearBuilt: property.year_built,
+            // Convert null to undefined for sizeSqft and yearBuilt
+            sizeSqft: property.area ?? undefined, 
+      yearBuilt: property.year_built ?? undefined, 
             category: '', // Placeholder
             listedIn: '', // Placeholder
             status: property.status, // Assuming PropertyDetails has status
             price: 0, // Placeholder
+            // Ensure all required fields from PropertyFormData are present or handle optionality
+            amenities: [], // Example: Add default or existing if available
+            doorNumber: '', // Example
+            floors: undefined, // Example
+            garageSize: undefined, // Example
+            garages: undefined, // Example
+            kitchens: undefined, // Example
+            numberOfUnits: property.units?.length, // Example: Infer from units
+            surveyNumber: '', // Example
+            yearlyTaxRate: undefined, // Example
         };
         openEditPropertyDialog(formData, fetchPropertyDetails);
     };

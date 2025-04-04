@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LeaseAgreement } from '@/api/types';
-import { api } from '@/api/apiClient'; // Use actual api client
+import { getLeaseByUnitId } from '@/api/services/leaseService'; // Import service function
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 interface LeaseInfoTabProps {
@@ -17,8 +17,8 @@ export default function LeaseInfoTab({ unitId }: LeaseInfoTabProps) {
       if (!unitId) return;
       setLoading(true); setError(null);
       try {
-        // Use actual API call
-        const data = await api.lease.getLeaseByUnitId(unitId); 
+        // Use imported service function
+        const data = await getLeaseByUnitId(unitId); 
         setLease(data); // API service returns LeaseAgreement or null
       } catch (err) { 
         console.error("Error fetching lease:", err);
