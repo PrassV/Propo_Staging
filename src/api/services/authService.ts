@@ -28,8 +28,8 @@ export const register = async (userData: {
 
 // Get current user profile
 export const getCurrentUser = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<ApiResponse<UserProfile>>('/users/me');
-  return response.data.data;
+  const response = await apiClient.get<UserProfile>('/users/me');
+  return response.data;
 };
 
 // Update user profile
