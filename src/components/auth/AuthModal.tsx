@@ -3,7 +3,6 @@ import LoginForm from './LoginForm';
 import SignupForm from './SignupForm';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { handleLogout } from '../../utils/auth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -12,7 +11,7 @@ interface AuthModalProps {
 
 const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [isLogin, setIsLogin] = useState(true);
-  const { user } = useAuth();
+  const { user, logoutUser } = useAuth();
 
   if (!isOpen) return null;
 
@@ -34,7 +33,7 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             </p>
             <button
               onClick={async () => {
-                await handleLogout();
+                await logoutUser();
                 onClose();
               }}
               className="w-full bg-black text-white py-3 rounded-lg font-semibold tracking-wide hover:bg-gray-800 transition-colors"
