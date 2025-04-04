@@ -11,6 +11,7 @@ from app.models.notification import (
 )
 from app.services import notification_service
 from app.config.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -34,7 +35,7 @@ async def get_notifications(
     is_read: Optional[bool] = Query(None, description="Filter by read status"),
     limit: int = Query(50, description="Maximum number of notifications to return"),
     offset: int = Query(0, description="Offset for pagination"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get notifications for the current user.
@@ -50,7 +51,7 @@ async def get_notifications(
     """
     # Get notifications
     notifications = await notification_service.get_user_notifications(
-        current_user["id"],
+        current_user.id,
         is_read,
         limit,
         offset
@@ -58,7 +59,7 @@ async def get_notifications(
     
     # Get unread count
     unread_notifications = await notification_service.get_user_notifications(
-        current_user["id"],
+        current_user.id,
         is_read=False
     )
     
@@ -72,7 +73,7 @@ async def get_notifications(
 @router.get("/{notification_id}", response_model=NotificationResponse)
 async def get_notification(
     notification_id: str = Path(..., description="The notification ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get a specific notification by ID.
@@ -93,7 +94,7 @@ async def get_notification(
         )
     
     # Check if the notification belongs to the user
-    if notification["user_id"] != current_user["id"]:
+    if notification["user_id"] != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to access this notification"
@@ -107,7 +108,7 @@ async def get_notification(
 @router.post("/", response_model=NotificationResponse, status_code=status.HTTP_201_CREATED)
 async def create_notification(
     notification_data: NotificationCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Create a new notification (admin only).
@@ -120,7 +121,7 @@ async def create_notification(
         Created notification
     """
     # Only admins should be able to create notifications directly
-    if current_user.get("role") != "admin":
+    if getattr(current_user, "role", None) != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can create notifications directly"
@@ -142,7 +143,7 @@ async def create_notification(
 @router.put("/{notification_id}/read", response_model=NotificationResponse)
 async def mark_notification_as_read(
     notification_id: str = Path(..., description="The notification ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Mark a notification as read.
@@ -163,7 +164,7 @@ async def mark_notification_as_read(
             detail="Notification not found"
         )
     
-    if notification["user_id"] != current_user["id"]:
+    if notification["user_id"] != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this notification"
@@ -184,7 +185,7 @@ async def mark_notification_as_read(
 
 @router.put("/read-all", status_code=status.HTTP_200_OK)
 async def mark_all_notifications_as_read(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Mark all notifications as read for the current user.
@@ -195,7 +196,7 @@ async def mark_all_notifications_as_read(
     Returns:
         Success message
     """
-    success = await notification_service.mark_all_notifications_as_read(current_user["id"])
+    success = await notification_service.mark_all_notifications_as_read(current_user.id)
     
     if not success:
         raise HTTPException(
@@ -210,7 +211,7 @@ async def mark_all_notifications_as_read(
 @router.delete("/{notification_id}", status_code=status.HTTP_200_OK)
 async def delete_notification(
     notification_id: str = Path(..., description="The notification ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Delete a notification.
@@ -231,7 +232,7 @@ async def delete_notification(
             detail="Notification not found"
         )
     
-    if notification["user_id"] != current_user["id"] and current_user.get("role") != "admin":
+    if notification["user_id"] != current_user.id and getattr(current_user, "role", None) != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to delete this notification"
@@ -251,7 +252,7 @@ async def delete_notification(
 
 @router.get("/settings", response_model=NotificationSettingsResponse)
 async def get_notification_settings(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get notification settings for the current user.
@@ -262,12 +263,12 @@ async def get_notification_settings(
     Returns:
         Notification settings
     """
-    settings = await notification_service.get_notification_settings(current_user["id"])
+    settings = await notification_service.get_notification_settings(current_user.id)
     
     if not settings:
         # Return default settings if none exist
         settings = {
-            "user_id": current_user["id"],
+            "user_id": current_user.id,
             "enabled_types": {},
             "preferred_methods": {},
             "quiet_hours_start": None,
@@ -282,7 +283,7 @@ async def get_notification_settings(
 @router.put("/settings", response_model=NotificationSettingsResponse)
 async def update_notification_settings(
     settings_data: Dict[str, Any] = Body(..., description="The notification settings data"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update notification settings for the current user.
@@ -295,7 +296,7 @@ async def update_notification_settings(
         Updated notification settings
     """
     settings = await notification_service.create_or_update_notification_settings(
-        current_user["id"],
+        current_user.id,
         settings_data
     )
     
