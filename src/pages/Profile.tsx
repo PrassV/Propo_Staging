@@ -34,7 +34,24 @@ export default function Profile() {
   const handleSave = async (formData: Partial<ProfileFormData>) => {
     if (!profile) return;
     
-    const updatePayload = { ...formData };
+    console.log("Form data received:", formData);
+    
+    // Create a properly typed payload for the API
+    const updatePayload = {
+      first_name: formData.firstName || '',
+      last_name: formData.lastName || '',
+      phone: formData.phone || '',
+      // Include address fields
+      ...(formData.addressLine1 ? { address_line1: formData.addressLine1 } : {}),
+      ...(formData.addressLine2 ? { address_line2: formData.addressLine2 } : {}),
+      ...(formData.city ? { city: formData.city } : {}),
+      ...(formData.state ? { state: formData.state } : {}),
+      ...(formData.pincode ? { pincode: formData.pincode } : {}),
+      // Set role if provided
+      ...(formData.role ? { role: formData.role } : {})
+    };
+    
+    console.log("Update payload:", updatePayload);
 
     toast.loading('Updating profile...');
     try {
@@ -91,14 +108,12 @@ export default function Profile() {
                 firstName: profile.first_name || '', 
                 lastName: profile.last_name || '',
                 phone: profile.phone || '',
-                // Add address fields if they exist in profile object
-                // addressLine1: profile.address_line1 || '', 
-                // addressLine2: profile.address_line2 || '',
-                // city: profile.city || '', 
-                // state: profile.state || '', 
-                // pincode: profile.pincode || '',
-                // Ensure only 'owner' or 'tenant' is passed to the form, default to null if it's 'admin' or other
-                role: (profile.role === 'owner' || profile.role === 'tenant') ? profile.role : null, 
+                addressLine1: profile.address_line1 || '', 
+                addressLine2: profile.address_line2 || '',
+                city: profile.city || '', 
+                state: profile.state || '', 
+                pincode: profile.pincode || '',
+                role: (profile.role === 'owner' || profile.role === 'tenant') ? profile.role : 'owner', 
               }}
               onSave={handleSave} // Use the new handler
               onCancel={() => setIsEditing(false)}

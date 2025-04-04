@@ -43,9 +43,14 @@ export interface UserProfile {
   first_name?: string;
   last_name?: string;
   phone?: string;
-  role: 'owner' | 'tenant' | 'admin' | null;
-  created_at: string;
-  updated_at: string;
+  role?: 'owner' | 'tenant' | 'admin' | null;
+  created_at?: string;
+  updated_at?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
 }
 
 // Define and export Session type for AuthContext

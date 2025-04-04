@@ -48,6 +48,9 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Debug what's being submitted
+    console.log('Submitting form data:', formData);
+    
     if (!initialData.role && !formData.role) {
         toast.error("Please select your role (Owner or Tenant).");
         setErrors(prev => ({ ...prev, role: 'Role is required.'}));
@@ -62,20 +65,8 @@ export default function ProfileForm({ initialData, onSave, onCancel, loading = f
 
     setSubmitting(true);
     try {
-      const apiData = {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone: formData.phone,
-        address_line1: formData.addressLine1,
-        address_line2: formData.addressLine2 || null,
-        city: formData.city,
-        state: formData.state,
-        pincode: formData.pincode,
-        role: formData.role,
-      };
-
-      await onSave(apiData);
-
+      // Pass the form data directly to the parent handler
+      await onSave(formData);
     } catch (error: unknown) {
       console.error('Error updating profile:', error);
       let errorMessage = 'Failed to update profile';
