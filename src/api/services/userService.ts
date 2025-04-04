@@ -40,7 +40,7 @@ export const updateUserProfile = async (
 ): Promise<unknown> => { // Changed Promise return type from any to unknown
   try {
     // Specify expected response type if known, otherwise use unknown
-    const response = await apiClient.put<unknown>('/auth/me', profileData); // Changed response type from any to unknown
+    const response = await apiClient.put<unknown>('/users/me', profileData); // Changed response type from any to unknown
     
     // You might want to add checks here to validate response.data structure 
     // before returning if a specific structure is expected.
