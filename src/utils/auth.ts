@@ -1,7 +1,7 @@
 import api from '@/api'; // Use central API client
 import toast from 'react-hot-toast';
 // Import types from central location
-import { LoginRequest, UserProfile } from '@/api/types'; 
+import { LoginRequest, LoginResponse } from '@/api/types'; 
 
 // Removed redundant LoginData interface, use LoginRequest directly
 
@@ -34,15 +34,25 @@ export const handleLogin = async ({ email, password }: LoginRequest) => {
   }
 };
 
-// Refactor handleSignup to use api.auth.register
+// Refactor handleSignup to properly update auth context
 export const handleSignup = async (signupData: SignupData) => {
   try {
-    // Call the register service function
-    const userProfile: UserProfile = await api.auth.register(signupData);
-
-    toast.success('Successfully signed up! You can now log in.'); 
-    // Return success and the created user profile
-    return { success: true, data: userProfile };
+    // Call the register service function - this returns user and stores tokens
+    const response = await api.auth.register(signupData);
+    
+    // Create a valid login response object with the user and token
+    const loginResponse: LoginResponse = {
+      access_token: localStorage.getItem('token') || '', // Get the token that was stored by register
+      refresh_token: localStorage.getItem('refreshToken') || '',
+      token_type: 'bearer',
+      expires_in: 0, // Default value
+      user: response
+    };
+    
+    toast.success('Successfully signed up!');
+    
+    // Return the complete data including tokens
+    return { success: true, data: loginResponse };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Signup failed due to an unexpected error';
     toast.error(message);

@@ -4,7 +4,7 @@ import { storeToken, storeRefreshToken, clearTokens } from '../../utils/token';
 
 // Login user
 export const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/login', credentials);
+  const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
   
   // Store the tokens
   storeToken(response.data.access_token);

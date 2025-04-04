@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import InputField from './InputField';
 import { handleSignup } from '@/utils/auth';
-import { UserProfile } from '@/api/types';
+import { UserProfile, LoginResponse } from '@/api/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SignupFormProps {
   onSuccess?: (userProfile: UserProfile) => void;
 }
 
 const SignupForm = ({ onSuccess }: SignupFormProps) => {
+  const { setAuthData } = useAuth();
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -39,9 +41,12 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
       });
       
       if (result.success && result.data) {
+        // Update the auth context with the login response
+        setAuthData(result.data as LoginResponse);
+        
         // Call the onSuccess callback if provided
         if (onSuccess) {
-          onSuccess(result.data as UserProfile);
+          onSuccess(result.data.user as UserProfile);
         } else {
           // Route to onboarding page for profile completion
           window.location.href = '/onboarding';
