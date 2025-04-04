@@ -263,4 +263,63 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
     Returns:
         JSON with user information
     """
-    return current_user 
+    return current_user
+
+@router.put("/profile", response_model=Dict[str, Any])
+async def update_profile(
+    update_data: Dict[str, Any] = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Update user profile endpoint for compatibility with frontend.
+    Forwards the request to the user service.
+    
+    Args:
+        update_data: The profile data to update
+        current_user: The current authenticated user
+        
+    Returns:
+        Updated user profile wrapped in a data field
+    """
+    from app.services import user_service
+    from app.models.user import UserUpdate
+    from pydantic import BaseModel
+    
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+    
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials - User ID missing"
+        )
+    
+    # Create a dynamic model to validate the update data
+    class DynamicUserUpdate(BaseModel):
+        pass
+    
+    for key, value in update_data.items():
+        setattr(DynamicUserUpdate, key, (type(value), ...))
+    
+    update_model = DynamicUserUpdate(**update_data)
+    
+    try:
+        updated_user = user_service.update_user_profile(user_id, update_model)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found or update failed"
+            )
+        
+        # Return in the format expected by the frontend
+        return {"data": updated_user, "message": "Profile updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating profile via auth router: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+        ) 
