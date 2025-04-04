@@ -24,4 +24,3 @@ resend
 twilio
 reportlab
 tailwind-merge
-tailwind-css

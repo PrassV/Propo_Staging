@@ -1,7 +1,25 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { clearTokens, getStoredToken } from '../utils/token';
+import api from '../api';
 import toast from 'react-hot-toast';
+
+// Create type definitions compatible with our API structure
+interface User {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  user_type?: 'owner' | 'tenant' | 'admin';
+}
+
+interface Session {
+  access_token: string;
+  user: User;
+}
+
+interface AuthError {
+  message: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -26,13 +44,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [initialized, setInitialized] = useState(false);
 
   const logoutUser = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Error logging out:", error);
+    try {
+      await api.auth.logout();
+      clearTokens();
+      setUser(null);
+      setSession(null);
+      toast.success("Logged out successfully!");
+    } catch (error) {
+      const authError = error as AuthError;
+      console.error("Error logging out:", authError);
       toast.error("Failed to log out.");
-      return { error };
+      return { error: authError };
     }
-    toast.success("Logged out successfully!");
   };
 
   useEffect(() => {
@@ -40,18 +63,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const token = getStoredToken();
         
-        if (error) throw error;
+        if (!token) {
+          if (mounted) {
+            setLoading(false);
+            setInitialized(true);
+          }
+          return;
+        }
         
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
+        // Fetch current user profile with the stored token
+        const userProfile = await api.auth.getCurrentUser();
+        
+        if (mounted && userProfile) {
+          const sessionData = {
+            access_token: token,
+            user: userProfile
+          };
+          
+          setSession(sessionData);
+          setUser(userProfile);
           setLoading(false);
           setInitialized(true);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
+        // Token might be invalid, clear it
+        clearTokens();
+        
         if (mounted) {
           setLoading(false);
           setInitialized(true);
@@ -61,26 +101,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (initialized) {
-          setLoading(false); 
-        }
-
-        if (_event === 'SIGNED_OUT') {
-          localStorage.removeItem('propify-auth');
-        }
-        if (!initialized && mounted) setInitialized(true);
-      }
-    });
+    // We don't have real-time auth state changes without supabase,
+    // so we'll need to rely on manual auth state updates
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, [initialized]);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, session, loading, initialized, logoutUser }}>
