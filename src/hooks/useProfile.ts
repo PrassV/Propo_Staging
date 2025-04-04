@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { UserProfile, UserUpdate } from '../api/types';
-import api from '../api';
+import { UserProfile } from '@/api/types';
+import api from '@/api';
 
 export function useProfile() {
   const { initialized } = useAuth();
@@ -14,7 +14,7 @@ export function useProfile() {
     setLoading(true);
     setError(null);
     try {
-      const fetchedProfile = await api.auth.getCurrentUserProfile();
+      const fetchedProfile = await api.auth.getCurrentUser();
       setProfile(fetchedProfile);
     } catch (err: unknown) {
       console.error('Profile fetch error:', err);
@@ -25,7 +25,6 @@ export function useProfile() {
         errorMessage = (err as { formattedMessage: string }).formattedMessage;
       }
       setError(errorMessage);
-      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -41,11 +40,11 @@ export function useProfile() {
     return fetchProfile();
   }, [fetchProfile]);
 
-  const updateProfile = useCallback(async (updateData: UserUpdate): Promise<boolean> => {
+  const updateProfile = useCallback(async (updateData: Partial<UserProfile>): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
-      const updatedProfile = await api.auth.updateCurrentUserProfile(updateData);
+      const updatedProfile = await api.auth.updateUserProfile(updateData);
       setProfile(updatedProfile);
       toast.success('Profile updated successfully!');
       return true;

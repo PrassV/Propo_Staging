@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import api from '../api';
-import { Notification } from '../api/types';
+import api from '@/api';
+import { Notification } from '@/api/types';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Hook to manage notifications
 export function useNotifications() {
+  const { user, initialized } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -12,30 +14,38 @@ export function useNotifications() {
 
   // Fetch notifications from the API
   const fetchNotifications = useCallback(async () => {
+    if (!initialized || !user) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     try {
-      // Fetch latest notifications (e.g., limit 50)
-      const response = await api.notification.getNotifications({ limit: 50 }); 
-      setNotifications(response.notifications);
-      setUnreadCount(response.unread_count);
+      const response = await api.notification.getNotifications({ limit: 50 });
+      setNotifications(response.notifications || []);
+      setUnreadCount(response.unread_count || 0);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
       const msg = err instanceof Error ? err.message : 'Could not load notifications';
-      setError(msg);
-      // Don't toast error on every background fetch potentially
+      if (!(err instanceof Error && err.message.includes('403'))) {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialized, user]);
 
-  // Initial fetch and potentially periodic refresh
+  // Fetch only when auth is initialized and user exists
   useEffect(() => {
-    fetchNotifications();
-    // Optional: Set up interval polling if WebSockets aren't used
-    // const intervalId = setInterval(fetchNotifications, 60000); // Fetch every 60 seconds
-    // return () => clearInterval(intervalId);
-  }, [fetchNotifications]);
+    if (initialized && user) {
+      fetchNotifications();
+    } else if (initialized) {
+      setLoading(false);
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  }, [initialized, user, fetchNotifications]);
 
   // Mark a single notification as read
   const markAsRead = useCallback(async (id: string) => {
@@ -44,7 +54,6 @@ export function useNotifications() {
     setUnreadCount(prev => Math.max(0, prev - 1)); 
     try {
       await api.notification.markNotificationAsRead(id);
-      // No need to refetch immediately due to optimistic update
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
       toast.error('Failed to update notification status.');
