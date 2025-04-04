@@ -293,28 +293,50 @@ async def update_profile(
     
     # Handle different current_user structures (object vs dict)
     user_id = None
-    if isinstance(current_user, dict):
-        user_id = current_user.get("id")
-    else:
-        user_id = getattr(current_user, "id", None)
+    
+    # Safely extract user_id without serialization issues
+    try:
+        if isinstance(current_user, dict):
+            user_id = current_user.get("id")
+        elif hasattr(current_user, "id"):
+            user_id = current_user.id
+        
+        # For debugging purposes
+        logger.info(f"Current user type: {type(current_user)}")
+        logger.info(f"Extracted user_id: {user_id}")
+    except Exception as e:
+        logger.error(f"Error extracting user_id: {str(e)}")
+        user_id = None
     
     if not user_id:
-        logger.error(f"User ID missing in current_user: {current_user}")
+        logger.error(f"User ID missing in current_user (type: {type(current_user)})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials - User ID missing"
         )
     
-    # Create a dynamic model to validate the update data
-    class DynamicUserUpdate(BaseModel):
-        pass
+    # We'll skip the dynamic model creation which can cause issues
+    # Instead, directly extract only the fields we need from update_data
+    safe_update_data = {
+        "first_name": update_data.get("first_name"),
+        "last_name": update_data.get("last_name"),
+        "phone": update_data.get("phone"),
+        "address_line1": update_data.get("address_line1"),
+        "address_line2": update_data.get("address_line2"),
+        "city": update_data.get("city"),
+        "state": update_data.get("state"),
+        "pincode": update_data.get("pincode"),
+        "role": update_data.get("role"),
+    }
     
-    for key, value in update_data.items():
-        setattr(DynamicUserUpdate, key, (type(value), ...))
-    
-    update_model = DynamicUserUpdate(**update_data)
+    # Remove None values to avoid overwriting existing data with None
+    safe_update_data = {k: v for k, v in safe_update_data.items() if v is not None}
     
     try:
+        # Create a simple UserUpdate model manually to avoid dynamic model issues
+        update_model = UserUpdate(**safe_update_data)
+        
+        # Now update the profile
         updated_user = user_service.update_user_profile(user_id, update_model)
         if not updated_user:
             raise HTTPException(
@@ -322,8 +344,25 @@ async def update_profile(
                 detail="User profile not found or update failed"
             )
         
+        # Since we might still have serialization issues, let's create a clean response
+        if isinstance(updated_user, dict):
+            clean_response = updated_user
+        else:
+            # Try to create a dict from the object
+            try:
+                clean_response = {
+                    "id": getattr(updated_user, "id", user_id),
+                    "first_name": getattr(updated_user, "first_name", safe_update_data.get("first_name")),
+                    "last_name": getattr(updated_user, "last_name", safe_update_data.get("last_name")),
+                    "phone": getattr(updated_user, "phone", safe_update_data.get("phone")),
+                    # Add other fields as needed
+                }
+            except Exception as e:
+                logger.error(f"Error creating clean response: {str(e)}")
+                clean_response = {"id": user_id, **safe_update_data}
+        
         # Return in the format expected by the frontend
-        return {"data": updated_user, "message": "Profile updated successfully"}
+        return {"data": clean_response, "message": "Profile updated successfully"}
     except Exception as e:
         logger.error(f"Error updating profile via auth router: {e}", exc_info=True)
         raise HTTPException(

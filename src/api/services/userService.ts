@@ -37,18 +37,25 @@ export interface UserProfileUpdateData {
  */
 export const updateUserProfile = async (
   profileData: UserProfileUpdateData
-): Promise<unknown> => { // Changed Promise return type from any to unknown
+): Promise<unknown> => {
   try {
     // Specify expected response type if known, otherwise use unknown
-    const response = await apiClient.put<unknown>('/users/me', profileData); // Changed response type from any to unknown
+    const response = await apiClient.put<unknown>('/users/me', profileData);
     
-    // You might want to add checks here to validate response.data structure 
-    // before returning if a specific structure is expected.
+    // Handle different response formats
+    if (response.data && typeof response.data === 'object') {
+      if ('data' in response.data && response.data.data) {
+        // It's wrapped in an ApiResponse
+        return response.data.data;
+      }
+    }
+    
+    // It's directly the profile object or another format
     return response.data;
   } catch (error) {
     console.error("Error updating user profile:", error);
     
-    // Refined error handling (already improved, keeping it)
+    // Refined error handling
     let errorMessage = 'Failed to update profile';
     if (error && typeof error === 'object' && 'response' in error && 
         error.response && typeof error.response === 'object' && 'data' in error.response &&

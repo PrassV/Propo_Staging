@@ -27,16 +27,62 @@ async def update_current_user_profile(
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials - User not found")
 
-    user_id = current_user.id
+    # Safely extract user_id
+    user_id = None
+    try:
+        if isinstance(current_user, dict):
+            user_id = current_user.get("id")
+        elif hasattr(current_user, "id"):
+            user_id = current_user.id
+        else:
+            logger.error(f"Couldn't extract ID from current_user type: {type(current_user)}")
+    except Exception as e:
+        logger.error(f"Error extracting user ID: {str(e)}")
+    
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials - User ID missing")
     
     try:
+        # Get only the fields that were actually provided
+        update_dict = {}
+        if hasattr(update_data, "model_dump"):
+            update_dict = update_data.model_dump(exclude_unset=True)
+        elif hasattr(update_data, "dict"):
+            update_dict = update_data.dict(exclude_unset=True)
+        else:
+            # Fallback for when Pydantic model methods aren't available
+            for field in ["first_name", "last_name", "phone", "address_line1", 
+                         "address_line2", "city", "state", "pincode", "role"]:
+                if hasattr(update_data, field) and getattr(update_data, field) is not None:
+                    update_dict[field] = getattr(update_data, field)
+        
+        logger.info(f"Updating user {user_id} with data: {update_dict}")
+        
         updated_user = user_service.update_user_profile(user_id, update_data)
         if not updated_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed")
         
-        return updated_user
+        # Clean response to avoid serialization issues
+        if isinstance(updated_user, dict):
+            clean_response = updated_user
+        else:
+            # Try to create a dict from the object
+            try:
+                clean_response = {
+                    "id": getattr(updated_user, "id", user_id),
+                    # Safely extract other fields
+                }
+                # Add all attributes that exist
+                for field in ["first_name", "last_name", "phone", "email", "address_line1", 
+                             "address_line2", "city", "state", "pincode", "role", "created_at", "updated_at"]:
+                    if hasattr(updated_user, field):
+                        clean_response[field] = getattr(updated_user, field)
+            except Exception as e:
+                logger.error(f"Error creating clean response: {str(e)}")
+                # Fallback to original update data plus user ID
+                clean_response = {"id": user_id, **update_dict}
+        
+        return clean_response
     except HTTPException:
         raise
     except Exception as e:

@@ -46,18 +46,50 @@ export const getCurrentUser = async (): Promise<UserProfile> => {
 export const updateUserProfile = async (profileData: Partial<UserProfile>): Promise<UserProfile> => {
   try {
     // First try the /users/me endpoint (our primary endpoint)
-    const response = await apiClient.put<ApiResponse<UserProfile>>('/users/me', profileData);
-    return response.data.data;
+    const response = await apiClient.put<ApiResponse<UserProfile> | UserProfile>('/users/me', profileData);
+    
+    // Handle different response formats
+    if (response.data && 'data' in response.data) {
+      // It's wrapped in an ApiResponse
+      return response.data.data;
+    } else {
+      // It's directly the profile object
+      return response.data;
+    }
   } catch (error) {
     console.error("Error updating profile with /users/me, trying fallback endpoint", error);
     
     // If first attempt fails, try the /auth/profile endpoint as fallback
     try {
-      const fallbackResponse = await apiClient.put<ApiResponse<UserProfile>>('/auth/profile', profileData);
-      return fallbackResponse.data.data;
+      const fallbackResponse = await apiClient.put<ApiResponse<UserProfile> | UserProfile>('/auth/profile', profileData);
+      
+      // Handle different response formats
+      if (fallbackResponse.data && 'data' in fallbackResponse.data) {
+        // It's wrapped in an ApiResponse
+        return fallbackResponse.data.data;
+      } else {
+        // It's directly the profile object
+        return fallbackResponse.data;
+      }
     } catch (fallbackError) {
       console.error("Both profile update endpoints failed", fallbackError);
-      throw fallbackError; // Rethrow the last error
+      
+      // Create a better error message for debugging
+      let errorMessage = 'Failed to update profile';
+      if (fallbackError && typeof fallbackError === 'object') {
+        if ('response' in fallbackError && fallbackError.response) {
+          const responseData = fallbackError.response as { data?: any; status?: number };
+          if (responseData.data && typeof responseData.data === 'object' && 'detail' in responseData.data) {
+            errorMessage = `Server error: ${responseData.data.detail}`;
+          } else {
+            errorMessage = `Server error (${responseData.status || 'unknown'})`;
+          }
+        } else if ('message' in fallbackError) {
+          errorMessage = `Network error: ${(fallbackError as Error).message}`;
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 };
