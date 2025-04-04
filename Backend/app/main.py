@@ -96,7 +96,7 @@ async def protected_route(current_user: Dict = Depends(get_current_user)):
     return {"message": "This is a protected route", "user": current_user}
 
 # Include routers
-app.include_router(auth)
+app.include_router(auth, prefix="/auth", tags=["Auth"])
 app.include_router(user)
 app.include_router(property)
 app.include_router(tenant)
