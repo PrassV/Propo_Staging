@@ -3,6 +3,7 @@ import { RouteObject } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
+import OnboardingFlow from '../components/onboarding/OnboardingFlow';
 
 // Dashboard pages
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -122,6 +123,14 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth>
         {withSuspense(Profile)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/onboarding',
+    element: (
+      <RouteGuard requireAuth>
+        <OnboardingFlow />
       </RouteGuard>
     )
   }

@@ -43,8 +43,8 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
         if (onSuccess) {
           onSuccess(result.data as UserProfile);
         } else {
-          // If no callback provided, redirect to dashboard
-          window.location.href = '/dashboard';
+          // Route to onboarding page for profile completion
+          window.location.href = '/onboarding';
         }
       }
     } catch (error) {
