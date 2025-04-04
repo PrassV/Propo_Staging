@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-async def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]:
+def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]:
     """
     Updates a user's profile information in the database.
     """
@@ -21,13 +21,13 @@ async def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional
         if not update_dict:
             logger.info(f"No update data provided for user {user_id}.")
             # Return current data or raise an error? Let's return current for now.
-            response = await supabase.table("profiles").select("*").eq("id", user_id).single().execute()
+            response = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
             return response.data
 
         logger.info(f"Attempting to update profile for user {user_id} with data: {update_dict}")
         
         # Execute the update
-        response = await supabase.table("profiles")\
+        response = supabase.table("profiles")\
                            .update(update_dict)\
                            .eq("id", user_id)\
                            .execute()
@@ -41,11 +41,11 @@ async def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional
             return response.data[0] 
         else:
             # Check if the user exists but wasn't updated (e.g., no matching row)
-            check_user = await supabase.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
+            check_user = supabase.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
             if check_user.data:
                  logger.warning(f"Update attempted for user {user_id}, but no data returned. Data might be unchanged.")
                  # Return current data as it likely wasn't changed
-                 current_data_response = await supabase.table("profiles").select("*").eq("id", user_id).single().execute()
+                 current_data_response = supabase.table("profiles").select("*").eq("id", user_id).single().execute()
                  return current_data_response.data
             else:
                  logger.error(f"Profile not found for user {user_id} during update attempt.")
@@ -56,11 +56,11 @@ async def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional
         # Re-raise the exception or handle it as needed
         raise  # Re-raising allows the API layer to catch it and return 500
 
-async def get_user_profile(user_id: str) -> Optional[Dict]:
+def get_user_profile(user_id: str) -> Optional[Dict]:
     """Fetch user profile data by user ID."""
     try:
         supabase = supabase_client
-        response = await supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+        response = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
         logger.debug(f"Supabase get_user_profile response for {user_id}: {response}")
         return response.data
     except Exception as e:

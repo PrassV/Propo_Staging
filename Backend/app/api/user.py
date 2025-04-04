@@ -32,7 +32,7 @@ async def update_current_user_profile(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials - User ID missing")
     
     try:
-        updated_user = await user_service.update_user_profile(user_id, update_data)
+        updated_user = user_service.update_user_profile(user_id, update_data)
         if not updated_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed")
         
@@ -56,9 +56,9 @@ async def get_user_info(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this user's information")
     
     if current_user.id == user_id or getattr(current_user, 'role', None) == "admin":
-        requested_user = await user_service.get_user_by_id(user_id)
+        requested_user = user_service.get_user_profile(user_id)
         if not requested_user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested user not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested user profile not found")
         return requested_user
 
     return {"id": user_id, "email": f"user{user_id}@example.com", "name": f"User {user_id}"} 
