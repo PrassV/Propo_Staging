@@ -29,7 +29,7 @@ export interface UserProfileUpdateData {
 
 /**
  * Updates the current authenticated user's profile.
- * Calls the backend's PUT /auth/me endpoint.
+ * Calls the backend's PUT /users/me endpoint.
  * 
  * @param profileData The profile data to update.
  * @returns The updated user profile data (adjust return type as needed).

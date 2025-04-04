@@ -38,7 +38,8 @@ export default function Profile() {
 
     toast.loading('Updating profile...');
     try {
-      await api.user.updateUserProfile(updatePayload);
+      // Change from user service to auth service for profile updates
+      await api.auth.updateUserProfile(updatePayload);
       toast.dismiss();
       toast.success('Profile updated successfully!');
       setIsEditing(false);
