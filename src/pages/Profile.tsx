@@ -38,7 +38,7 @@ export default function Profile() {
 
     toast.loading('Updating profile...');
     try {
-      await api.user.updateProfile(profile.id, updatePayload);
+      await api.user.updateUserProfile(updatePayload);
       toast.dismiss();
       toast.success('Profile updated successfully!');
       setIsEditing(false);
@@ -96,7 +96,8 @@ export default function Profile() {
                 // city: profile.city || '', 
                 // state: profile.state || '', 
                 // pincode: profile.pincode || '',
-                role: profile.role, // Pass role
+                // Ensure only 'owner' or 'tenant' is passed to the form, default to null if it's 'admin' or other
+                role: (profile.role === 'owner' || profile.role === 'tenant') ? profile.role : null, 
               }}
               onSave={handleSave} // Use the new handler
               onCancel={() => setIsEditing(false)}
