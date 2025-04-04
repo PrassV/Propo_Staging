@@ -15,8 +15,8 @@ async def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional
         # Use the imported client
         supabase = supabase_client
         
-        # Prepare the data, excluding None values to avoid overwriting fields with null
-        update_dict = update_data.model_dump(exclude_unset=True) 
+        # Use .dict() for Pydantic V1 compatibility
+        update_dict = update_data.dict(exclude_unset=True)
         
         if not update_dict:
             logger.info(f"No update data provided for user {user_id}.")
