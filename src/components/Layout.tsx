@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePropertyDialog } from '../contexts/PropertyDialogContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PropertyForm from './property/PropertyForm';
-import { api } from '@/api/apiClient';
+import api from '@/api';
 import toast from 'react-hot-toast';
 import { PropertyFormData } from '@/api/types';
 
