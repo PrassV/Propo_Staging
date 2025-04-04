@@ -4,6 +4,7 @@ import InputField from './InputField';
 import { handleLogin } from '@/utils/auth';
 import toast from 'react-hot-toast';
 import { LoginResponse } from '@/api/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LoginFormProps {
   onSuccess?: (loginResponse: LoginResponse) => void;
@@ -15,6 +16,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  const { setAuthData } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +25,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
     const result = await handleLogin(formData);
     
     if (result.success && result.data && onSuccess) {
+      setAuthData(result.data as LoginResponse);
       onSuccess(result.data as LoginResponse);
     }
     

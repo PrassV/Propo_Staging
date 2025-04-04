@@ -1,47 +1,49 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { clearTokens, getStoredToken } from '../utils/token';
+import { clearTokens, getStoredToken, storeToken } from '../utils/token';
 import api from '../api';
 import toast from 'react-hot-toast';
+import { UserProfile, LoginResponse, Session, AuthError } from '@/api/types';
 
-// Create type definitions compatible with our API structure
-interface User {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  user_type?: 'owner' | 'tenant' | 'admin';
-}
-
-interface Session {
-  access_token: string;
-  user: User;
-}
-
-interface AuthError {
-  message: string;
-}
-
+// AuthContextType uses correct types
 interface AuthContextType {
-  user: User | null;
+  user: UserProfile | null;
   session: Session | null;
   loading: boolean;
   initialized: boolean;
+  setAuthData: (loginResponse: LoginResponse) => void;
   logoutUser: () => Promise<{ error: AuthError } | void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  session: null, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
   loading: true,
   initialized: false,
+  setAuthData: () => {},
   logoutUser: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+
+  const setAuthData = (loginResponse: LoginResponse) => {
+    if (loginResponse.access_token && loginResponse.user) {
+      storeToken(loginResponse.access_token);
+      const sessionData: Session = {
+        access_token: loginResponse.access_token,
+        user: loginResponse.user,
+      };
+      setSession(sessionData);
+      setUser(loginResponse.user);
+      setLoading(false);
+      setInitialized(true);
+    } else {
+      console.error("Invalid login response passed to setAuthData:", loginResponse);
+    }
+  };
 
   const logoutUser = async () => {
     try {
@@ -49,6 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       clearTokens();
       setUser(null);
       setSession(null);
+      setLoading(false);
       toast.success("Logged out successfully!");
     } catch (error) {
       const authError = error as AuthError;
@@ -60,6 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
 
     const initializeAuth = async () => {
       try {
@@ -77,32 +81,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const userProfile = await api.auth.getCurrentUser();
         
         if (mounted && userProfile) {
-          const sessionData = {
+          const sessionData: Session = {
             access_token: token,
             user: userProfile
           };
           
           setSession(sessionData);
           setUser(userProfile);
-          setLoading(false);
-          setInitialized(true);
+        } else if (mounted) {
+           clearTokens();
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        // Token might be invalid, clear it
         clearTokens();
-        
-        if (mounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
+      } finally {
+         if (mounted) {
+            setLoading(false);
+            setInitialized(true);
+         }
       }
     };
 
     initializeAuth();
-
-    // We don't have real-time auth state changes without supabase,
-    // so we'll need to rely on manual auth state updates
 
     return () => {
       mounted = false;
@@ -110,7 +110,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, initialized, logoutUser }}>
+    <AuthContext.Provider value={{ user, session, loading, initialized, setAuthData, logoutUser }}>
       {children}
     </AuthContext.Provider>
   );

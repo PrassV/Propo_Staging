@@ -48,6 +48,19 @@ export interface UserProfile {
   updated_at: string;
 }
 
+// Define and export Session type for AuthContext
+export interface Session {
+  access_token: string;
+  user: UserProfile;
+}
+
+// Define and export AuthError type for AuthContext
+export interface AuthError {
+  message: string;
+  status?: number;
+  errors?: Record<string, string[]>;
+}
+
 // Add this interface
 export interface PropertiesListResponse {
   items: Property[];
@@ -68,9 +81,9 @@ export interface Property {
   description?: string;
   bedrooms?: number;
   bathrooms?: number;
-  area?: number;
+  area?: number | null;
   area_unit?: string;
-  year_built?: number;
+  year_built?: number | null;
   owner_id: string;
   image_url?: string;
   status: 'Rented' | 'Vacant' | 'For Sale' | 'Unknown';
