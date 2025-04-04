@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]:
     """
     Updates a user's profile information in the database.
+    If profile doesn't exist, creates a new one.
     """
     try:
         # Use the imported client
@@ -31,41 +32,33 @@ def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]
 
         logger.info(f"Attempting to update profile for user {user_id} with data: {update_dict}")
         
-        # Execute the update using V2 API
-        response = supabase.table("profiles").update(update_dict).eq("id", user_id)
+        # First check if the profile exists
+        check_user = supabase.table("profiles").select("id").eq("id", user_id).single()
         
-        logger.debug(f"Supabase update response for user {user_id}")
+        if check_user and hasattr(check_user, 'data') and check_user.data:
+            # Profile exists, perform update
+            logger.info(f"Profile found for user {user_id}, updating...")
+            response = supabase.table("profiles").update(update_dict).eq("id", user_id)
+        else:
+            # Profile doesn't exist, perform insert
+            logger.info(f"Profile not found for user {user_id}, creating new profile...")
+            # Include user_id in the data to insert
+            insert_data = {"id": user_id, **update_dict}
+            response = supabase.table("profiles").insert(insert_data)
+        
+        logger.debug(f"Supabase response for user {user_id}")
         
         # Extract data properly
         if response and hasattr(response, 'data') and response.data:
-            logger.info(f"Successfully updated profile for user {user_id}.")
+            logger.info(f"Successfully processed profile for user {user_id}.")
             # Return just the data, not the entire response object
             return response.data[0] if isinstance(response.data, list) and response.data else response.data
         else:
-            # Check if the user exists but wasn't updated 
-            try:
-                # Using V2 API
-                check_user = supabase.table("profiles").select("id").eq("id", user_id).single()
-                if check_user and hasattr(check_user, 'data') and check_user.data:
-                    logger.warning(f"Update attempted for user {user_id}, but no data returned. Data might be unchanged.")
-                    # Return current data as it likely wasn't changed
-                    try:
-                        # Using V2 API
-                        current_response = supabase.table("profiles").select("*").eq("id", user_id).single()
-                        # Extract just the data
-                        return current_response.data if hasattr(current_response, 'data') else None
-                    except Exception as fetch_err:
-                        logger.error(f"Error fetching current profile for user {user_id}: {fetch_err}")
-                        return None
-                else:
-                    logger.error(f"Profile not found for user {user_id} during update attempt.")
-                    return None # Indicate user not found
-            except Exception as check_err:
-                logger.error(f"Error checking if profile exists for user {user_id}: {check_err}")
-                return None
+            logger.error(f"Failed to process profile for user {user_id}.")
+            return None
 
     except Exception as e:
-        logger.error(f"Database error updating profile for user {user_id}: {e}", exc_info=True)
+        logger.error(f"Database error processing profile for user {user_id}: {e}", exc_info=True)
         # Re-raise the exception or handle it as needed
         raise  # Re-raising allows the API layer to catch it and return 500
 
