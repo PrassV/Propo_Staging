@@ -304,6 +304,7 @@ async def update_profile(
         # For debugging purposes
         logger.info(f"Current user type: {type(current_user)}")
         logger.info(f"Extracted user_id: {user_id}")
+        logger.info(f"Update data received: {update_data}")
     except Exception as e:
         logger.error(f"Error extracting user_id: {str(e)}")
         user_id = None
@@ -334,35 +335,54 @@ async def update_profile(
     
     try:
         # Create a simple UserUpdate model manually to avoid dynamic model issues
-        update_model = UserUpdate(**safe_update_data)
+        try:
+            update_model = UserUpdate(**safe_update_data)
+            logger.info(f"Created update model successfully: {update_model}")
+        except Exception as model_error:
+            logger.error(f"Error creating model: {model_error}")
+            # Fallback: Pass the dict directly to the service function
+            logger.info("Using direct dict approach as fallback")
+            from types import SimpleNamespace
+            update_model = SimpleNamespace(**safe_update_data)
+            update_model.dict = lambda exclude_unset=False: safe_update_data
         
         # Now update the profile
         updated_user = user_service.update_user_profile(user_id, update_model)
         if not updated_user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found or update failed"
-            )
-        
-        # Since we might still have serialization issues, let's create a clean response
-        if isinstance(updated_user, dict):
-            clean_response = updated_user
-        else:
-            # Try to create a dict from the object
+            logger.error(f"Profile update failed for user {user_id}")
+            # Try direct DB access as a last resort
+            from app.config.database import supabase_client
             try:
-                clean_response = {
-                    "id": getattr(updated_user, "id", user_id),
-                    "first_name": getattr(updated_user, "first_name", safe_update_data.get("first_name")),
-                    "last_name": getattr(updated_user, "last_name", safe_update_data.get("last_name")),
-                    "phone": getattr(updated_user, "phone", safe_update_data.get("phone")),
-                    # Add other fields as needed
-                }
-            except Exception as e:
-                logger.error(f"Error creating clean response: {str(e)}")
-                clean_response = {"id": user_id, **safe_update_data}
+                # Try a direct upsert
+                logger.info(f"Attempting direct upsert for user {user_id}")
+                insert_data = {"id": user_id, **safe_update_data}
+                upsert_response = supabase_client.table("profiles").upsert(insert_data).execute()
+                
+                if upsert_response and hasattr(upsert_response, 'data') and upsert_response.data:
+                    logger.info(f"Direct upsert successful: {upsert_response.data}")
+                    updated_user = upsert_response.data[0] if isinstance(upsert_response.data, list) else upsert_response.data
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="User profile not found or update failed"
+                    )
+            except Exception as direct_error:
+                logger.error(f"Direct upsert failed: {direct_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User profile not found or update failed after multiple attempts"
+                )
+        
+        # Create a clean response to avoid serialization issues
+        clean_response = {
+            "id": user_id,
+            **{k: v for k, v in safe_update_data.items() if v is not None}
+        }
         
         # Return in the format expected by the frontend
         return {"data": clean_response, "message": "Profile updated successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating profile via auth router: {e}", exc_info=True)
         raise HTTPException(

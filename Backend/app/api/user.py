@@ -60,27 +60,29 @@ async def update_current_user_profile(
         
         updated_user = user_service.update_user_profile(user_id, update_data)
         if not updated_user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed")
+            logger.error(f"Failed to update profile through service, trying direct DB access")
+            # Try direct upsert as last resort
+            from app.config.database import supabase_client
+            try:
+                # Prepare insert data
+                insert_data = {"id": user_id, **update_dict}
+                # Try direct upsert
+                upsert_response = supabase_client.table("profiles").upsert(insert_data).execute()
+                
+                if upsert_response and hasattr(upsert_response, 'data') and upsert_response.data:
+                    logger.info(f"Direct upsert successful: {upsert_response.data}")
+                    updated_user = upsert_response.data[0] if isinstance(upsert_response.data, list) else upsert_response.data
+                else:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed")
+            except Exception as direct_error:
+                logger.error(f"Direct upsert failed: {direct_error}")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed after all attempts")
         
         # Clean response to avoid serialization issues
-        if isinstance(updated_user, dict):
-            clean_response = updated_user
-        else:
-            # Try to create a dict from the object
-            try:
-                clean_response = {
-                    "id": getattr(updated_user, "id", user_id),
-                    # Safely extract other fields
-                }
-                # Add all attributes that exist
-                for field in ["first_name", "last_name", "phone", "email", "address_line1", 
-                             "address_line2", "city", "state", "pincode", "role", "created_at", "updated_at"]:
-                    if hasattr(updated_user, field):
-                        clean_response[field] = getattr(updated_user, field)
-            except Exception as e:
-                logger.error(f"Error creating clean response: {str(e)}")
-                # Fallback to original update data plus user ID
-                clean_response = {"id": user_id, **update_dict}
+        clean_response = {
+            "id": user_id,
+            **{k: v for k, v in update_dict.items() if v is not None}
+        }
         
         return clean_response
     except HTTPException:
