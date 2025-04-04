@@ -1,35 +1,44 @@
 import { useState } from 'react';
-import { User, Mail, Lock, Phone } from 'lucide-react';
+import { Mail, Lock, User, Phone } from 'lucide-react';
 import InputField from './InputField';
-import { handleSignup } from '../../utils/auth';
-import toast from 'react-hot-toast';
+import { handleSignup } from '@/utils/auth';
+import { UserProfile } from '@/api/types';
 
 interface SignupFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (userProfile: UserProfile) => void;
 }
 
 const SignupForm = ({ onSuccess }: SignupFormProps) => {
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    user_type: 'owner' as 'owner' | 'tenant',
   });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
+      alert('Passwords do not match');
       return;
     }
-
     setLoading(true);
-    const result = await handleSignup(formData);
     
-    if (result.success && onSuccess) {
-      onSuccess();
+    const result = await handleSignup({
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password,
+      user_type: formData.user_type,
+    });
+    
+    if (result.success && result.data && onSuccess) {
+      onSuccess(result.data as UserProfile);
     }
     
     setLoading(false);
@@ -37,17 +46,28 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <InputField
-        label="Full Name"
-        icon={<User size={20} />}
-        type="text"
-        placeholder="Enter your full name"
-        value={formData.name}
-        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        disabled={loading}
-        required
-      />
-
+      <div className="grid grid-cols-2 gap-4">
+        <InputField
+          label="First Name"
+          icon={<User size={20} />}
+          type="text"
+          placeholder="Enter your first name"
+          value={formData.first_name}
+          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+          disabled={loading}
+          required
+        />
+        <InputField
+          label="Last Name"
+          icon={<User size={20} />}
+          type="text"
+          placeholder="Enter your last name"
+          value={formData.last_name}
+          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+          disabled={loading}
+          required
+        />
+      </div>
       <InputField
         label="Email Address"
         icon={<Mail size={20} />}
@@ -58,7 +78,6 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
         disabled={loading}
         required
       />
-
       <InputField
         label="Phone Number"
         icon={<Phone size={20} />}
@@ -67,20 +86,17 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
         value={formData.phone}
         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
         disabled={loading}
-        required
       />
-
       <InputField
         label="Password"
         icon={<Lock size={20} />}
         type="password"
-        placeholder="Create a password"
+        placeholder="Enter your password"
         value={formData.password}
         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
         disabled={loading}
         required
       />
-
       <InputField
         label="Confirm Password"
         icon={<Lock size={20} />}
@@ -91,13 +107,40 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
         disabled={loading}
         required
       />
+      <div className="space-y-2">
+         <label className="block text-sm font-medium text-gray-700">I am a:</label>
+         <div className="flex space-x-4">
+            <label className="flex items-center">
+                <input 
+                    type="radio" 
+                    name="userType" 
+                    value="owner" 
+                    checked={formData.user_type === 'owner'}
+                    onChange={() => setFormData({ ...formData, user_type: 'owner' })}
+                    className="mr-2"
+                />
+                Property Owner / Manager
+            </label>
+             <label className="flex items-center">
+                <input 
+                    type="radio" 
+                    name="userType" 
+                    value="tenant" 
+                    checked={formData.user_type === 'tenant'}
+                    onChange={() => setFormData({ ...formData, user_type: 'tenant' })}
+                    className="mr-2"
+                />
+                Tenant
+            </label>
+         </div>
+      </div>
 
       <button
         type="submit"
         disabled={loading}
         className="w-full bg-black text-white py-3 rounded-lg font-semibold tracking-wide hover:bg-gray-800 transition-colors disabled:opacity-50"
       >
-        {loading ? 'Creating Account...' : 'Create Account'}
+        {loading ? 'Signing up...' : 'Sign Up'}
       </button>
     </form>
   );

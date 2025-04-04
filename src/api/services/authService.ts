@@ -1,5 +1,5 @@
 import apiClient from '../client';
-import { ApiResponse, LoginRequest, LoginResponse, UserProfile, UserUpdate } from '../types';
+import { ApiResponse, LoginRequest, LoginResponse, UserProfile } from '../types';
 import { storeToken, storeRefreshToken, clearTokens } from '../../utils/token';
 
 // Login user
@@ -28,7 +28,7 @@ export const register = async (userData: {
 
 // Get current user profile
 export const getCurrentUser = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<ApiResponse<UserProfile>>('/auth/me');
+  const response = await apiClient.get<ApiResponse<UserProfile>>('/users/me');
   return response.data.data;
 };
 
@@ -48,21 +48,7 @@ export const logout = async (): Promise<void> => {
   }
 };
 
-// Function to get current user profile
-export const getCurrentUserProfile = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<UserProfile>('/auth/me'); 
-  return response.data;
-};
-
-// Function to update current user profile
-export const updateCurrentUserProfile = async (updateData: UserUpdate): Promise<UserProfile> => {
-  const response = await apiClient.put<UserProfile>('/users/me', updateData);
-  return response.data;
-};
-
-/* Potential alternative using /users/me for getting profile
-export const getCurrentUserProfileViaUsers = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<UserProfile>('/users/me'); 
-  return response.data;
-};
-*/ 
+// Remove duplicate/alternative functions if getCurrentUser is the primary one
+// export const getCurrentUserProfile = async (): Promise<UserProfile> => { ... };
+// export const updateCurrentUserProfile = async (updateData: UserUpdate): Promise<UserProfile> => { ... };
+// export const getCurrentUserProfileViaUsers = async (): Promise<UserProfile> => { ... }; 

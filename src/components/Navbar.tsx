@@ -5,6 +5,7 @@ import AuthModal from './auth/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import NotificationDropdown from './notifications/NotificationDropdown';
+import { LoginResponse } from '@/api/types';
 
 interface NavbarProps {
   onMenuClick?: () => void;
@@ -37,6 +38,16 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
       navigate('/');
     } catch (error) {
       console.error("Logout failed:", error);
+    }
+  };
+
+  const handleLoginSuccess = (loginResponse: LoginResponse) => {
+    setShowAuthModal(false);
+    const userProfile = loginResponse.user;
+    if (userProfile && userProfile.user_type) {
+      navigate('/dashboard');
+    } else {
+      navigate('/profile');
     }
   };
 
@@ -114,6 +125,7 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
          <AuthModal 
            isOpen={showAuthModal}
            onClose={() => setShowAuthModal(false)}
+           onLoginSuccess={handleLoginSuccess}
          />
       )}
     </nav>

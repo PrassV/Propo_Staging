@@ -3,15 +3,28 @@ import LoginForm from './LoginForm';
 import SignupForm from './SignupForm';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { LoginResponse, UserProfile } from '@/api/types';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLoginSuccess: (loginResponse: LoginResponse) => void;
 }
 
-const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+const AuthModal = ({ isOpen, onClose, onLoginSuccess }: AuthModalProps) => {
   const [isLogin, setIsLogin] = useState(true);
   const { user, logoutUser } = useAuth();
+
+  const handleSignupSuccess = (userProfile: UserProfile) => {
+    const dummyLoginResponse: LoginResponse = {
+      access_token: 'dummy-token-after-signup',
+      refresh_token: 'dummy-refresh',
+      token_type: 'bearer',
+      expires_in: 0,
+      user: userProfile
+    };
+    onLoginSuccess(dummyLoginResponse);
+  };
 
   if (!isOpen) return null;
 
@@ -60,7 +73,10 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           {isLogin ? 'Welcome Back' : 'Create Account'}
         </h2>
 
-        {isLogin ? <LoginForm onSuccess={onClose} /> : <SignupForm onSuccess={onClose} />}
+        {isLogin ? 
+          <LoginForm onSuccess={onLoginSuccess} /> : 
+          <SignupForm onSuccess={handleSignupSuccess} />
+        }
 
         <div className="mt-6 text-center">
           <button 

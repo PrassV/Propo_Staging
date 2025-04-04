@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Mail, Lock } from 'lucide-react';
 import InputField from './InputField';
-import { handleLogin } from '../../utils/auth';
+import { handleLogin } from '@/utils/auth';
 import toast from 'react-hot-toast';
+import { LoginResponse } from '@/api/types';
 
 interface LoginFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (loginResponse: LoginResponse) => void;
 }
 
 const LoginForm = ({ onSuccess }: LoginFormProps) => {
@@ -21,8 +22,8 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
     
     const result = await handleLogin(formData);
     
-    if (result.success && onSuccess) {
-      onSuccess();
+    if (result.success && result.data && onSuccess) {
+      onSuccess(result.data as LoginResponse);
     }
     
     setLoading(false);
