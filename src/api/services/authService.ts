@@ -22,8 +22,18 @@ export const register = async (userData: {
   phone?: string;
   user_type: 'owner' | 'tenant';
 }): Promise<UserProfile> => {
-  const response = await apiClient.post<ApiResponse<{ user: UserProfile }>>('/auth/register', userData);
-  return response.data.data.user;
+  // The actual response structure matches LoginResponse
+  const response = await apiClient.post<LoginResponse>('/auth/register', userData);
+  
+  // Store tokens exactly like we do in the login function
+  if (response.data.access_token) {
+    storeToken(response.data.access_token);
+    if (response.data.refresh_token) {
+      storeRefreshToken(response.data.refresh_token);
+    }
+  }
+  
+  return response.data.user;
 };
 
 // Get current user profile

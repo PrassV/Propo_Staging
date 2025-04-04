@@ -28,20 +28,30 @@ const SignupForm = ({ onSuccess }: SignupFormProps) => {
     }
     setLoading(true);
     
-    const result = await handleSignup({
-      first_name: formData.first_name,
-      last_name: formData.last_name,
-      email: formData.email,
-      phone: formData.phone,
-      password: formData.password,
-      user_type: formData.user_type,
-    });
-    
-    if (result.success && result.data && onSuccess) {
-      onSuccess(result.data as UserProfile);
+    try {
+      const result = await handleSignup({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        user_type: formData.user_type,
+      });
+      
+      if (result.success && result.data) {
+        // Call the onSuccess callback if provided
+        if (onSuccess) {
+          onSuccess(result.data as UserProfile);
+        } else {
+          // If no callback provided, redirect to dashboard
+          window.location.href = '/dashboard';
+        }
+      }
+    } catch (error) {
+      console.error('Error during signup:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
