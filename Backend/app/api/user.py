@@ -14,7 +14,7 @@ router = APIRouter(
 )
 
 @router.get("/me")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get current user information"""
     return current_user
 
@@ -122,16 +122,19 @@ async def update_current_user_profile(update_data: Dict[str, Any] = Body(...), c
 @router.get("/{user_id}")
 async def get_user_info(
     user_id: str = Path(..., description="The user ID"),
-    current_user: User = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get information for a specific user (for admin use)"""
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
 
-    if current_user.id != user_id and getattr(current_user, 'role', None) != "admin":
+    user_type = current_user.get("user_type") if isinstance(current_user, dict) else getattr(current_user, "user_type", None)
+    current_user_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    
+    if current_user_id != user_id and user_type != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this user's information")
     
-    if current_user.id == user_id or getattr(current_user, 'role', None) == "admin":
+    if current_user_id == user_id or user_type == "admin":
         requested_user = user_service.get_user_profile(user_id)
         if not requested_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested user profile not found")

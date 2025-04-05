@@ -263,57 +263,59 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
     Returns:
         JSON with user information
     """
-    # Add explicit logging for debugging
-    logger.debug(f"GET /me called, current_user data: {current_user}")
-    
-    # Extract user_id to fetch the full profile if user_type is missing
+    # Extract user_id to fetch the full profile
     user_id = None
     if isinstance(current_user, dict):
         user_id = current_user.get("id")
     elif hasattr(current_user, "id"):
         user_id = current_user.id
     
-    # If user_type is missing but we have user_id, try to fetch the full profile explicitly
-    if user_id and not (current_user.get("user_type") if isinstance(current_user, dict) else getattr(current_user, "user_type", None)):
-        logger.info(f"User type missing in /me response, fetching full profile for user {user_id}")
+    # Always fetch fresh profile data directly from the database
+    if user_id:
         try:
             from app.services import user_service
             profile_data = user_service.get_user_profile(user_id)
             
             if profile_data:
-                logger.info(f"Full profile fetched for user {user_id}: {profile_data}")
+                logger.info(f"Profile data fetched for user {user_id}")
                 
-                # If current_user is a dict, update it directly
-                if isinstance(current_user, dict):
-                    # Add missing fields
-                    for key, value in profile_data.items():
-                        if key not in current_user or current_user[key] is None:
-                            current_user[key] = value
-                    
-                    # Construct full_name if missing but first_name and last_name exist
-                    if not current_user.get("full_name") and current_user.get("first_name") and current_user.get("last_name"):
-                        current_user["full_name"] = f"{current_user['first_name']} {current_user['last_name']}"
-                else:
-                    # If current_user is an object, we need to handle it differently
-                    # For simplicity, convert to dict
-                    current_user_dict = {}
-                    for key in dir(current_user):
-                        if not key.startswith("_") and key not in ["model_config", "model_fields"]:
-                            current_user_dict[key] = getattr(current_user, key)
-                    
-                    # Update with profile data
-                    for key, value in profile_data.items():
-                        if key not in current_user_dict or current_user_dict[key] is None:
-                            current_user_dict[key] = value
-                    
-                    # Handle full_name and role mapping
-                    if not current_user_dict.get("full_name") and current_user_dict.get("first_name") and current_user_dict.get("last_name"):
-                        current_user_dict["full_name"] = f"{current_user_dict['first_name']} {current_user_dict['last_name']}"
-                    
-                    current_user = current_user_dict
+                # Create a clean response with only the fields that exist in the database
+                # plus any derived fields we need
+                response = {
+                    "id": user_id,
+                    "email": profile_data.get("email"),
+                    "user_type": profile_data.get("user_type"),
+                    "first_name": profile_data.get("first_name"),
+                    "last_name": profile_data.get("last_name"),
+                    "phone": profile_data.get("phone"),
+                    "created_at": profile_data.get("created_at"),
+                    "updated_at": profile_data.get("updated_at"),
+                    # Include is_active from JWT validation
+                    "is_active": True
+                }
+                
+                # Add derived fields
+                if response["first_name"] and response["last_name"]:
+                    response["full_name"] = f"{response['first_name']} {response['last_name']}"
+                
+                # For frontend compatibility, provide role=user_type
+                if response["user_type"]:
+                    response["role"] = response["user_type"]
+                
+                return response
+            else:
+                logger.warning(f"No profile found for user {user_id}")
+                # Return minimal data from JWT
+                return {
+                    "id": user_id,
+                    "email": current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None),
+                    "is_active": True
+                }
         except Exception as e:
-            logger.error(f"Error fetching full profile in /me endpoint: {e}")
+            logger.error(f"Error fetching profile data: {e}")
+            # Fall back to current_user if profile fetch fails
     
+    # If we couldn't fetch profile or there was an error, return current_user
     return current_user
 
 @router.put("/profile", response_model=Dict[str, Any])
