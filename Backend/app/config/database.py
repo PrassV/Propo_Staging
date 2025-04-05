@@ -23,6 +23,18 @@ try:
     # Use standard client creation
     supabase_client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     logger.info("Successfully initialized GLOBAL Supabase client (v2)")
+    
+    # Service role client for admin operations (bypasses RLS)
+    if settings.SUPABASE_SERVICE_ROLE_KEY:
+        supabase_service_role_client: Client = create_client(
+            settings.SUPABASE_URL, 
+            settings.SUPABASE_SERVICE_ROLE_KEY
+        )
+        logger.info("Successfully initialized SERVICE ROLE Supabase client (bypasses RLS)")
+    else:
+        logger.warning("SUPABASE_SERVICE_ROLE_KEY not set - using regular client as fallback")
+        supabase_service_role_client = supabase_client
+        
 except ValueError as ve:
     logger.critical(f"Configuration error: {str(ve)}")
     raise
