@@ -5,12 +5,18 @@ import { UserProfile } from '@/api/types';
 import api from '@/api';
 
 export function useProfile() {
-  const { initialized } = useAuth();
+  const { user, initialized } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async () => {
+    if (!user) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     try {
@@ -37,13 +43,14 @@ export function useProfile() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (initialized) {
+      console.log('[useProfile useEffect] Triggering fetchProfile. Initialized:', initialized, 'User available:', !!user);
       fetchProfile();
     }
-  }, [initialized, fetchProfile]);
+  }, [initialized, user, fetchProfile]);
 
   const refetch = useCallback(() => {
     return fetchProfile();
