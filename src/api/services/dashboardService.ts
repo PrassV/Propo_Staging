@@ -8,6 +8,14 @@ export const getDashboardSummary = async (): Promise<DashboardSummary> => {
   return response.data;
 };
 
+// Get revenue data for charts
+export const getRevenueData = async (months: number = 6): Promise<Array<{month: string, amount: number}>> => {
+  const response = await apiClient.get<Array<{month: string, amount: number}>>('/dashboard/revenue', {
+    params: { months }
+  });
+  return response.data;
+};
+
 // Backend response type for /data endpoint
 interface DashboardDataResponse {
   data: DashboardData;

@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../hooks/useProfile';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import DashboardSummaryCards from '../../components/dashboard/DashboardSummary';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../api';
 import { DashboardSummary } from '../../api/types';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/alert';
@@ -15,6 +16,7 @@ export default function DashboardPage() {
   const { profile, loading: profileLoading } = useProfile();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+  const [revenueData, setRevenueData] = useState<Array<{month: string, amount: number}>>([]);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -31,8 +33,15 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.dashboard.getDashboardSummary();
-      setDashboardData(data);
+      // Fetch summary data
+      const summaryData = await api.dashboard.getDashboardSummary();
+      setDashboardData(summaryData);
+      
+      // Also fetch revenue data for charts if user is an owner
+      if (profile?.role === 'owner') {
+        const revenueResponse = await api.dashboard.getRevenueData();
+        setRevenueData(revenueResponse);
+      }
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -128,41 +137,100 @@ export default function DashboardPage() {
       {/* Conditional rendering based on ROLE */}
       {profile.role === 'owner' ? (
         // Owner-specific dashboard content
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="col-span-2">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Recent Properties</h2>
-              <Button onClick={() => navigate('/dashboard/properties')}>
-                View All Properties
-              </Button>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Maintenance Requests</h2>
-              <Button onClick={() => navigate('/dashboard/maintenance')}>
-                View All Requests
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="space-y-6">
+          {/* Revenue Chart */}
+          {revenueData && revenueData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Monthly Revenue</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={revenueData}
+                      margin={{
+                        top: 5,
+                        right: 30,
+                        left: 20,
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip 
+                        formatter={(value) => [`$${value}`, 'Revenue']}
+                        labelFormatter={(label) => `Month: ${label}`}
+                      />
+                      <Bar dataKey="amount" fill="#8884d8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Properties and Maintenance Cards */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="col-span-2">
+              <CardContent className="p-6">
+                <h2 className="text-xl font-semibold mb-4">Recent Properties</h2>
+                <Button onClick={() => navigate('/dashboard/properties')}>
+                  View All Properties
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-xl font-semibold mb-4">Maintenance Requests</h2>
+                <Button onClick={() => navigate('/dashboard/maintenance')}>
+                  View All Requests
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       ) : profile.role === 'tenant' ? (
         // Tenant-specific dashboard content
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="col-span-2">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Payment History</h2>
-              <Button variant="outline">View Payments</Button>
-            </CardContent>
-          </Card>
+        <div className="space-y-6">
+          {/* Upcoming Payments Chart or Calendar */}
           <Card>
+            <CardHeader>
+              <CardTitle>Payment Schedule</CardTitle>
+            </CardHeader>
             <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Maintenance</h2>
-              <Button onClick={() => navigate('/dashboard/maintenance')}>
-                Request Maintenance
+              <p className="text-muted-foreground mb-4">
+                Your next payment is due on {dashboardData?.next_due_date ? 
+                  new Date(dashboardData.next_due_date).toLocaleDateString() : 
+                  'Not available'}
+              </p>
+              {/* Add a simple payment schedule display here */}
+              <Button variant="outline" onClick={() => navigate('/dashboard/payments')}>
+                View Payment History
               </Button>
             </CardContent>
           </Card>
+
+          {/* Additional Tenant Cards */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="col-span-2">
+              <CardContent className="p-6">
+                <h2 className="text-xl font-semibold mb-4">Payment History</h2>
+                <Button variant="outline" onClick={() => navigate('/dashboard/payments')}>
+                  View Payments
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-xl font-semibold mb-4">Maintenance</h2>
+                <Button onClick={() => navigate('/dashboard/maintenance')}>
+                  Request Maintenance
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       ) : (
         <p>Dashboard view for role '{profile.role}' is not available.</p>

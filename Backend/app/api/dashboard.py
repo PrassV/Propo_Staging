@@ -27,9 +27,11 @@ class DashboardDataResponse(BaseModel):
 async def get_dashboard_summary(current_user = Depends(get_current_user)):
     """Get dashboard summary data"""
     try:
-        logger.info(f"Fetching dashboard summary for user {current_user['id']}")
+        user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+        logger.info(f"Fetching dashboard summary for user {user_id}")
+        
         # Call the dashboard service to get real data
-        summary = await dashboard_service.get_dashboard_summary(current_user["id"])
+        summary = await dashboard_service.get_dashboard_summary(user_id)
         return summary
     except Exception as e:
         logger.error(f"Error getting dashboard summary: {str(e)}")
@@ -42,8 +44,10 @@ async def get_recent_activities(
 ):
     """Get recent activities for the dashboard"""
     try:
-        logger.info(f"Fetching recent activities for user {current_user['id']}")
-        activities = await dashboard_service.get_recent_activities(current_user["id"], limit)
+        user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+        logger.info(f"Fetching recent activities for user {user_id}")
+        
+        activities = await dashboard_service.get_recent_activities(user_id, limit)
         return activities
     except Exception as e:
         logger.error(f"Error getting recent activities: {str(e)}")
@@ -56,8 +60,10 @@ async def get_revenue_data(
 ):
     """Get revenue data for the dashboard charts"""
     try:
-        logger.info(f"Fetching revenue data for user {current_user['id']}")
-        revenue_data = await dashboard_service.get_revenue_data(current_user["id"], months)
+        user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+        logger.info(f"Fetching revenue data for user {user_id}")
+        
+        revenue_data = await dashboard_service.get_revenue_data(user_id, months)
         return revenue_data
     except Exception as e:
         logger.error(f"Error getting revenue data: {str(e)}")
@@ -66,7 +72,7 @@ async def get_revenue_data(
 @router.get("/data", response_model=DashboardDataResponse)
 async def get_dashboard_data(
     months: int = Query(6, ge=1, le=24, description="Number of months of historical data to retrieve"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """
     Get complete dashboard data for the current user.
@@ -78,7 +84,9 @@ async def get_dashboard_data(
     Returns:
         JSON with complete dashboard data
     """
-    data = await dashboard_service.get_dashboard_data(current_user["id"], months)
+    user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+    
+    data = await dashboard_service.get_dashboard_data(user_id, months)
     
     if not data:
         raise HTTPException(
