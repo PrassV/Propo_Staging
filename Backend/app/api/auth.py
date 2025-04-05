@@ -255,67 +255,25 @@ async def logout(current_user: Dict[str, Any] = Depends(get_current_user)):
 @router.get("/me", response_model=Dict[str, Any])
 async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)):
     """
-    Get current user information.
+    Get current user information directly from the dependency.
+    The get_current_user dependency handles fetching and merging profile data.
     
     Args:
-        current_user: The current authenticated user
+        current_user: The authenticated user data (dict) provided by get_current_user.
         
     Returns:
-        JSON with user information
+        JSON with combined user information (JWT + Profile).
     """
-    # Extract user_id to fetch the full profile
-    user_id = None
-    if isinstance(current_user, dict):
-        user_id = current_user.get("id")
-    elif hasattr(current_user, "id"):
-        user_id = current_user.id
-    
-    # Always fetch fresh profile data directly from the database
-    if user_id:
-        try:
-            from app.services import user_service
-            profile_data = user_service.get_user_profile(user_id)
-            
-            if profile_data:
-                logger.info(f"Profile data fetched for user {user_id}")
-                
-                # Create a clean response with only the fields that exist in the database
-                # plus any derived fields we need
-                response = {
-                    "id": user_id,
-                    "email": profile_data.get("email"),
-                    "user_type": profile_data.get("user_type"),
-                    "first_name": profile_data.get("first_name"),
-                    "last_name": profile_data.get("last_name"),
-                    "phone": profile_data.get("phone"),
-                    "created_at": profile_data.get("created_at"),
-                    "updated_at": profile_data.get("updated_at"),
-                    # Include is_active from JWT validation
-                    "is_active": True
-                }
-                
-                # Add derived fields
-                if response["first_name"] and response["last_name"]:
-                    response["full_name"] = f"{response['first_name']} {response['last_name']}"
-                
-                # For frontend compatibility, provide role=user_type
-                if response["user_type"]:
-                    response["role"] = response["user_type"]
-                
-                return response
-            else:
-                logger.warning(f"No profile found for user {user_id}")
-                # Return minimal data from JWT
-                return {
-                    "id": user_id,
-                    "email": current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None),
-                    "is_active": True
-                }
-        except Exception as e:
-            logger.error(f"Error fetching profile data: {e}")
-            # Fall back to current_user if profile fetch fails
-    
-    # If we couldn't fetch profile or there was an error, return current_user
+    # The get_current_user dependency already fetches and prepares the user data.
+    # No need for additional fetching or processing here.
+    if not current_user:
+         # This case should technically be handled by the dependency itself,
+         # but adding a safeguard.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials or fetch user data."
+        )
+    logger.debug(f"Returning current_user data from dependency: {current_user}")
     return current_user
 
 @router.put("/profile", response_model=Dict[str, Any])

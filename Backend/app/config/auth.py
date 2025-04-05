@@ -13,12 +13,10 @@ logger = logging.getLogger(__name__)
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[Dict[str, Any]]:
     """
     Validate JWT token, fetch the user's profile from the DB, and return current user object.
-    
-    Changed return type from User model to Dict for better serialization control.
+    Ensures profile fields are present (even if null) and maps user_type to role.
     """
     try:
         token = credentials.credentials
-        # Verify the JWT token using the Supabase JWT secret
         payload = jwt.decode(
             token,
             settings.SUPABASE_JWT_SECRET,
@@ -26,7 +24,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             audience="authenticated"
         )
         
-        # Extract user information from the token
         user_id = payload.get("sub")
         email = payload.get("email")
         
@@ -36,40 +33,71 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 detail="Invalid authentication token: User ID (sub) missing",
             )
             
-        # Fetch profile data from the database using user_service
         profile_data = user_service.get_user_profile(user_id)
         
-        # Create a minimal base user dict with JWT data
+        # Start with base JWT data
         user_dict = {
             "id": user_id,
             "email": email,
-            "is_active": True
+            "is_active": True,
+            # Initialize expected profile fields to None
+            "first_name": None,
+            "last_name": None,
+            "full_name": None,
+            "phone": None,
+            "user_type": None,
+            "role": None, # Frontend expects role
+            "created_at": None,
+            "updated_at": None,
+            "address_line1": None, # Add address fields, even if not in DB yet
+            "address_line2": None,
+            "city": None,
+            "state": None,
+            "pincode": None,
         }
         
-        # Add profile data if available
+        # Populate with profile data if found
         if profile_data:
             logger.debug(f"Profile found for user {user_id}")
+            user_dict.update({
+                "first_name": profile_data.get("first_name"),
+                "last_name": profile_data.get("last_name"),
+                "phone": profile_data.get("phone"),
+                "user_type": profile_data.get("user_type"),
+                "created_at": profile_data.get("created_at"),
+                "updated_at": profile_data.get("updated_at"),
+                # Explicitly get address fields if they exist in profile_data
+                "address_line1": profile_data.get("address_line1"),
+                "address_line2": profile_data.get("address_line2"),
+                "city": profile_data.get("city"),
+                "state": profile_data.get("state"),
+                "pincode": profile_data.get("pincode"),
+            })
             
-            # Add all profile fields to the user dict
-            for key, value in profile_data.items():
-                if value is not None:  # Only add non-null values
-                    user_dict[key] = value
-            
-            # Add derived fields
-            if profile_data.get("first_name") and profile_data.get("last_name"):
-                user_dict["full_name"] = f"{profile_data['first_name']} {profile_data['last_name']}"
+            # Construct full_name
+            if user_dict["first_name"] and user_dict["last_name"]:
+                user_dict["full_name"] = f"{user_dict['first_name']} {user_dict['last_name']}"
+            elif user_dict["first_name"]:
+                 user_dict["full_name"] = user_dict["first_name"]
+
+            # Map user_type to role for frontend compatibility
+            if user_dict["user_type"]:
+                user_dict["role"] = user_dict["user_type"]
+                
         else:
-            logger.warning(f"Profile not found for user {user_id}")
+            logger.warning(f"Profile not found for user {user_id}. Returning JWT data with null profile fields.")
         
         return user_dict
         
     except JWTError as e:
+        logger.error(f"JWT Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
         )
     except Exception as e:
+        logger.error(f"Error in get_current_user: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail=f"Could not process authentication: {str(e)}",
         ) 
