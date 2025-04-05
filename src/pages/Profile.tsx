@@ -19,6 +19,7 @@ export default function Profile() {
   // const { user } = useAuth();
   const { profile, loading, refetch } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   // Automatically enter edit mode if role is missing after loading
   useEffect(() => {
@@ -26,6 +27,17 @@ export default function Profile() {
       setIsEditing(true);
     }
   }, [loading, profile]);
+
+  // Redirect to dashboard if we're in the process of redirecting
+  useEffect(() => {
+    if (redirecting) {
+      const timer = setTimeout(() => {
+        navigate('/dashboard');
+      }, 1500); // Short delay to allow toast to be seen
+      
+      return () => clearTimeout(timer);
+    }
+  }, [redirecting, navigate]);
 
   if (loading) return <LoadingSpinner />;
   if (!profile) return <div className="p-6">Error loading profile data.</div>;
@@ -61,6 +73,12 @@ export default function Profile() {
       toast.success('Profile updated successfully!');
       setIsEditing(false);
       await refetch();
+      
+      // Check if role was provided and it's a new profile
+      if (formData.role && (!profile.role || profile.role !== formData.role)) {
+        toast.success('Profile completed! Redirecting to dashboard...');
+        setRedirecting(true);
+      }
     } catch (error) {
       console.error("Failed to update profile:", error);
       toast.dismiss();

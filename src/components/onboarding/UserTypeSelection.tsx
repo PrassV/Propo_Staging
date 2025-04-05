@@ -1,8 +1,9 @@
 import { Building, User } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { updateUserProfile } from '../../api/services/userService';
+import api from '../../api';
 
 interface UserTypeSelectionProps {
   onSelect: (type: 'owner' | 'tenant') => void;
@@ -11,16 +12,31 @@ interface UserTypeSelectionProps {
 const UserTypeSelection = ({ onSelect }: UserTypeSelectionProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSelection = async (type: 'owner' | 'tenant') => {
     if (!user) return;
     setLoading(true);
+    
+    toast.loading('Setting up your profile...');
 
     try {
-      await updateUserProfile({ user_type: type });
+      // Use auth service to update profile with role
+      await api.auth.updateUserProfile({ role: type });
+      toast.dismiss();
+      toast.success('Profile updated successfully!');
+      
+      // First call the onSelect callback
       onSelect(type);
+      
+      // Then navigate to dashboard after a short delay
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
     } catch (error: unknown) {
       console.error('Error setting user type:', error);
+      toast.dismiss();
+      
       let errorMessage = 'Failed to set user type. Please try again.';
       if (error && typeof error === 'object' && 'response' in error && 
           error.response && typeof error.response === 'object' && 'data' in error.response &&
