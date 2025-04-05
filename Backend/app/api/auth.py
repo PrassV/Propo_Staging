@@ -266,16 +266,16 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
     # Add explicit logging for debugging
     logger.debug(f"GET /me called, current_user data: {current_user}")
     
-    # Extract user_id to fetch the full profile if role is missing
+    # Extract user_id to fetch the full profile if user_type is missing
     user_id = None
     if isinstance(current_user, dict):
         user_id = current_user.get("id")
     elif hasattr(current_user, "id"):
         user_id = current_user.id
     
-    # If role is missing but we have user_id, try to fetch the full profile explicitly
-    if user_id and not (current_user.get("role") if isinstance(current_user, dict) else getattr(current_user, "role", None)):
-        logger.info(f"Role missing in /me response, fetching full profile for user {user_id}")
+    # If user_type is missing but we have user_id, try to fetch the full profile explicitly
+    if user_id and not (current_user.get("user_type") if isinstance(current_user, dict) else getattr(current_user, "user_type", None)):
+        logger.info(f"User type missing in /me response, fetching full profile for user {user_id}")
         try:
             from app.services import user_service
             profile_data = user_service.get_user_profile(user_id)
@@ -293,10 +293,6 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
                     # Construct full_name if missing but first_name and last_name exist
                     if not current_user.get("full_name") and current_user.get("first_name") and current_user.get("last_name"):
                         current_user["full_name"] = f"{current_user['first_name']} {current_user['last_name']}"
-                    
-                    # Map user_type to role if role is missing but user_type exists
-                    if not current_user.get("role") and current_user.get("user_type"):
-                        current_user["role"] = current_user["user_type"]
                 else:
                     # If current_user is an object, we need to handle it differently
                     # For simplicity, convert to dict
@@ -313,9 +309,6 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
                     # Handle full_name and role mapping
                     if not current_user_dict.get("full_name") and current_user_dict.get("first_name") and current_user_dict.get("last_name"):
                         current_user_dict["full_name"] = f"{current_user_dict['first_name']} {current_user_dict['last_name']}"
-                    
-                    if not current_user_dict.get("role") and current_user_dict.get("user_type"):
-                        current_user_dict["role"] = current_user_dict["user_type"]
                     
                     current_user = current_user_dict
         except Exception as e:
@@ -382,8 +375,13 @@ async def update_profile(update_data: Dict[str, Any] = Body(...), current_user: 
         "city": update_data.get("city"),
         "state": update_data.get("state"),
         "pincode": update_data.get("pincode"),
-        "role": update_data.get("role"),
+        "user_type": update_data.get("user_type"),
     }
+    
+    # If role is passed from frontend, use it for user_type
+    if update_data.get("role") and not safe_update_data.get("user_type"):
+        safe_update_data["user_type"] = update_data.get("role")
+        logger.info(f"Converting role to user_type: {safe_update_data['user_type']}")
     
     # Remove None values to avoid overwriting existing data with None
     safe_update_data = {k: v for k, v in safe_update_data.items() if v is not None}

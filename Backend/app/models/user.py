@@ -13,7 +13,6 @@ class User(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[str] = None
     user_type: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -31,10 +30,7 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
-    # Add role and user_type fields which are crucial for profile completion
-    role: Optional[str] = None
     user_type: Optional[str] = None
-    # Use correct column names with underscores
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None

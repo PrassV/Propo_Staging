@@ -1,5 +1,5 @@
-from typing import Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from typing import Dict, List, Any
+from fastapi import APIRouter, Depends, HTTPException, Path, status, Body
 from app.config.auth import get_current_user
 from app.models.user import UserUpdate, User
 from app.services import user_service
@@ -18,78 +18,106 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
 
-@router.put("/me")
-async def update_current_user_profile(
-    update_data: UserUpdate,
-    current_user: User = Depends(get_current_user)
-):
-    """Update the profile for the currently authenticated user."""
+@router.put("/me", response_model=Any)
+async def update_current_user_profile(update_data: Dict[str, Any] = Body(...), current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Update current authenticated user's profile.
+    
+    Args:
+        update_data: The profile data to update
+        current_user: The current authenticated user
+        
+    Returns:
+        Updated user profile
+    """
+    # Get user ID from the token payload
     if not current_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials - User not found")
-
-    # Safely extract user_id
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+    
     user_id = None
-    try:
-        if isinstance(current_user, dict):
-            user_id = current_user.get("id")
-        elif hasattr(current_user, "id"):
-            user_id = current_user.id
-        else:
-            logger.error(f"Couldn't extract ID from current_user type: {type(current_user)}")
-    except Exception as e:
-        logger.error(f"Error extracting user ID: {str(e)}")
+    # Safely extract user_id to avoid serialization issues
+    if isinstance(current_user, dict):
+        user_id = current_user.get("id")
+    elif hasattr(current_user, "id"):
+        user_id = current_user.id
     
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials - User ID missing")
+        logger.error(f"User ID missing in auth token payload")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials - user ID missing"
+        )
+    
+    # Use dict method if available, otherwise manually handle fields
+    update_dict = {}
+    if hasattr(update_data, "dict"):
+        try:
+            update_dict = update_data.dict(exclude_unset=True)
+            logger.info(f"Created update dict using dict() method: {update_dict}")
+        except Exception as e:
+            logger.error(f"Error using dict() method: {e}")
+            update_dict = {}  # Reset and try fallback
+    
+    # Fallback if dict method doesn't work or is not available
+    if not update_dict:
+        fields = ["first_name", "last_name", "phone", "address_line1", "address_line2", 
+                 "city", "state", "pincode", "user_type"]
+        
+        for field in fields:
+            if field in update_data and update_data[field] is not None:
+                update_dict[field] = update_data[field]
+        
+        # If role is passed from frontend, use it for user_type
+        if update_data.get("role") and not update_dict.get("user_type"):
+            update_dict["user_type"] = update_data.get("role")
+            logger.info(f"Converting role to user_type: {update_dict['user_type']}")
+        
+        logger.info(f"Created update dict manually: {update_dict}")
+    
+    # Remove None values
+    update_dict = {k: v for k, v in update_dict.items() if v is not None}
     
     try:
-        # Get only the fields that were actually provided
-        update_dict = {}
-        if hasattr(update_data, "model_dump"):
-            update_dict = update_data.model_dump(exclude_unset=True)
-        elif hasattr(update_data, "dict"):
-            update_dict = update_data.dict(exclude_unset=True)
-        else:
-            # Fallback for when Pydantic model methods aren't available
-            for field in ["first_name", "last_name", "phone", "address_line1", 
-                         "address_line2", "city", "state", "pincode", "role", "user_type"]:
-                if hasattr(update_data, field) and getattr(update_data, field) is not None:
-                    update_dict[field] = getattr(update_data, field)
+        logger.info(f"Attempting to update user profile for user {user_id}")
         
-        logger.info(f"Updating user {user_id} with data: {update_dict}")
+        # Use the user service to update the profile
+        updated_user = user_service.update_user_profile(user_id, UserUpdate(**update_dict))
         
-        updated_user = user_service.update_user_profile(user_id, update_data)
         if not updated_user:
-            logger.error(f"Failed to update profile through service, trying direct DB access")
-            # Try direct upsert as last resort
+            logger.warning(f"Profile update through service failed for user {user_id}, trying direct DB access")
+            # Try direct DB access
             from app.config.database import supabase_client
-            try:
-                # Prepare insert data
-                insert_data = {"id": user_id, **update_dict}
-                # Try direct upsert
-                upsert_response = supabase_client.table("profiles").upsert(insert_data).execute()
-                
-                if upsert_response and hasattr(upsert_response, 'data') and upsert_response.data:
-                    logger.info(f"Direct upsert successful: {upsert_response.data}")
-                    updated_user = upsert_response.data[0] if isinstance(upsert_response.data, list) else upsert_response.data
-                else:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed")
-            except Exception as direct_error:
-                logger.error(f"Direct upsert failed: {direct_error}")
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found or update failed after all attempts")
+            insert_data = {"id": user_id, **update_dict}
+            upsert_response = supabase_client.table("profiles").upsert(insert_data).execute()
+            
+            if upsert_response and hasattr(upsert_response, 'data') and upsert_response.data:
+                logger.info(f"Direct upsert successful: {upsert_response.data}")
+                updated_user = upsert_response.data[0] if isinstance(upsert_response.data, list) else upsert_response.data
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to update user profile"
+                )
         
-        # Clean response to avoid serialization issues
+        # Clean the response to avoid serialization issues
         clean_response = {
             "id": user_id,
             **{k: v for k, v in update_dict.items() if v is not None}
         }
         
         return clean_response
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating profile for user {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update profile")
+        logger.error(f"Error updating profile in user router: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+        )
 
 @router.get("/{user_id}")
 async def get_user_info(
