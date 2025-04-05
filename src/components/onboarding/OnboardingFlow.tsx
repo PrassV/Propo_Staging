@@ -18,7 +18,7 @@ const OnboardingFlow = () => {
 
   useEffect(() => {
     // If user has a complete profile, redirect to dashboard
-    if (profile?.first_name && profile?.last_name) {
+    if (profile?.first_name && profile?.last_name && profile?.role) {
       navigate('/dashboard');
     }
   }, [profile, navigate]);
@@ -34,7 +34,7 @@ const OnboardingFlow = () => {
   }
 
   // If user has a complete profile, don't render anything as they'll be redirected
-  if (profile?.first_name && profile?.last_name) {
+  if (profile?.first_name && profile?.last_name && profile?.role) {
     return null;
   }
 
@@ -44,10 +44,10 @@ const OnboardingFlow = () => {
   }
 
   // Show type selection if no user type or explicitly showing selection
-  if (showTypeSelection || !profile?.user_type) {
+  if (showTypeSelection || !profile?.role) {
     return (
       <UserTypeSelection 
-        onSelect={(type) => {
+        onSelect={(userType) => {
           setShowTypeSelection(false);
           // Force reload profile after type selection
           window.location.reload();
@@ -56,21 +56,21 @@ const OnboardingFlow = () => {
     );
   }
 
-  // Show the appropriate form based on user type
+  // Show the appropriate onboarding form based on user role
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="mx-auto max-w-4xl p-6">
       <UserTypeSwitch 
-        currentType={profile.user_type} 
-        onSwitch={() => setShowTypeSelection(true)} 
+        currentType={profile.role as 'owner' | 'tenant' | null}
+        onSwitch={() => setShowTypeSelection(true)}
       />
       
-      {profile.user_type === 'owner' ? (
+      {profile.role === 'owner' ? (
         <OwnerOnboardingForm />
       ) : (
         <TenantOnboardingForm />
       )}
     </div>
   );
-};
+}
 
 export default OnboardingFlow;

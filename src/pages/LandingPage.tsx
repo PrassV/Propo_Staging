@@ -20,13 +20,19 @@ export default function LandingPage() {
     );
   }
 
-  // If user is logged in and has profile, redirect to dashboard
-  if (user && profile?.first_name) {
+  // Check if profile is complete (name and role set)
+  const isProfileComplete = profile && 
+                           profile.first_name && 
+                           profile.last_name && 
+                           profile.role;
+
+  // If user is logged in and has complete profile, redirect to dashboard
+  if (user && isProfileComplete) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // If user is logged in but no profile, redirect to onboarding
-  if (user && !profile?.first_name) {
+  // If user is logged in but no complete profile, redirect to onboarding
+  if (user && !isProfileComplete) {
     return <Navigate to="/onboarding" replace />;
   }
 

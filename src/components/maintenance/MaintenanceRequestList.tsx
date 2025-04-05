@@ -7,6 +7,7 @@ import { MaintenanceRequest } from '../../api/services/maintenanceService';
 
 interface MaintenanceRequestListProps {
   propertyId?: string;
+  userType?: 'owner' | 'tenant' | 'admin' | null;
 }
 
 // Define an interface for the transformed request that matches what RequestCard expects
@@ -26,7 +27,7 @@ interface TransformedRequest {
   };
 }
 
-export default function MaintenanceRequestList({ propertyId }: MaintenanceRequestListProps) {
+export default function MaintenanceRequestList({ propertyId, userType }: MaintenanceRequestListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     status: 'all',

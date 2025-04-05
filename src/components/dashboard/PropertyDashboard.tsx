@@ -14,6 +14,6 @@ export default function PropertyDashboard() {
     return null;
   }
 
-  // Show different dashboard based on user type
-  return profile.user_type === 'owner' ? <OwnerDashboard /> : <TenantDashboard />;
+  // Show different dashboard based on user role
+  return profile.role === 'owner' ? <OwnerDashboard /> : <TenantDashboard />;
 }
