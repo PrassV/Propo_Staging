@@ -15,6 +15,12 @@ export function useProfile() {
     setError(null);
     try {
       const fetchedProfile = await api.auth.getCurrentUser();
+      
+      // Map user_type to role if it exists
+      if (fetchedProfile && 'user_type' in fetchedProfile && !fetchedProfile.role) {
+        fetchedProfile.role = fetchedProfile.user_type as 'owner' | 'tenant' | 'admin' | null;
+      }
+      
       setProfile(fetchedProfile);
     } catch (err: unknown) {
       console.error('Profile fetch error:', err);
@@ -44,7 +50,19 @@ export function useProfile() {
     setLoading(true);
     setError(null);
     try {
-      const updatedProfile = await api.auth.updateUserProfile(updateData);
+      // Map role to user_type for the API
+      const apiUpdateData = { ...updateData };
+      if ('role' in apiUpdateData && apiUpdateData.role) {
+        apiUpdateData.user_type = apiUpdateData.role;
+      }
+      
+      const updatedProfile = await api.auth.updateUserProfile(apiUpdateData);
+      
+      // Map user_type to role in the response
+      if (updatedProfile && 'user_type' in updatedProfile && !updatedProfile.role) {
+        updatedProfile.role = updatedProfile.user_type as 'owner' | 'tenant' | 'admin' | null;
+      }
+      
       setProfile(updatedProfile);
       toast.success('Profile updated successfully!');
       return true;

@@ -37,11 +37,11 @@ export default function RouteGuard({
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  // Check if profile is complete (must have name AND role set)
+  // Check if profile is complete (must have name AND role/user_type set)
   const isProfileComplete = profile && 
                            profile.first_name && 
                            profile.last_name && 
-                           profile.role;
+                           (profile.role || profile.user_type);
 
   // Logged in but no complete profile when required
   if (user && requireProfile && !isProfileComplete && location.pathname !== '/onboarding') {

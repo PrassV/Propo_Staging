@@ -21,8 +21,11 @@ const UserTypeSelection = ({ onSelect }: UserTypeSelectionProps) => {
     toast.loading('Setting up your profile...');
 
     try {
-      // Use auth service to update profile with role
-      await api.auth.updateUserProfile({ role: type });
+      // Use auth service to update profile with both role and user_type
+      await api.auth.updateUserProfile({ 
+        role: type,
+        user_type: type 
+      });
       toast.dismiss();
       toast.success('Profile updated successfully!');
       

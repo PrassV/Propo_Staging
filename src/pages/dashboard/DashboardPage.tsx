@@ -38,7 +38,8 @@ export default function DashboardPage() {
       setDashboardData(summaryData);
       
       // Also fetch revenue data for charts if user is an owner
-      if (profile?.role === 'owner') {
+      const userRole = profile?.role || profile?.user_type;
+      if (userRole === 'owner') {
         const revenueResponse = await api.dashboard.getRevenueData();
         setRevenueData(revenueResponse);
       }
@@ -81,8 +82,9 @@ export default function DashboardPage() {
     );
   }
 
-  // Check ROLE instead of user_type
-  if (!profile?.role) {
+  // Check ROLE or USER_TYPE
+  const userRole = profile?.role || profile?.user_type;
+  if (!userRole) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
         <Card className="p-6">
@@ -118,7 +120,7 @@ export default function DashboardPage() {
       {dashboardData ? (
         <DashboardSummaryCards 
           summaryData={dashboardData} 
-          userType={profile.role as 'owner' | 'tenant'}
+          userType={(profile.role || profile.user_type) as 'owner' | 'tenant'}
         />
       ) : (
         <div className="text-center p-4">
@@ -134,8 +136,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Conditional rendering based on ROLE */}
-      {profile.role === 'owner' ? (
+      {/* Conditional rendering based on ROLE or USER_TYPE */}
+      {userRole === 'owner' ? (
         // Owner-specific dashboard content
         <div className="space-y-6">
           {/* Revenue Chart */}
@@ -191,7 +193,7 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
-      ) : profile.role === 'tenant' ? (
+      ) : userRole === 'tenant' ? (
         // Tenant-specific dashboard content
         <div className="space-y-6">
           {/* Upcoming Payments Chart or Calendar */}
@@ -233,7 +235,7 @@ export default function DashboardPage() {
           </div>
         </div>
       ) : (
-        <p>Dashboard view for role '{profile.role}' is not available.</p>
+        <p>Dashboard view for role '{userRole}' is not available.</p>
       )}
     </div>
   );

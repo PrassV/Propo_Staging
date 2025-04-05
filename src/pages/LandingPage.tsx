@@ -20,11 +20,11 @@ export default function LandingPage() {
     );
   }
 
-  // Check if profile is complete (name and role set)
+  // Check if profile is complete (name and role/user_type set)
   const isProfileComplete = profile && 
                            profile.first_name && 
                            profile.last_name && 
-                           profile.role;
+                           (profile.role || profile.user_type);
 
   // If user is logged in and has complete profile, redirect to dashboard
   if (user && isProfileComplete) {
