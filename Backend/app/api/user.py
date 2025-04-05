@@ -51,10 +51,16 @@ async def update_current_user_profile(
             update_dict = update_data.dict(exclude_unset=True)
         else:
             # Fallback for when Pydantic model methods aren't available
-            for field in ["first_name", "last_name", "phone", "address_line1", 
-                         "address_line2", "city", "state", "pincode", "role"]:
+            for field in ["first_name", "last_name", "phone", "address_line_1", 
+                         "address_line_2", "city", "state", "pincode", "role", "user_type"]:
                 if hasattr(update_data, field) and getattr(update_data, field) is not None:
                     update_dict[field] = getattr(update_data, field)
+                    
+            # Also check for legacy field names and map them
+            if hasattr(update_data, "address_line1") and getattr(update_data, "address_line1") is not None:
+                update_dict["address_line_1"] = getattr(update_data, "address_line1")
+            if hasattr(update_data, "address_line2") and getattr(update_data, "address_line2") is not None:
+                update_dict["address_line_2"] = getattr(update_data, "address_line2")
         
         logger.info(f"Updating user {user_id} with data: {update_dict}")
         

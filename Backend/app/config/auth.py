@@ -66,8 +66,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 user_type=profile_data.get("user_type"), # Keep user_type as well
                 created_at=profile_data.get("created_at"),
                 updated_at=profile_data.get("updated_at"),
-                address_line1=profile_data.get("address_line1"),
-                address_line2=profile_data.get("address_line2"),
+                # Use correct column names with underscores
+                address_line_1=profile_data.get("address_line_1"),
+                address_line_2=profile_data.get("address_line_2"),
                 city=profile_data.get("city"),
                 state=profile_data.get("state"),
                 pincode=profile_data.get("pincode"),

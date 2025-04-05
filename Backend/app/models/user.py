@@ -16,8 +16,8 @@ class User(BaseModel):
     user_type: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
@@ -33,9 +33,9 @@ class UserUpdate(BaseModel):
     # Add role and user_type fields which are crucial for profile completion
     role: Optional[str] = None
     user_type: Optional[str] = None
-    # Add address fields which are used in the onboarding forms
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
+    # Use correct column names with underscores
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
