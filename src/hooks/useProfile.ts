@@ -15,13 +15,16 @@ export function useProfile() {
     setError(null);
     try {
       const fetchedProfile = await api.auth.getCurrentUser();
+      console.log('[useProfile] Fetched raw profile:', JSON.stringify(fetchedProfile));
       
       // Map user_type to role if it exists
       if (fetchedProfile && 'user_type' in fetchedProfile && !fetchedProfile.role) {
+        console.log('[useProfile] Mapping user_type to role:', fetchedProfile.user_type);
         fetchedProfile.role = fetchedProfile.user_type as 'owner' | 'tenant' | 'admin' | null;
       }
       
       setProfile(fetchedProfile);
+      console.log('[useProfile] Set profile state:', JSON.stringify(fetchedProfile));
     } catch (err: unknown) {
       console.error('Profile fetch error:', err);
       let errorMessage = 'Failed to fetch profile';
