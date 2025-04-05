@@ -324,10 +324,7 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
     return current_user
 
 @router.put("/profile", response_model=Dict[str, Any])
-async def update_profile(
-    update_data: Dict[str, Any] = Body(...),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
+async def update_profile(update_data: Dict[str, Any] = Body(...), current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Update user profile endpoint for compatibility with frontend.
     Forwards the request to the user service.
@@ -380,9 +377,8 @@ async def update_profile(
         "first_name": update_data.get("first_name"),
         "last_name": update_data.get("last_name"),
         "phone": update_data.get("phone"),
-        # Use the correct column names for address fields - with underscores
-        "address_line_1": update_data.get("address_line_1") or update_data.get("address_line1"),
-        "address_line_2": update_data.get("address_line_2") or update_data.get("address_line2"),
+        "address_line1": update_data.get("address_line1"),
+        "address_line2": update_data.get("address_line2"),
         "city": update_data.get("city"),
         "state": update_data.get("state"),
         "pincode": update_data.get("pincode"),

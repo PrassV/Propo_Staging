@@ -1,12 +1,13 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+from uuid import UUID
 
 class User(BaseModel):
     """
     User model for authentication and user management
     """
-    id: str
-    email: EmailStr
+    id: Optional[UUID] = None
+    email: Optional[EmailStr] = None
     is_active: bool = True
     full_name: Optional[str] = None
     first_name: Optional[str] = None
@@ -16,8 +17,8 @@ class User(BaseModel):
     user_type: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-    address_line_1: Optional[str] = None
-    address_line_2: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
@@ -34,8 +35,8 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     user_type: Optional[str] = None
     # Use correct column names with underscores
-    address_line_1: Optional[str] = None
-    address_line_2: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
