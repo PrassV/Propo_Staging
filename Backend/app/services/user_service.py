@@ -50,13 +50,40 @@ def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]
 
 def get_user_profile(user_id: str) -> Optional[Dict]:
     """Fetch user profile data by user ID."""
+    logger.info(f"Attempting to fetch profile for user_id: {user_id}")
     try:
         supabase = supabase_client
-        # Using V2 API
-        response = supabase.table("profiles").select("*").eq("id", user_id).single()
-        logger.debug(f"Supabase get_user_profile response received for {user_id}")
-        # Extract just the data, don't return the response object
-        return response.data if hasattr(response, 'data') else None
+        logger.debug(f"Using supabase client: {type(supabase)}")
+        
+        # Execute the query
+        response = supabase.table("profiles").select("*", count='exact').eq("id", user_id).execute()
+        
+        # Log the raw response
+        logger.info(f"Raw Supabase response for user {user_id}: {response}")
+        
+        # Check for data and count
+        data = None
+        count = 0
+        if hasattr(response, 'data'):
+            data = response.data
+            logger.info(f"Response data type: {type(data)}, content: {data}")
+        if hasattr(response, 'count'):
+            count = response.count
+            logger.info(f"Response count: {count}")
+
+        # Determine result based on data and count
+        if data and isinstance(data, list) and len(data) > 0:
+            profile = data[0]
+            logger.info(f"Profile found for user {user_id}: {profile}")
+            return profile
+        elif count == 0:
+            logger.warning(f"No profile found in DB for user {user_id} (count is 0).")
+            return None
+        else:
+            # This case might indicate an issue with the response structure
+            logger.warning(f"Profile data for user {user_id} is empty or not in expected list format, but count is {count}. Raw data: {data}")
+            return None
+            
     except Exception as e:
         logger.error(f"Error fetching profile for user {user_id}: {e}", exc_info=True)
         return None
