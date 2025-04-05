@@ -9,7 +9,18 @@ class User(BaseModel):
     email: EmailStr
     is_active: bool = True
     full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
     role: Optional[str] = None
+    user_type: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -19,12 +30,15 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
-    # Add address fields if they are stored in the user profile table
-    # address_line1: Optional[str] = None
-    # address_line2: Optional[str] = None
-    # city: Optional[str] = None
-    # state: Optional[str] = None
-    # pincode: Optional[str] = None
+    # Add role and user_type fields which are crucial for profile completion
+    role: Optional[str] = None
+    user_type: Optional[str] = None
+    # Add address fields which are used in the onboarding forms
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
     class Config:
         from_attributes = True 

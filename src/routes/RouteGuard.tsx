@@ -50,15 +50,14 @@ export default function RouteGuard({
 
   // Check if profile is complete (must have name AND role/user_type set)
   const isProfileComplete = profile && 
-                           profile.first_name && 
-                           profile.last_name && 
+                           profile.full_name &&
                            (profile.role || profile.user_type);
 
-  console.log('[RouteGuard] isProfileComplete result:', isProfileComplete); // Log the result
+  console.log('[RouteGuard] isProfileComplete result:', isProfileComplete, 'Checked full_name:', profile?.full_name, 'Checked role:', profile?.role, 'Checked user_type:', profile?.user_type);
 
   // Logged in but no complete profile when required
   if (user && requireProfile && !isProfileComplete && location.pathname !== '/onboarding') {
-    console.log('[RouteGuard] Redirecting to /onboarding because profile is incomplete.'); // Log redirect reason
+    console.log('[RouteGuard] Redirecting to /onboarding because profile is incomplete.');
     return <Navigate to="/onboarding" replace />;
   }
 
