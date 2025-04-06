@@ -79,7 +79,7 @@ export const getPropertyById = async (id: string): Promise<PropertyDetails> => {
  */
 export const createProperty = async (data: PropertyCreate): Promise<Property> => {
     try {
-        const response = await apiClient.post<Property>('/properties', data);
+        const response = await apiClient.post<Property>('/properties/', data);
         return response.data;
     } catch (error: unknown) {
         console.error("Error creating property:", error);
