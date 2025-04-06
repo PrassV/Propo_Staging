@@ -112,24 +112,30 @@ async def get_property(
 @router.post("/", response_model=Property, status_code=status.HTTP_201_CREATED)
 async def create_property(
     property_data: PropertyCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """Create a new property."""
+    user_id = current_user.get("id") if current_user else None
+    if not user_id:
+        # Handle case where user_id might be missing or current_user is None
+        logging.error("User ID not found in current_user for create_property")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user data")
+
     try:
         created_property = await property_service.create_property(
             db_client=db_client,
             property_data=property_data, 
-            owner_id=current_user.id
+            owner_id=user_id
         )
         if not created_property:
             # It might be useful to log why creation failed if None was returned
-            logging.warning(f"property_service.create_property returned None for owner {current_user.id}")
+            logging.warning(f"property_service.create_property returned None for owner {user_id}")
             raise HTTPException(status_code=500, detail="Failed to create property")
         return created_property
     except Exception as e:
         # Log the exception details with traceback
-        logging.error(f"Error in create_property for owner {current_user.id}: {str(e)}", exc_info=True)
+        logging.error(f"Error in create_property for owner {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating property: {str(e)}")
 
 @router.put("/{property_id}", response_model=Property)

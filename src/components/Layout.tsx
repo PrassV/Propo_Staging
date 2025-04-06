@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
@@ -7,7 +7,6 @@ import { usePropertyDialog } from '../contexts/PropertyDialogContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PropertyForm from './property/PropertyForm';
 import api from '@/api';
-import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
 import { PropertyFormData } from '@/api/types';
 
@@ -25,13 +24,6 @@ export default function Layout({ children }: LayoutProps) {
     closeDialog: closePropertyDialog,
     onSuccessCallback,
   } = usePropertyDialog();
-  
-  // --- TEMPORARY RUNTIME ALERT --- 
-  useEffect(() => {
-    // Use alert for debugging - REMOVE AFTER TESTING!
-    alert('[RUNTIME_ALERT] apiClient baseURL: ' + apiClient.defaults.baseURL);
-  }, []);
-  // --- END TEMPORARY RUNTIME ALERT ---
   
   // Don't show layout on auth pages and landing page
   const isAuthPage = location.pathname.startsWith('/invite/');
