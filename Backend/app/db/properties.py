@@ -180,7 +180,7 @@ async def create_property(db_client: Client, property_data: Dict[str, Any]) -> O
             'create_my_property',
             {'propert_data_arg': rpc_data}
         )
-        response = await rpc_query.execute() # Execute the query first
+        response = rpc_query.execute() # Execute the query first (Removed await)
         
         # --- Detailed Response Logging (Now correctly placed) --- 
         logger.info(f"[DEBUG] RPC Call Successful. Response Type: {type(response)}") 
