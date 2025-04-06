@@ -183,7 +183,7 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
 
 /**
  * Upload property images
- * Calls POST /upload endpoint for image files
+ * Calls POST /uploads endpoint for image files
  */
 export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls: string[] }> => {
     try {
@@ -192,7 +192,7 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls:
             formData.append(`file${index}`, file);
         });
         
-        const response = await apiClient.post<{ imageUrls: string[] }>('/upload', formData, {
+        const response = await apiClient.post<{ imageUrls: string[] }>('/uploads', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
