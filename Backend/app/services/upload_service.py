@@ -32,18 +32,35 @@ async def handle_upload(
 ) -> str:
     """
     Handles file upload to Supabase Storage using the service role key.
+    Selects the bucket based on the provided context.
     Constructs a path based on context, user_id, related_id, and a unique filename.
     Returns the public URL of the uploaded file.
     """
     try:
-        # Use the service role client for storage operations
         storage_client = get_supabase_service_client()
 
-        # Define bucket and path
-        bucket_name = settings.SUPABASE_STORAGE_BUCKET
+        # Select bucket based on context
+        if context == 'property_image':
+            bucket_name = settings.PROPERTY_IMAGE_BUCKET
+        elif context == 'tenant_document':
+            bucket_name = settings.TENANT_DOCUMENT_BUCKET
+        elif context == 'id_document':
+            bucket_name = settings.ID_DOCUMENT_BUCKET
+        elif context == 'maintenance_file':
+            bucket_name = settings.MAINTENANCE_FILES_BUCKET
+        elif context == 'agreement':
+            bucket_name = settings.AGREEMENTS_BUCKET
+        # Add more elif blocks for other contexts as needed
+        else:
+            # Default to a general bucket if context is unknown or missing
+            bucket_name = settings.GENERAL_UPLOAD_BUCKET 
+            logger.warning(f"Upload context '{context}' not recognized or missing. Using default bucket: {bucket_name}")
+            # Use 'general' for path if context was None
+            context = context or "general" 
+
         if not bucket_name:
-            logger.error("SUPABASE_STORAGE_BUCKET is not configured in settings.")
-            raise ValueError("Storage bucket name not configured.")
+            logger.error(f"Storage bucket name is not configured for context '{context}' or default.")
+            raise ValueError("Storage bucket name not configured correctly.")
 
         # Generate a unique filename to prevent overwrites and sanitize input
         # Using UUID + original extension is safer than using original filename directly
@@ -51,7 +68,7 @@ async def handle_upload(
         unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
 
         # Construct path (e.g., context/user_id/related_id/unique_filename.ext)
-        path_parts = [context or "general", str(user_id)]
+        path_parts = [context, str(user_id)]
         if related_id:
             path_parts.append(str(related_id))
         path_parts.append(unique_filename)

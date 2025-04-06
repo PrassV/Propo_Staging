@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # API Configuration
-    API_V1_STR: str = "/api"
+    API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Property Management API"
     
     # CORS
@@ -30,14 +30,24 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
+    SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "")
     
     # Security
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7))
     
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # Specific Storage Buckets (read from env vars, provide defaults if sensible)
+    PROPERTY_IMAGE_BUCKET: str = os.getenv("PROPERTY_IMAGE_BUCKET", "propertyimage")
+    TENANT_DOCUMENT_BUCKET: str = os.getenv("TENANT_DOCUMENT_BUCKET", "Tenant Documents")
+    ID_DOCUMENT_BUCKET: str = os.getenv("ID_DOCUMENT_BUCKET", "ID Documents")
+    MAINTENANCE_FILES_BUCKET: str = os.getenv("MAINTENANCE_FILES_BUCKET", "Maintenance Files")
+    AGREEMENTS_BUCKET: str = os.getenv("AGREEMENTS_BUCKET", "agreements")
+    GENERAL_UPLOAD_BUCKET: str = os.getenv("GENERAL_UPLOAD_BUCKET", "general-uploads") # A default bucket
+    # Add others as needed based on your Supabase setup
 
     class Config:
         env_file = ".env"
