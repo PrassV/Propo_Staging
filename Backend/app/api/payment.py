@@ -1,13 +1,14 @@
-from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Form
+from typing import Dict, List, Optional, Any
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Form, status
 from datetime import date
 import logging
 import uuid
 
-from app.models.payment import Payment, PaymentCreate, PaymentUpdate
+from app.models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType, PaymentMethod, RecordPaymentRequest
 from app.services import payment_service
 from app.config.auth import get_current_user
 from app.utils.common import PaginationParams
+from pydantic import BaseModel
 
 router = APIRouter(
     prefix="/payments",
@@ -17,127 +18,126 @@ router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
+# Response Models
+class PaymentResponse(BaseModel):
+    payment: Dict[str, Any]
+    message: str = "Success"
+
+class PaymentsListResponse(BaseModel):
+    items: List[Dict[str, Any]]
+    total: int
+
+class PaymentSummaryResponse(BaseModel):
+    summary: Dict[str, Any]
+    message: str = "Success"
+
 # Get all payments (with optional filters)
-@router.get("/", response_model=List[Payment])
+@router.get("/", response_model=PaymentsListResponse)
 async def get_payments(
-    property_id: Optional[str] = Query(None, description="Filter by property ID"),
-    tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    payment_type: Optional[str] = Query(None, description="Filter by payment type"),
-    start_date: Optional[str] = Query(None, description="Filter by start date (format: YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="Filter by end date (format: YYYY-MM-DD)"),
-    current_user: Dict = Depends(get_current_user)
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    property_id: Optional[uuid.UUID] = Query(None),
+    tenant_id: Optional[uuid.UUID] = Query(None),
+    status: Optional[PaymentStatus] = Query(None),
+    payment_type: Optional[PaymentType] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    sort_by: str = Query("due_date"),
+    sort_order: str = Query("desc"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get all payments for the current user (optionally filtered).
-    
-    If the user is a landlord, returns payments for their properties.
-    If the user is a tenant, returns only their payments.
+    Get a list of payments (requests/history). Filtered by user role.
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        if user_type == "tenant":
-            # Tenants can only see their own payments
-            payments = await payment_service.get_payments(
-                tenant_id=user_id,
-                property_id=property_id,
-                status=status,
-                payment_type=payment_type,
-                start_date=start_date,
-                end_date=end_date
-            )
-        else:
-            # Owners see all payments for their properties
-            payments = await payment_service.get_payments(
-                owner_id=user_id,
-                property_id=property_id,
-                tenant_id=tenant_id,
-                status=status,
-                payment_type=payment_type,
-                start_date=start_date,
-                end_date=end_date
-            )
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
             
-        return payments
+        user_type = current_user.get("user_type") or current_user.get("role")
+
+        payments, total = await payment_service.get_payments(
+            user_id=user_id,
+            user_type=user_type,
+            property_id=property_id,
+            tenant_id=tenant_id,
+            status=status.value if status else None,
+            payment_type=payment_type.value if payment_type else None,
+            start_date=start_date,
+            end_date=end_date,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return PaymentsListResponse(items=payments, total=total)
     except Exception as e:
-        logger.error(f"Error getting payments: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve payments")
+        logger.error(f"Error getting payments: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve payments: {str(e)}")
 
 # Get a specific payment by ID
-@router.get("/{payment_id}", response_model=Payment)
+@router.get("/{payment_id}", response_model=PaymentResponse)
 async def get_payment(
-    payment_id: str = Path(..., description="The payment ID"),
-    current_user: Dict = Depends(get_current_user)
+    payment_id: uuid.UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get a specific payment by ID.
-    
-    Users can only access their own payments or payments for their properties.
+    Get details for a specific payment.
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        payment = await payment_service.get_payment(payment_id)
-        
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+            
+        user_type = current_user.get("user_type") or current_user.get("role")
+
+        payment = await payment_service.get_payment_by_id(payment_id)
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
-            
-        # Check authorization
-        if user_type == "tenant" and payment.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to access this payment")
-        elif user_type == "owner" and payment.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to access this payment")
-            
-        return payment
-    except HTTPException:
-        raise
+
+        can_access = await payment_service.check_user_access_to_payment(user_id, user_type, payment_id)
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to view this payment")
+
+        return PaymentResponse(payment=payment)
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        logger.error(f"Error getting payment: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve payment")
+        logger.error(f"Error getting payment {payment_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve payment: {str(e)}")
 
 # Create a new payment
-@router.post("/", response_model=Payment)
-async def create_payment(
+@router.post("/", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+async def create_payment_request(
     payment_data: PaymentCreate,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Create a new payment.
-    
-    Only owners can create payments.
+    Create a new payment request (e.g., rent due) by owner.
     """
     try:
-        user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        owner_id = current_user.get("id")
+        if not owner_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
         
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to create payments")
+        if current_user.get("user_type") != 'owner':
+             raise HTTPException(status_code=403, detail="Only property owners can create payment requests")
+
+        payment = await payment_service.create_payment_request(payment_data)
+        if not payment:
+            raise HTTPException(status_code=400, detail="Payment request creation failed")
             
-        created_payment = await payment_service.create_payment(
-            payment_data=payment_data,
-            owner_id=user_id
-        )
-        
-        if not created_payment:
-            raise HTTPException(status_code=500, detail="Failed to create payment")
-            
-        return created_payment
-    except HTTPException:
-        raise
+        return PaymentResponse(payment=payment, message="Payment request created successfully")
     except Exception as e:
-        logger.error(f"Error creating payment: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create payment")
+        logger.error(f"Error creating payment request: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create payment request: {str(e)}")
 
 # Update a payment
-@router.put("/{payment_id}", response_model=Payment)
+@router.put("/{payment_id}", response_model=PaymentResponse)
 async def update_payment(
     payment_data: PaymentUpdate,
-    payment_id: str = Path(..., description="The payment ID"),
-    current_user: Dict = Depends(get_current_user)
+    payment_id: uuid.UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Update a payment.
@@ -146,20 +146,17 @@ async def update_payment(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to update payments")
+        if user_type != 'owner':
+            raise HTTPException(status_code=403, detail="Only owners can update payments")
             
-        # Get the existing payment
-        existing_payment = await payment_service.get_payment(payment_id)
+        payment = await payment_service.get_payment_by_id(payment_id)
         
-        if not existing_payment:
+        if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
             
-        # Verify ownership
-        if existing_payment.get("owner_id") != user_id:
+        if payment.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to update this payment")
             
         updated_payment = await payment_service.update_payment(
@@ -170,7 +167,7 @@ async def update_payment(
         if not updated_payment:
             raise HTTPException(status_code=500, detail="Failed to update payment")
             
-        return updated_payment
+        return PaymentResponse(payment=updated_payment)
     except HTTPException:
         raise
     except Exception as e:
@@ -178,99 +175,82 @@ async def update_payment(
         raise HTTPException(status_code=500, detail="Failed to update payment")
 
 # Delete a payment
-@router.delete("/{payment_id}", response_model=dict)
-async def delete_payment(
-    payment_id: str = Path(..., description="The payment ID"),
-    current_user: Dict = Depends(get_current_user)
+@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_payment_request(
+    payment_id: uuid.UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Delete a payment.
-    
-    Only owners can delete payments.
+    Cancel a pending payment request (by owner).
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to delete payments")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
             
-        # Get the existing payment
-        existing_payment = await payment_service.get_payment(payment_id)
-        
-        if not existing_payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type != 'owner':
+             raise HTTPException(status_code=403, detail="Only owners can cancel payment requests")
+        can_access = await payment_service.check_user_access_to_payment(user_id, user_type, payment_id)
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to cancel this payment request")
+
+        cancelled = await payment_service.cancel_payment_request(payment_id)
+        if not cancelled:
+            raise HTTPException(status_code=404, detail="Payment request not found, already paid/cancelled, or cancellation failed")
             
-        # Verify ownership
-        if existing_payment.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to delete this payment")
-            
-        success = await payment_service.delete_payment(payment_id)
-        
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete payment")
-            
-        return {"message": "Payment deleted successfully"}
-    except HTTPException:
-        raise
+        return None # No content
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        logger.error(f"Error deleting payment: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to delete payment")
+        logger.error(f"Error cancelling payment request {payment_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to cancel payment request: {str(e)}")
 
 # Record a payment
-@router.post("/{payment_id}/record", response_model=Payment)
-async def record_payment(
-    payment_id: str = Path(..., description="The payment ID"),
-    amount: float = Form(..., description="The amount paid"),
-    payment_method: str = Form(..., description="The payment method used"),
-    receipt_url: Optional[str] = Form(None, description="URL to the receipt document"),
-    current_user: Dict = Depends(get_current_user)
+@router.post("/{payment_id}/record", response_model=PaymentResponse)
+async def record_manual_payment(
+    payment_id: uuid.UUID,
+    payment_details: RecordPaymentRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Record a payment for an existing payment record.
-    
-    Both tenants and owners can record payments.
+    Record a manual payment (e.g., cash, check) against a payment request.
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        # Get the existing payment
-        existing_payment = await payment_service.get_payment(payment_id)
-        
-        if not existing_payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
             
-        # Check authorization
-        if user_type == "tenant" and existing_payment.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to record payment for this payment")
-        elif user_type == "owner" and existing_payment.get("owner_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to record payment for this payment")
-            
-        updated_payment = await payment_service.record_payment(
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type != 'owner':
+             raise HTTPException(status_code=403, detail="Only owners can record manual payments")
+        can_access = await payment_service.check_user_access_to_payment(user_id, user_type, payment_id)
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to record payment for this request")
+
+        updated_payment = await payment_service.record_manual_payment(
             payment_id=payment_id,
-            amount=amount,
-            payment_method=payment_method,
-            receipt_url=receipt_url
+            amount_paid=payment_details.amount_paid,
+            payment_date=payment_details.payment_date,
+            payment_method=payment_details.payment_method,
+            notes=payment_details.notes
         )
-        
         if not updated_payment:
-            raise HTTPException(status_code=500, detail="Failed to record payment")
+            raise HTTPException(status_code=404, detail="Payment request not found or failed to record payment")
             
-        return updated_payment
-    except HTTPException:
-        raise
+        return PaymentResponse(payment=updated_payment, message="Payment recorded successfully")
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        logger.error(f"Error recording payment: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to record payment")
+        logger.error(f"Error recording manual payment for {payment_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to record payment: {str(e)}")
 
 # Add a receipt to a payment
 @router.post("/{payment_id}/receipts", response_model=dict)
 async def add_receipt(
-    payment_id: str = Path(..., description="The payment ID"),
+    payment_id: uuid.UUID,
     url: str = Form(..., description="URL to the receipt document"),
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Add a receipt to a payment.
@@ -279,18 +259,16 @@ async def add_receipt(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # Get the existing payment
-        existing_payment = await payment_service.get_payment(payment_id)
+        payment = await payment_service.get_payment_by_id(payment_id)
         
-        if not existing_payment:
+        if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
             
-        # Check authorization
-        if user_type == "tenant" and existing_payment.get("tenant_id") != user_id:
+        if user_type == "tenant" and payment.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to add receipt to this payment")
-        elif user_type == "owner" and existing_payment.get("owner_id") != user_id:
+        elif user_type == "owner" and payment.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to add receipt to this payment")
             
         receipt = await payment_service.create_payment_receipt(
@@ -311,10 +289,10 @@ async def add_receipt(
 # Send a payment reminder
 @router.post("/{payment_id}/reminders", response_model=dict)
 async def send_reminder(
-    payment_id: str = Path(..., description="The payment ID"),
+    payment_id: uuid.UUID,
     recipient_email: str = Form(..., description="Email address to send the reminder to"),
     message: str = Form(..., description="Message content for the reminder"),
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Send a payment reminder.
@@ -323,20 +301,17 @@ async def send_reminder(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to send payment reminders")
+        if user_type != 'owner':
+            raise HTTPException(status_code=403, detail="Only property owners can send payment reminders")
             
-        # Get the existing payment
-        existing_payment = await payment_service.get_payment(payment_id)
+        payment = await payment_service.get_payment_by_id(payment_id)
         
-        if not existing_payment:
+        if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
             
-        # Verify ownership
-        if existing_payment.get("owner_id") != user_id:
+        if payment.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to send reminder for this payment")
             
         reminder = await payment_service.send_payment_reminder(
@@ -358,7 +333,7 @@ async def send_reminder(
 # Get overdue payments
 @router.get("/overdue", response_model=List[Payment])
 async def get_overdue_payments(
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get overdue payments.
@@ -368,14 +343,12 @@ async def get_overdue_payments(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # If tenant, we'll filter the overdue payments in the application layer
         overdue_payments = await payment_service.get_overdue_payments(
             owner_id=user_id if user_type == "owner" else None
         )
         
-        # Filter for tenant if needed
         if user_type == "tenant":
             overdue_payments = [p for p in overdue_payments if p.get("tenant_id") == user_id]
             
@@ -388,7 +361,7 @@ async def get_overdue_payments(
 @router.get("/upcoming", response_model=List[Payment])
 async def get_upcoming_payments(
     days: int = Query(7, description="Number of days to look ahead", ge=1, le=90),
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get upcoming payments due in the next specified number of days.
@@ -398,15 +371,13 @@ async def get_upcoming_payments(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # If tenant, we'll filter the upcoming payments in the application layer
         upcoming_payments = await payment_service.get_upcoming_payments(
             owner_id=user_id if user_type == "owner" else None,
             days=days
         )
         
-        # Filter for tenant if needed
         if user_type == "tenant":
             upcoming_payments = [p for p in upcoming_payments if p.get("tenant_id") == user_id]
             
@@ -425,7 +396,7 @@ async def generate_rent_payments(
     start_date: str = Form(..., description="Start date for recurring payments (format: YYYY-MM-DD)"),
     end_date: str = Form(..., description="End date for recurring payments (format: YYYY-MM-DD)"),
     description: Optional[str] = Form(None, description="Optional payment description"),
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Generate recurring rent payments for a tenant.
@@ -434,20 +405,17 @@ async def generate_rent_payments(
     """
     try:
         user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
+        user_type = current_user.get("user_type") or current_user.get("role")
         
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to generate rent payments")
+        if user_type != 'owner':
+            raise HTTPException(status_code=403, detail="Only property owners can generate rent payments")
             
-        # Parse dates
         try:
             start_date_obj = date.fromisoformat(start_date)
             end_date_obj = date.fromisoformat(end_date)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
             
-        # Validate date range
         if end_date_obj < start_date_obj:
             raise HTTPException(status_code=400, detail="End date must be after start date")
             
@@ -472,28 +440,27 @@ async def generate_rent_payments(
         raise HTTPException(status_code=500, detail="Failed to generate rent payments")
 
 # Get payment summary for an owner
-@router.get("/summary", response_model=Dict)
+@router.get("/summary", response_model=PaymentSummaryResponse)
 async def get_payment_summary(
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get a summary of payments for the current user.
-    
-    Only owners can view the payment summary.
+    Get a summary of payments for the owner.
     """
     try:
-        user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        # Check authorization
-        if user_type == "tenant":
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to view payment summary")
+        owner_id = current_user.get("id")
+        if not owner_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
             
-        summary = await payment_service.get_payment_summary(user_id)
-        
-        return summary
-    except HTTPException:
-        raise
+        if current_user.get("user_type") != 'owner':
+             raise HTTPException(status_code=403, detail="Only property owners can view the payment summary")
+
+        summary = await payment_service.get_payment_summary(owner_id)
+        return PaymentSummaryResponse(summary=summary)
     except Exception as e:
-        logger.error(f"Error getting payment summary: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get payment summary") 
+        logger.error(f"Error getting payment summary: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve payment summary: {str(e)}")
+
+# TODO: Endpoints for initiating online payments (Stripe integration?)
+# TODO: Endpoint for tenant to view their payment history/due payments?
+# The generic GET / can handle this if service layer filters correctly 

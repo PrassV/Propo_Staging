@@ -26,17 +26,18 @@ export const getProperties = async (
         limit?: number;
     }
 ): Promise<PropertiesListResponse> => {
+    const endpointPath = '/properties/'; // Added trailing slash for testing
     try {
         // Log the URL being requested
-        const requestUrl = apiClient.getUri({ url: '/properties', params });
+        const requestUrl = apiClient.getUri({ url: endpointPath, params });
         console.log(`[propertyService.getProperties] Requesting URL: ${requestUrl}`);
         
-        const response = await apiClient.get<PropertiesListResponse>('/properties', { params });
+        const response = await apiClient.get<PropertiesListResponse>(endpointPath, { params }); // Use endpointPath
         console.log(`[propertyService.getProperties] Response status: ${response.status}`);
         return response.data;
     } catch (error: unknown) {
         // Log the error object for more details
-        console.error("[propertyService.getProperties] Error fetching properties:", error);
+        console.error(`[propertyService.getProperties] Error fetching properties from ${endpointPath}:`, error);
         
         let errorMessage = 'Failed to fetch properties';
         // Extract error message more robustly
