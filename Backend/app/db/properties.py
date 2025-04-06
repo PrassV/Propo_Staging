@@ -22,10 +22,25 @@ async def get_properties(
     Uses the provided authenticated client instance.
     """
     try:
+        # Log the received user_id and its type
+        logger.info(f"[db.get_properties] Received user_id: {user_id} (Type: {type(user_id)})")
+        
         query = db_client.table('properties').select('*')
         
         if user_id:
+            # Ensure user_id is a string before querying
+            if not isinstance(user_id, str):
+                 logger.error(f"[db.get_properties] Incorrect type for user_id: {type(user_id)}. Attempting to extract 'id'.")
+                 # Attempt to gracefully handle if dict was passed, but log error
+                 user_id_str = user_id.get("id") if isinstance(user_id, dict) else str(user_id)
+                 if not isinstance(user_id_str, str):
+                      logger.error("[db.get_properties] Could not extract valid string ID. Aborting query.")
+                      return [] # Or raise error
+                 user_id = user_id_str # Use the extracted string
+            
+            logger.info(f"[db.get_properties] Querying with owner_id: {user_id}")
             query = query.eq('owner_id', user_id)
+            
         if property_type:
             query = query.eq('property_type', property_type)
         if city:
@@ -34,7 +49,6 @@ async def get_properties(
             query = query.eq('pincode', pincode)
         
         if sort_by:
-            # Use simple ordering syntax that works with PostgREST
             is_desc = sort_order.lower() == 'desc'
             query = query.order(sort_by, desc=is_desc)
         
@@ -43,15 +57,15 @@ async def get_properties(
         response = await query.execute()
         
         if hasattr(response, 'error') and response.error:
-            logger.error(f"Error fetching properties: {response.error.message}")
+            logger.error(f"[db.get_properties] Error fetching properties: {response.error.message}")
             return []
         if not hasattr(response, 'data'):
-             logger.error(f"Error fetching properties: No data attribute in response")
+             logger.error(f"[db.get_properties] Error fetching properties: No data attribute in response")
              return []
             
         return response.data or []
     except Exception as e:
-        logger.error(f"Failed to get properties: {str(e)}", exc_info=True)
+        logger.error(f"[db.get_properties] Failed to get properties: {str(e)}", exc_info=True)
         return []
 
 async def get_properties_count(

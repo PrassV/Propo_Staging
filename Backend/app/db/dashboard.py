@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
 from ..config.database import supabase_client
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -84,20 +85,41 @@ async def get_revenue_stats(owner_id: str) -> Dict[str, Any]:
     Returns:
         Dictionary with revenue statistics
     """
+    logger.info(f"[get_revenue_stats] Received owner_id: {owner_id} (Type: {type(owner_id)})")
+    # Ensure owner_id is a string UUID before querying
+    if not isinstance(owner_id, str) or not uuid.UUID(owner_id):
+         logger.error(f"[get_revenue_stats] Invalid owner_id format: {owner_id}. Aborting.")
+         # Return default zero stats if ID is invalid
+         return {
+            'monthly_rental_income': 0,
+            'total_lease_value': 0,
+            'total_security_deposits': 0,
+            'total_maintenance_income': 0,
+            'yearly_income': 0
+         }
+    
     try:
+        logger.info(f"[get_revenue_stats] Querying dashboard_summary view for owner: {owner_id}")
         # Get dashboard summary from the view
         dashboard_response = supabase_client.table('dashboard_summary') \
             .select('*') \
             .eq('owner_id', owner_id) \
             .execute()
         
-        if "error" in dashboard_response and dashboard_response["error"]:
-            logger.error(f"Error fetching dashboard summary: {dashboard_response['error']}")
-            return {}
+        logger.info(f"[get_revenue_stats] Raw view response: {dashboard_response}")
+
+        # Check for explicit errors (copying logic from get_property_stats)
+        if hasattr(dashboard_response, 'error') and dashboard_response.error:
+            logger.error(f"[get_revenue_stats] Error fetching dashboard summary view: {dashboard_response.error}")
+            error_details = getattr(dashboard_response.error, 'details', None) or getattr(dashboard_response.error, 'message', str(dashboard_response.error))
+            logger.error(f"[get_revenue_stats] Error details: {error_details}")
+            return {'monthly_rental_income': 0, 'total_lease_value': 0, 'total_security_deposits': 0, 'total_maintenance_income': 0, 'yearly_income': 0}
         
-        # Check if we have data
-        if not dashboard_response.data or len(dashboard_response.data) == 0:
-            logger.info("No dashboard summary found for owner_id")
+        data = getattr(dashboard_response, 'data', None)
+        count = getattr(dashboard_response, 'count', None) # Need count='exact' in select for this
+
+        if data is None or (isinstance(data, list) and len(data) == 0):
+            logger.warning(f"[get_revenue_stats] No dashboard summary data found for owner: {owner_id}")
             return {
                 'monthly_rental_income': 0,
                 'total_lease_value': 0,
@@ -106,23 +128,27 @@ async def get_revenue_stats(owner_id: str) -> Dict[str, Any]:
                 'yearly_income': 0
             }
         
-        # Get the dashboard summary
-        dashboard = dashboard_response.data[0]
-        
-        # Extract revenue stats
-        result = {
-            'monthly_rental_income': float(dashboard['monthly_rental_income'] or 0),
-            'total_lease_value': float(dashboard['total_lease_value'] or 0),
-            'total_security_deposits': float(dashboard['total_security_deposits'] or 0),
-            'total_maintenance_income': float(dashboard['total_maintenance_income'] or 0),
-            'yearly_income': float(dashboard['yearly_rental_income'] or 0)
-        }
-        
-        logger.info(f"Revenue stats result: {result}")
-        return result
+        # Get the dashboard summary (assuming data is a list)
+        if isinstance(data, list) and len(data) > 0:
+            dashboard = data[0]
+            logger.info(f"[get_revenue_stats] Extracted dashboard data: {dashboard}")
+            # Extract revenue stats
+            result = {
+                'monthly_rental_income': float(dashboard.get('monthly_rental_income', 0) or 0),
+                'total_lease_value': float(dashboard.get('total_lease_value', 0) or 0),
+                'total_security_deposits': float(dashboard.get('total_security_deposits', 0) or 0),
+                'total_maintenance_income': float(dashboard.get('total_maintenance_income', 0) or 0),
+                'yearly_income': float(dashboard.get('yearly_rental_income', 0) or 0)
+            }
+            logger.info(f"[get_revenue_stats] Revenue stats result: {result}")
+            return result
+        else:
+            logger.error(f"[get_revenue_stats] Unexpected data format: {data}")
+            return {'monthly_rental_income': 0, 'total_lease_value': 0, 'total_security_deposits': 0, 'total_maintenance_income': 0, 'yearly_income': 0}
+            
     except Exception as e:
-        logger.error(f"Failed to get revenue stats: {str(e)}")
-        return {}
+        logger.error(f"[get_revenue_stats] Failed to get revenue stats: {str(e)}", exc_info=True)
+        return {'monthly_rental_income': 0, 'total_lease_value': 0, 'total_security_deposits': 0, 'total_maintenance_income': 0, 'yearly_income': 0}
 
 async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
     """
@@ -134,81 +160,112 @@ async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
     Returns:
         Dictionary with tenant statistics
     """
+    logger.info(f"[get_tenant_stats] Received owner_id: {owner_id} (Type: {type(owner_id)})")
+    # Ensure owner_id is a string UUID before querying
+    if not isinstance(owner_id, str) or not uuid.UUID(owner_id):
+         logger.error(f"[get_tenant_stats] Invalid owner_id format: {owner_id}. Aborting.")
+         return {
+            'total_tenants': 0,
+            'upcoming_lease_expirations': 0
+         }
+         
     try:
+        logger.info(f"[get_tenant_stats] Querying dashboard_summary view for owner: {owner_id}")
         # Get dashboard summary from the view
         dashboard_response = supabase_client.table('dashboard_summary') \
             .select('*') \
             .eq('owner_id', owner_id) \
             .execute()
         
-        if "error" in dashboard_response and dashboard_response["error"]:
-            logger.error(f"Error fetching dashboard summary: {dashboard_response['error']}")
-            return {}
+        logger.info(f"[get_tenant_stats] Raw view response: {dashboard_response}")
         
-        # Check if we have data
-        if not dashboard_response.data or len(dashboard_response.data) == 0:
-            logger.info("No dashboard summary found for owner_id")
-            return {
-                'total_tenants': 0,
-                'upcoming_lease_expirations': 0
-            }
+        # Check for errors (copying logic)
+        if hasattr(dashboard_response, 'error') and dashboard_response.error:
+            logger.error(f"[get_tenant_stats] Error fetching dashboard summary view: {dashboard_response.error}")
+            error_details = getattr(dashboard_response.error, 'details', None) or getattr(dashboard_response.error, 'message', str(dashboard_response.error))
+            logger.error(f"[get_tenant_stats] Error details: {error_details}")
+            return {'total_tenants': 0, 'upcoming_lease_expirations': 0}
         
-        # Get the dashboard summary
-        dashboard = dashboard_response.data[0]
+        data = getattr(dashboard_response, 'data', None)
         
-        # For upcoming lease expirations, we still need to query the database
-        # Get current date for upcoming expiry calculations
+        total_tenants_from_view = 0
+        if data and isinstance(data, list) and len(data) > 0:
+            dashboard = data[0]
+            total_tenants_from_view = dashboard.get('total_tenants', 0)
+            logger.info(f"[get_tenant_stats] Extracted total_tenants from view: {total_tenants_from_view}")
+        else:
+            logger.warning(f"[get_tenant_stats] No dashboard summary data found for owner: {owner_id}")
+        
+        # Calculate upcoming lease expirations separately (requires tenant table access)
+        # Note: This part might fail if the client used doesn't have RLS access to tenants table
+        # Consider using supabase_service_role_client if necessary and appropriate
         today = datetime.now().date()
-        
-        # Get tenant details for lease expiration calculations
-        tenants_query = """
-        SELECT t.* 
-        FROM tenants t
-        JOIN property_tenants pt ON t.id = pt.tenant_id
-        JOIN properties p ON pt.property_id = p.id
-        WHERE p.owner_id = '{}';
-        """
-        
-        tenants_response = supabase_client.table('tenants') \
-            .select('rental_end_date, lease_end_date, rental_type') \
-            .execute()
-        
         upcoming_expirations = 0
+        try:
+            logger.info(f"[get_tenant_stats] Querying tenants table for owner: {owner_id}")
+            # This query assumes a direct link or view that relates tenants to owner_id
+            # If using joins as before, ensure RLS allows joins. 
+            # Let's try querying tenants directly linked via properties first.
+            properties_response = await supabase_client.table('properties').select('id').eq('owner_id', owner_id).execute()
+            if hasattr(properties_response, 'error') and properties_response.error:
+                raise Exception(f"Failed to get properties for tenant query: {properties_response.error}")
+            
+            property_ids = [p['id'] for p in getattr(properties_response, 'data', [])]
+            if not property_ids:
+                logger.warning(f"[get_tenant_stats] No properties found for owner {owner_id}, cannot calculate expirations.")
+            else:
+                 property_tenants_response = await supabase_client.table('property_tenants')\
+                    .select('tenant_id')\
+                    .in_('property_id', property_ids)\
+                    .execute()
+                 if hasattr(property_tenants_response, 'error') and property_tenants_response.error:
+                     raise Exception(f"Failed to get property_tenants: {property_tenants_response.error}")
+                 
+                 tenant_ids = list(set(pt['tenant_id'] for pt in getattr(property_tenants_response, 'data', [])))
+                 if not tenant_ids:
+                     logger.warning(f"[get_tenant_stats] No tenants linked to properties for owner {owner_id}.")
+                 else:
+                    tenants_response = await supabase_client.table('tenants') \
+                        .select('rental_end_date, lease_end_date, rental_type') \
+                        .in_('id', tenant_ids) \
+                        .execute()
+                    
+                    logger.info(f"[get_tenant_stats] Raw tenants response for expirations: {tenants_response}")
+
+                    if hasattr(tenants_response, 'error') and tenants_response.error:
+                        raise Exception(f"Failed to get tenants for expirations: {tenants_response.error}")
+
+                    if tenants_response.data and len(tenants_response.data) > 0:
+                        for tenant in tenants_response.data:
+                            expiry_date_str = None
+                            if tenant.get('rental_type') == 'rent':
+                                expiry_date_str = tenant.get('rental_end_date')
+                            elif tenant.get('rental_type') == 'lease':
+                                expiry_date_str = tenant.get('lease_end_date')
+                                
+                            if expiry_date_str:
+                                try:
+                                    end_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                                    days_until_expiry = (end_date - today).days
+                                    if 0 <= days_until_expiry <= 30:
+                                        upcoming_expirations += 1
+                                except (ValueError, TypeError) as date_err:
+                                    logger.warning(f"[get_tenant_stats] Error parsing date '{expiry_date_str}': {date_err}")
+                                    pass # Ignore invalid dates
+        except Exception as expiry_err:
+             logger.error(f"[get_tenant_stats] Error calculating upcoming expirations: {expiry_err}", exc_info=True)
+             # Proceed without expiration count if calculation fails
         
-        # Check if we have tenant data
-        if tenants_response.data and len(tenants_response.data) > 0:
-            for tenant in tenants_response.data:
-                # Check rental end date for rent type tenants
-                if tenant.get('rental_type') == 'rent' and tenant.get('rental_end_date'):
-                    try:
-                        end_date = datetime.strptime(tenant['rental_end_date'], '%Y-%m-%d').date()
-                        days_until_expiry = (end_date - today).days
-                        if 0 <= days_until_expiry <= 30:
-                            upcoming_expirations += 1
-                    except (ValueError, TypeError):
-                        pass
-                        
-                # Check lease end date for lease type tenants
-                elif tenant.get('rental_type') == 'lease' and tenant.get('lease_end_date'):
-                    try:
-                        end_date = datetime.strptime(tenant['lease_end_date'], '%Y-%m-%d').date()
-                        days_until_expiry = (end_date - today).days
-                        if 0 <= days_until_expiry <= 30:
-                            upcoming_expirations += 1
-                    except (ValueError, TypeError):
-                        pass
-        
-        # Return tenant stats
         result = {
-            'total_tenants': dashboard['total_tenants'],
+            'total_tenants': total_tenants_from_view,
             'upcoming_lease_expirations': upcoming_expirations
         }
         
-        logger.info(f"Tenant stats result: {result}")
+        logger.info(f"[get_tenant_stats] Tenant stats result: {result}")
         return result
     except Exception as e:
-        logger.error(f"Failed to get tenant stats: {str(e)}")
-        return {}
+        logger.error(f"[get_tenant_stats] Failed to get tenant stats: {str(e)}", exc_info=True)
+        return {'total_tenants': 0, 'upcoming_lease_expirations': 0}
 
 async def get_monthly_revenue(owner_id: str, months: int = 6) -> List[Dict[str, Any]]:
     """
