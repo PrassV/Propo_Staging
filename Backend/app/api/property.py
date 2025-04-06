@@ -52,12 +52,18 @@ async def get_properties(
     property_type: Optional[PropertyType] = Query(None, description="Filter by property type"),
     city: Optional[str] = Query(None, description="Filter by city (case-insensitive)"),
     pincode: Optional[str] = Query(None, description="Filter by pincode"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """Get all properties for the current user with pagination, filtering, and sorting."""
     try:
-        user_id = current_user.id
+        # Correctly extract user_id from the dictionary provided by get_current_user
+        user_id = current_user.get("id")
+        if not user_id:
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token/session")
+             
+        logger.info(f"Fetching properties for user_id: {user_id}")
+        
         properties = await property_service.get_properties(
             db_client=db_client,
             user_id=user_id,
@@ -69,7 +75,10 @@ async def get_properties(
             city=city,
             pincode=pincode
         )
-        # TODO: Get total count for pagination metadata (requires separate query or modification to get_properties)
+        
+        logger.info(f"Fetched {len(properties)} properties for user {user_id}")
+        
+        # Get total count for pagination metadata
         total_count = await property_service.get_properties_count(
             db_client=db_client,
             user_id=user_id,
@@ -77,6 +86,8 @@ async def get_properties(
             city=city,
             pincode=pincode
         )
+        logger.info(f"Total properties count for user {user_id}: {total_count}")
+        
         return PropertiesListResponse(items=properties, total=total_count)
     except Exception as e:
         logging.error(f"Error getting properties: {e}", exc_info=True)
