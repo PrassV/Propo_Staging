@@ -54,15 +54,47 @@ async def get_properties(
         
         query = query.range(skip, skip + limit - 1)
         
+        logger.info(f"[db.get_properties] Executing query...") # Log before execution
         response = await query.execute()
+        logger.info(f"[db.get_properties] Query execution complete.") # Log after execution
+
+        # --- Start Enhanced Response Logging --- 
+        logger.info(f"[db.get_properties] Raw Response Type: {type(response)}") 
+        logger.info(f"[db.get_properties] Raw Response __dict__: {getattr(response, '__dict__', 'N/A')}") # Log internal dict if available
+        status_code = getattr(response, 'status_code', 'N/A')
+        logger.info(f"[db.get_properties] Raw Response Status Code: {status_code}")
+        has_error_attr = hasattr(response, 'error')
+        logger.info(f"[db.get_properties] Has 'error' attribute: {has_error_attr}")
+        if has_error_attr:
+             error_obj = getattr(response, 'error')
+             logger.info(f"[db.get_properties] Error object type: {type(error_obj)}")
+             logger.info(f"[db.get_properties] Error object value: {error_obj}")
+             if error_obj:
+                  logger.info(f"[db.get_properties] Error object __dict__: {getattr(error_obj, '__dict__', 'N/A')}")
+        has_data_attr = hasattr(response, 'data')
+        logger.info(f"[db.get_properties] Has 'data' attribute: {has_data_attr}")
+        if has_data_attr:
+             data_obj = getattr(response, 'data')
+             logger.info(f"[db.get_properties] Data object type: {type(data_obj)}")
+             logger.info(f"[db.get_properties] Data object value (repr): {repr(data_obj)}") # Use repr for potentially large data
+             if isinstance(data_obj, list):
+                 logger.info(f"[db.get_properties] Data list length: {len(data_obj)}")
+        has_count_attr = hasattr(response, 'count')
+        logger.info(f"[db.get_properties] Has 'count' attribute: {has_count_attr}")
+        if has_count_attr:
+             logger.info(f"[db.get_properties] Count attribute value: {getattr(response, 'count')}")
+        # --- End Enhanced Response Logging ---
         
+        # Original checks remain
         if hasattr(response, 'error') and response.error:
-            logger.error(f"[db.get_properties] Error fetching properties: {response.error.message}")
+            logger.error(f"[db.get_properties] Error identified in response (post-logging): {response.error.message}") # More specific log
             return []
         if not hasattr(response, 'data'):
-             logger.error(f"[db.get_properties] Error fetching properties: No data attribute in response")
+             logger.error(f"[db.get_properties] No 'data' attribute in response object (post-logging).")
              return []
             
+        # Original return
+        logger.info(f"[db.get_properties] Returning data. Count: {len(response.data)}")
         return response.data or []
     except Exception as e:
         logger.error(f"[db.get_properties] Failed to get properties: {str(e)}", exc_info=True)
