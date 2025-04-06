@@ -66,10 +66,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       />
 
       {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 h-screen w-64 bg-white border-r z-50 transform transition-transform duration-200
+      <aside className={`sticky top-[theme(spacing.16)] left-0 h-[calc(100vh-theme(spacing.16))] w-64 bg-white border-r z-40 transform transition-transform duration-200
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         
-        {/* Mobile close button - Keep fixed/absolute positioning for mobile toggle if needed */}
+        {/* Mobile close button - Position relative to sidebar */}
         <button 
           onClick={onClose}
           className="md:hidden absolute right-4 top-4 text-gray-500 hover:text-gray-700 z-50" /* Ensure button is above */
