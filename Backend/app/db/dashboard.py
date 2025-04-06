@@ -16,20 +16,32 @@ async def get_property_stats(owner_id: str) -> Dict[str, Any]:
     Returns:
         Dictionary with property statistics
     """
+    logger.info(f"[get_property_stats] Fetching dashboard_summary view for owner: {owner_id}")
     try:
         # Get dashboard summary from the view
         dashboard_response = supabase_client.table('dashboard_summary') \
-            .select('*') \
+            .select('*', count='exact') \
             .eq('owner_id', owner_id) \
             .execute()
         
-        if "error" in dashboard_response and dashboard_response["error"]:
-            logger.error(f"Error fetching dashboard summary: {dashboard_response['error']}")
-            return {}
+        # Log the raw response from the view query
+        logger.info(f"[get_property_stats] Raw dashboard_summary view response: {dashboard_response}")
         
-        # Check if we have data
-        if not dashboard_response.data or len(dashboard_response.data) == 0:
-            logger.info("No dashboard summary found for owner_id")
+        # Check for explicit errors in the response object
+        if hasattr(dashboard_response, 'error') and dashboard_response.error:
+            logger.error(f"[get_property_stats] Error fetching dashboard summary view: {dashboard_response.error}")
+            # Attempt to extract more detail if possible
+            error_details = getattr(dashboard_response.error, 'details', None) or getattr(dashboard_response.error, 'message', str(dashboard_response.error))
+            logger.error(f"[get_property_stats] Error details: {error_details}")
+            return {'total_properties': 0, 'total_rented': 0, 'total_vacant': 0, 'total_under_maintenance': 0, 'occupancy_rate': 0}
+        
+        # Check if we have data and the count
+        data = getattr(dashboard_response, 'data', None)
+        count = getattr(dashboard_response, 'count', None)
+        logger.info(f"[get_property_stats] View data: {data}, Count: {count}")
+
+        if data is None or count == 0:
+            logger.warning(f"[get_property_stats] No dashboard summary data returned from view for owner: {owner_id}")
             return {
                 'total_properties': 0,
                 'total_rented': 0,
@@ -38,23 +50,29 @@ async def get_property_stats(owner_id: str) -> Dict[str, Any]:
                 'occupancy_rate': 0
             }
         
-        # Get the dashboard summary
-        dashboard = dashboard_response.data[0]
-        
-        # Extract property stats
-        result = {
-            'total_properties': dashboard['total_properties'],
-            'total_rented': dashboard['total_rented_properties'],
-            'total_vacant': dashboard['total_vacant_properties'],
-            'total_under_maintenance': 0,  # Not tracked in our view
-            'occupancy_rate': round(dashboard['occupancy_rate'], 2)
-        }
-        
-        logger.info(f"Property stats result: {result}")
-        return result
+        # Get the dashboard summary (assuming data is a list)
+        if isinstance(data, list) and len(data) > 0:
+            dashboard = data[0]
+            logger.info(f"[get_property_stats] Successfully extracted dashboard data: {dashboard}")
+            
+            # Extract property stats
+            result = {
+                'total_properties': dashboard.get('total_properties', 0),
+                'total_rented': dashboard.get('total_rented_properties', 0),
+                'total_vacant': dashboard.get('total_vacant_properties', 0),
+                'total_under_maintenance': 0,  # Not tracked in our view
+                'occupancy_rate': round(dashboard.get('occupancy_rate', 0.0), 2)
+            }
+            
+            logger.info(f"[get_property_stats] Property stats result: {result}")
+            return result
+        else:
+            logger.error(f"[get_property_stats] Dashboard summary data is not a non-empty list: {data}")
+            return {'total_properties': 0, 'total_rented': 0, 'total_vacant': 0, 'total_under_maintenance': 0, 'occupancy_rate': 0}
+            
     except Exception as e:
-        logger.error(f"Failed to get property stats: {str(e)}")
-        return {}
+        logger.error(f"[get_property_stats] Exception fetching property stats: {str(e)}", exc_info=True)
+        return {'total_properties': 0, 'total_rented': 0, 'total_vacant': 0, 'total_under_maintenance': 0, 'occupancy_rate': 0}
 
 async def get_revenue_stats(owner_id: str) -> Dict[str, Any]:
     """
