@@ -94,11 +94,11 @@ export default function Layout({ children }: LayoutProps) {
           />
       )}
 
-      <div className="flex pt-16"> {/* pt-16 for Navbar height */}      
+      <div className="flex"> 
         {/* Apply margin-left to main content based on sidebar state */}
         <main className={`flex-1 transition-all duration-300 ease-in-out ${user ? (sidebarOpen ? 'md:ml-64' : 'ml-0') : 'ml-0'}`}> 
             {/* Added md: prefix to ml-64 to ensure it only applies on medium screens and up, matching sidebar logic */}
-          <div className="p-6">
+          <div className="px-6 pb-6 pt-[calc(theme(spacing.16)+theme(spacing.6))]">
             {children}
           </div>
         </main>
