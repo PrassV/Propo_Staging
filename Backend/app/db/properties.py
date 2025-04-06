@@ -141,7 +141,8 @@ async def get_property_by_id(db_client: Client, property_id: str) -> Optional[Di
     Uses the provided authenticated client instance.
     """
     try:
-        response = await db_client.table('properties').select('*').eq('id', property_id).single().execute()
+        # Removed await based on previous TypeErrors
+        response = db_client.table('properties').select('*').eq('id', property_id).single().execute()
         
         if hasattr(response, 'error') and response.error:
              if response.error.code == 'PGRST116':

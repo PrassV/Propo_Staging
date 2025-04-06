@@ -40,7 +40,7 @@ export default function Layout({ children }: LayoutProps) {
     toast.loading(propertyDialogInitialData ? 'Updating property...' : 'Adding property...');
     let submissionError = null;
     try {
-      let imageUrl = undefined;
+      let imageUrl: string | undefined = undefined;
       if (images && images.length > 0) {
           try {
               const uploadResponse = await api.property.uploadPropertyImages(images);
@@ -54,11 +54,80 @@ export default function Layout({ children }: LayoutProps) {
       }
 
       if (propertyDialogInitialData && propertyDialogInitialData.id) {
-        console.log("Update Property (Not Implemented):", formData, imageUrl);
+        // --- UPDATE LOGIC (Still Placeholder) ---
+        // TODO: Implement mapping and actual API call for updating property
+        const updatePayload = { 
+            // Map fields from formData to backend model (snake_case)
+            property_name: formData.propertyName, 
+            property_type: formData.propertyType,
+            address_line1: formData.addressLine1,
+            address_line2: formData.addressLine2,
+            city: formData.city,
+            state: formData.state,
+            zip_code: formData.pincode,
+            country: formData.country,
+            description: formData.description,
+            number_of_units: formData.numberOfUnits,
+            amenities: formData.amenities,
+            size_sqft: formData.sizeSqft,
+            bedrooms: formData.bedrooms,
+            bathrooms: formData.bathrooms,
+            kitchens: formData.kitchens,
+            garages: formData.garages,
+            garage_size: formData.garageSize,
+            year_built: formData.yearBuilt,
+            floors: formData.floors,
+            category: formData.category,
+            listed_in: formData.listedIn,
+            price: formData.price,
+            yearly_tax_rate: formData.yearlyTaxRate,
+            survey_number: formData.surveyNumber,
+            door_number: formData.doorNumber,
+            // Add image_urls if imageUrl exists
+            ...(imageUrl && { image_urls: [imageUrl] })
+         };
+        console.info("Update Property Payload (Placeholder):", updatePayload);
         toast.success('Property updated successfully! (Simulation)');
+        // Example: await api.property.updateProperty(propertyDialogInitialData.id, updatePayload);
+
       } else {
-        console.log("Create Property (Not Implemented):", formData, imageUrl);
-        toast.success('Property added successfully! (Simulation)');
+        // --- CREATE LOGIC (Implementation) ---
+        const createPayload = { 
+            // Map fields from formData to backend model (snake_case)
+            property_name: formData.propertyName, 
+            property_type: formData.propertyType,
+            address_line1: formData.addressLine1,
+            address_line2: formData.addressLine2,
+            city: formData.city,
+            state: formData.state,
+            zip_code: formData.pincode,
+            country: formData.country,
+            description: formData.description,
+            number_of_units: formData.numberOfUnits,
+            amenities: formData.amenities,
+            size_sqft: formData.sizeSqft,
+            bedrooms: formData.bedrooms,
+            bathrooms: formData.bathrooms,
+            kitchens: formData.kitchens,
+            garages: formData.garages,
+            garage_size: formData.garageSize,
+            year_built: formData.yearBuilt,
+            floors: formData.floors,
+            category: formData.category,
+            listed_in: formData.listedIn,
+            price: formData.price,
+            yearly_tax_rate: formData.yearlyTaxRate,
+            survey_number: formData.surveyNumber,
+            door_number: formData.doorNumber,
+            // Add image_urls if imageUrl exists
+            ...(imageUrl && { image_urls: [imageUrl] })
+        };
+        
+        console.info("Calling api.property.createProperty with payload:", createPayload);
+        // Actual API Call - Assuming api.property.createProperty accepts this structure
+        await api.property.createProperty(createPayload); 
+        
+        toast.success('Property added successfully!');
       }
       
       if (onSuccessCallback) {
