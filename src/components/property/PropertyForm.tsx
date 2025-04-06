@@ -4,10 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { PropertyFormData } from '@/api/types';
 import toast from 'react-hot-toast';
-import { useAuth } from '@/contexts/AuthContext';
 import { Checkbox } from "@/components/ui/checkbox";
 import { X } from "lucide-react";
 
@@ -24,7 +23,6 @@ const amenitiesList = [
 ];
 
 export default function PropertyForm({ initialData, onSubmit, onCancel }: PropertyFormProps) {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<PropertyFormData>(() => ({
     propertyName: initialData?.propertyName || '',
@@ -63,7 +61,10 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     
     setLoading(true);
     try {
-      await onSubmit(formData, newImages);
+      const payload: Partial<PropertyFormData> = { ...formData };
+      delete payload.category;
+      
+      await onSubmit(payload as PropertyFormData, newImages);
       setNewImages([]);
     } catch (error: unknown) {
       console.error('Error in form submission:', error);

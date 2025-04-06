@@ -83,7 +83,7 @@ export interface Property {
   address_line2?: string;
   city: string;
   state: string;
-  zip_code: string;
+  pincode: string;
   country: string;
   description?: string;
   bedrooms?: number;
@@ -106,7 +106,7 @@ export interface PropertyCreate {
   address_line2?: string;
   city: string;
   state: string;
-  zip_code: string;
+  pincode: string;
   country: string;
   description?: string;
   bedrooms?: number;
@@ -124,7 +124,7 @@ export interface PropertyUpdate {
   address_line2?: string;
   city?: string;
   state?: string;
-  zip_code?: string;
+  pincode?: string;
   country?: string;
   description?: string;
   bedrooms?: number;
