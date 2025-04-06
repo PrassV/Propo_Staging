@@ -55,7 +55,7 @@ async def get_properties(
         query = query.range(skip, skip + limit - 1)
         
         logger.info(f"[db.get_properties] Executing query...") # Log before execution
-        response = await query.execute()
+        response = query.execute()
         logger.info(f"[db.get_properties] Query execution complete.") # Log after execution
 
         # --- Start Enhanced Response Logging --- 
