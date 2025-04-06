@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Form, status, Body
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Form, status, Body, UploadFile, File
 from pydantic import BaseModel, HttpUrl
 import uuid
 import logging
@@ -32,6 +32,7 @@ router = APIRouter(
     tags=["Properties"], # Capitalized Tag
     responses={404: {"description": "Not found"}},
 )
+logger = logging.getLogger(__name__)
 
 # Define response model for list operations, potentially with pagination metadata
 class PropertiesListResponse(BaseModel):
