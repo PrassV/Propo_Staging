@@ -13,9 +13,6 @@ console.log('[BUILD_LOG] Axios baseURL will be set to:', API_BASE_URL);
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   timeout: 15000, // 15 seconds
 });
 
