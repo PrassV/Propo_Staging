@@ -26,11 +26,12 @@ export default function Layout({ children }: LayoutProps) {
     onSuccessCallback,
   } = usePropertyDialog();
   
-  // --- Add Runtime Log --- 
+  // --- TEMPORARY RUNTIME ALERT --- 
   useEffect(() => {
-    console.log('[RUNTIME_LOG] apiClient baseURL:', apiClient.defaults.baseURL);
+    // Use alert for debugging - REMOVE AFTER TESTING!
+    alert('[RUNTIME_ALERT] apiClient baseURL: ' + apiClient.defaults.baseURL);
   }, []);
-  // --- End Runtime Log ---
+  // --- END TEMPORARY RUNTIME ALERT ---
   
   // Don't show layout on auth pages and landing page
   const isAuthPage = location.pathname.startsWith('/invite/');
