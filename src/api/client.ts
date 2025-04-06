@@ -1,8 +1,14 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { getStoredToken, clearTokens } from '../utils/token';
 
+// Log the variable value AT BUILD TIME
+console.log('[BUILD_LOG] VITE_API_URL:', import.meta.env.VITE_API_URL);
+
 // Environment variables
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Log the value being used for baseURL
+console.log('[BUILD_LOG] Axios baseURL will be set to:', API_BASE_URL);
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
