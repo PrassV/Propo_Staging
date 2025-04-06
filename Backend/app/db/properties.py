@@ -119,7 +119,9 @@ async def get_properties_count(
         if pincode:
             query = query.eq('pincode', pincode)
 
-        response = await query.execute()
+        # When using count='exact', execute() might return the response directly
+        # instead of an awaitable. Removing await based on TypeError.
+        response = query.execute()
 
         if hasattr(response, 'error') and response.error:
             logger.error(f"Error counting properties: {response.error.message}")
