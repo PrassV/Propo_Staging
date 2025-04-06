@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "echo '[BUILD_SCRIPT_LOG] Available VITE vars:' && printenv | grep VITE_ && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "cd Backend && python -m uvicorn app.main:app --host=0.0.0.0 --port=${PORT:-8000} --timeout-keep-alive=300"
