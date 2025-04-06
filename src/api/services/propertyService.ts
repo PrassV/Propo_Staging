@@ -1,6 +1,7 @@
 import apiClient from '../client';
 // Import PropertiesListResponse and remove ApiResponse if no longer needed elsewhere
 import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse } from '../types';
+import axios from 'axios';
 
 // Define Unit type (adjust based on actual API response)
 export interface PropertyUnit {
@@ -26,16 +27,27 @@ export const getProperties = async (
     }
 ): Promise<PropertiesListResponse> => {
     try {
+        // Log the URL being requested
+        const requestUrl = apiClient.getUri({ url: '/properties', params });
+        console.log(`[propertyService.getProperties] Requesting URL: ${requestUrl}`);
+        
         const response = await apiClient.get<PropertiesListResponse>('/properties', { params });
+        console.log(`[propertyService.getProperties] Response status: ${response.status}`);
         return response.data;
     } catch (error: unknown) {
-        console.error("Error fetching properties:", error);
+        // Log the error object for more details
+        console.error("[propertyService.getProperties] Error fetching properties:", error);
+        
         let errorMessage = 'Failed to fetch properties';
-        if (error && typeof error === 'object' && 'formattedMessage' in error) {
-            errorMessage = (error as { formattedMessage: string }).formattedMessage;
+        // Extract error message more robustly
+        if (axios.isAxiosError(error)) {
+            errorMessage = error.response?.data?.detail || error.message;
         } else if (error instanceof Error) {
             errorMessage = error.message;
+        } else if (typeof error === 'object' && error !== null && 'formattedMessage' in error) {
+            errorMessage = (error as { formattedMessage: string }).formattedMessage;
         }
+        console.error(`[propertyService.getProperties] Formatted Error: ${errorMessage}`);
         throw new Error(errorMessage);
     }
 };

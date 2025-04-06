@@ -86,17 +86,18 @@ export default function Layout({ children }: LayoutProps) {
     <div className="min-h-screen bg-background dark:bg-gray-900">
       <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       
-      <div className="flex pt-16">
-        {user && (
-          <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-64' : 'w-16'} flex-shrink-0`}>
-            <Sidebar 
-              isOpen={sidebarOpen}
-              onClose={() => setSidebarOpen(false)} 
-            />
-          </div>
-        )}
+      {/* Keep Sidebar outside the main flex container if it uses fixed positioning */}
+      {user && (
+          <Sidebar 
+            isOpen={sidebarOpen} 
+            onClose={() => setSidebarOpen(false)} 
+          />
+      )}
 
-        <main className="flex-1 overflow-auto">
+      <div className="flex pt-16"> {/* pt-16 for Navbar height */}      
+        {/* Apply margin-left to main content based on sidebar state */}
+        <main className={`flex-1 transition-all duration-300 ease-in-out ${user ? (sidebarOpen ? 'md:ml-64' : 'ml-0') : 'ml-0'}`}> 
+            {/* Added md: prefix to ml-64 to ensure it only applies on medium screens and up, matching sidebar logic */}
           <div className="p-6">
             {children}
           </div>

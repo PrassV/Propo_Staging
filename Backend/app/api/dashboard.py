@@ -24,17 +24,21 @@ class DashboardDataResponse(BaseModel):
     message: str = "Success"
 
 @router.get("/summary")
-async def get_dashboard_summary(current_user = Depends(get_current_user)):
+async def get_dashboard_summary(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get dashboard summary data"""
     try:
-        user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+        # Correctly extract user_id from the dictionary
+        user_id = current_user.get("id")
+        if not user_id:
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token/session")
+             
         logger.info(f"Fetching dashboard summary for user {user_id}")
         
         # Call the dashboard service to get real data
         summary = await dashboard_service.get_dashboard_summary(user_id)
         return summary
     except Exception as e:
-        logger.error(f"Error getting dashboard summary: {str(e)}")
+        logger.error(f"Error getting dashboard summary: {str(e)}", exc_info=True) # Log stack trace
         raise HTTPException(status_code=500, detail=f"Failed to retrieve dashboard summary: {str(e)}")
 
 @router.get("/recent-activities")
@@ -72,7 +76,7 @@ async def get_revenue_data(
 @router.get("/data", response_model=DashboardDataResponse)
 async def get_dashboard_data(
     months: int = Query(6, ge=1, le=24, description="Number of months of historical data to retrieve"),
-    current_user = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get complete dashboard data for the current user.
@@ -84,11 +88,20 @@ async def get_dashboard_data(
     Returns:
         JSON with complete dashboard data
     """
-    user_id = current_user.id if hasattr(current_user, 'id') else str(current_user)
+    # Correctly extract user_id from the dictionary
+    user_id = current_user.get("id")
+    if not user_id:
+         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token/session")
+
+    logger.info(f"Fetching full dashboard data for user {user_id} for {months} months")
     
     data = await dashboard_service.get_dashboard_data(user_id, months)
     
     if not data:
+        logger.warning(f"No dashboard data found for user {user_id}")
+        # Return empty structure instead of 404, maybe?
+        # Consider what the frontend expects if no data exists.
+        # For now, let's keep the 404 behavior.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dashboard data not found"
