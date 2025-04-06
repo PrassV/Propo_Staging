@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from enum import Enum
+import uuid
 
 class PaymentStatus(str, Enum):
     PENDING = "pending"
@@ -16,6 +17,7 @@ class PaymentMethod(str, Enum):
     CREDIT_CARD = "credit_card"
     UPI = "upi"
     CHECK = "check"
+    ONLINE_PLATFORM = "online_platform"
     OTHER = "other"
 
 class PaymentType(str, Enum):
@@ -27,11 +29,11 @@ class PaymentType(str, Enum):
     OTHER = "other"
 
 class PaymentBase(BaseModel):
-    property_id: str
-    tenant_id: str
-    amount: float = Field(..., gt=0)
-    payment_type: PaymentType
+    property_id: uuid.UUID
+    tenant_id: uuid.UUID
+    amount_due: float = Field(..., gt=0)
     due_date: date
+    payment_type: PaymentType = PaymentType.RENT
     description: Optional[str] = None
     period_start_date: Optional[date] = None
     period_end_date: Optional[date] = None
@@ -40,7 +42,7 @@ class PaymentCreate(PaymentBase):
     pass
 
 class PaymentUpdate(BaseModel):
-    amount: Optional[float] = Field(None, gt=0)
+    amount_due: Optional[float] = Field(None, gt=0)
     status: Optional[PaymentStatus] = None
     payment_method: Optional[PaymentMethod] = None
     payment_date: Optional[date] = None
@@ -51,9 +53,15 @@ class PaymentUpdate(BaseModel):
     notes: Optional[str] = None
     amount_paid: Optional[float] = Field(None, ge=0)
 
+class RecordPaymentRequest(BaseModel):
+    amount_paid: float = Field(..., gt=0)
+    payment_date: date = Field(default_factory=date.today)
+    payment_method: PaymentMethod
+    notes: Optional[str] = None
+
 class Payment(PaymentBase):
-    id: str
-    owner_id: str
+    id: uuid.UUID
+    owner_id: uuid.UUID
     status: PaymentStatus = PaymentStatus.PENDING
     payment_method: Optional[PaymentMethod] = None
     payment_date: Optional[date] = None
@@ -62,9 +70,10 @@ class Payment(PaymentBase):
     notes: Optional[str] = None
     amount_paid: Optional[float] = 0
     receipt_url: Optional[str] = None
+    transaction_id: Optional[str] = None
     
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class PaymentReceipt(BaseModel):
     id: str
