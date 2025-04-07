@@ -40,16 +40,19 @@ export default function Layout({ children }: LayoutProps) {
     toast.loading(propertyDialogInitialData ? 'Updating property...' : 'Adding property...');
     let submissionError = null;
     try {
-      let imageUrl: string | undefined = undefined;
+      // Store the list of URLs, not just one
+      let uploadedImageUrls: string[] | undefined = undefined; 
       if (images && images.length > 0) {
           try {
               const uploadResponse = await api.property.uploadPropertyImages(images);
+              // Store the entire array if it exists and is not empty
               if (uploadResponse && uploadResponse.imageUrls && uploadResponse.imageUrls.length > 0) {
-                  imageUrl = uploadResponse.imageUrls[0];
+                  uploadedImageUrls = uploadResponse.imageUrls;
+                  console.log("Images uploaded successfully. URLs:", uploadedImageUrls); 
               }
           } catch (uploadError) {
               console.error('Image upload failed:', uploadError);
-              toast.error('Image upload failed. Property saved without image.');
+              toast.error('Image upload failed. Property saved without image(s).');
           }
       }
 
@@ -82,8 +85,8 @@ export default function Layout({ children }: LayoutProps) {
             yearly_tax_rate: formData.yearlyTaxRate,
             survey_number: formData.surveyNumber,
             door_number: formData.doorNumber,
-            // Add image_urls if imageUrl exists
-            ...(imageUrl && { image_urls: [imageUrl] })
+            // Add image_urls if the array exists and has URLs
+            ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
          };
         console.info("Update Property Payload (Placeholder):", updatePayload);
         toast.success('Property updated successfully! (Simulation)');
@@ -117,12 +120,11 @@ export default function Layout({ children }: LayoutProps) {
             yearly_tax_rate: formData.yearlyTaxRate,
             survey_number: formData.surveyNumber,
             door_number: formData.doorNumber,
-            // Add image_urls if imageUrl exists
-            ...(imageUrl && { image_urls: [imageUrl] })
+            // Add image_urls if the array exists and has URLs
+            ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
         };
         
         console.info("Calling api.property.createProperty with payload:", createPayload);
-        // Actual API Call - Assuming api.property.createProperty accepts this structure
         await api.property.createProperty(createPayload); 
         
         toast.success('Property added successfully!');
