@@ -62,7 +62,6 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     setLoading(true);
     try {
       const payload: Partial<PropertyFormData> = { ...formData };
-      delete payload.category;
       
       await onSubmit(payload as PropertyFormData, newImages);
       setNewImages([]);
@@ -129,7 +128,9 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
                         <SelectContent>
                             <SelectItem value="residential">Residential</SelectItem>
                             <SelectItem value="commercial">Commercial</SelectItem>
-                            <SelectItem value="land">Land</SelectItem>
+                            <SelectItem value="vacant_land">Vacant Land</SelectItem>
+                            <SelectItem value="hostel_pg">Hostel/PG</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                     </Select>
                  </div>

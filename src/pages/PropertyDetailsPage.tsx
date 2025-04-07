@@ -247,9 +247,6 @@ export default function PropertyDetailsPage() {
                     <UnitCard 
                         key={unit.id} 
                         unit={unit}
-                        // Add placeholders to satisfy type temporarily
-                        isSelected={false} 
-                        onClick={() => {}} 
                     />
                 ))}
             </div>
@@ -268,7 +265,11 @@ export default function PropertyDetailsPage() {
                     </DialogHeader>
                     
                     {/* Add the AddUnitForm component */}
-                    <AddUnitForm onSubmit={handleAddUnit} isLoading={addingUnit} />
+                    <AddUnitForm 
+                        onSubmit={handleAddUnit} 
+                        onCancel={() => setAddUnitDialogOpen(false)}
+                        isLoading={addingUnit} 
+                    />
                 </DialogContent>
             </Dialog>
         </div>

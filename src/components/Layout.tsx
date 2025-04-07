@@ -62,73 +62,45 @@ export default function Layout({ children }: LayoutProps) {
           }
       }
 
-      if (propertyDialogInitialData && propertyDialogInitialData.id) {
-        console.log("[handlePropertyFormSubmit] Proceeding with UPDATE logic (Placeholder). ID:", propertyDialogInitialData.id); // Log update path
-        // --- UPDATE LOGIC (Still Placeholder) ---
-        const updatePayload = { 
-            // Map fields from formData to backend model (snake_case)
-            property_name: formData.propertyName, 
-            property_type: formData.propertyType,
-            address_line1: formData.addressLine1,
-            address_line2: formData.addressLine2,
-            city: formData.city,
-            state: formData.state,
-            pincode: formData.pincode,
-            country: formData.country,
-            description: formData.description,
-            number_of_units: formData.numberOfUnits,
-            amenities: formData.amenities,
-            size_sqft: formData.sizeSqft,
-            bedrooms: formData.bedrooms,
-            bathrooms: formData.bathrooms,
-            kitchens: formData.kitchens,
-            garages: formData.garages,
-            garage_size: formData.garageSize,
-            year_built: formData.yearBuilt,
-            floors: formData.floors,
-            listed_in: formData.listedIn,
-            price: formData.price,
-            yearly_tax_rate: formData.yearlyTaxRate,
-            survey_number: formData.surveyNumber,
-            door_number: formData.doorNumber,
-            // Add image_urls if the array exists and has URLs
-            ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
-         };
-        console.info("[handlePropertyFormSubmit] Update Property Payload (Placeholder):", updatePayload);
-        toast.success('Property updated successfully! (Simulation)');
-        // Example: await api.property.updateProperty(propertyDialogInitialData.id, updatePayload);
+      const propertyId = propertyDialogInitialData?.id;
 
-      } else {
-        console.log("[handlePropertyFormSubmit] Proceeding with CREATE logic."); // Log create path
+      if (!propertyId) {
         // --- CREATE LOGIC (Implementation) ---
-        const createPayload = { 
-            // Map fields from formData to backend model (snake_case)
-            property_name: formData.propertyName, 
-            property_type: formData.propertyType,
-            address_line1: formData.addressLine1,
-            address_line2: formData.addressLine2,
-            city: formData.city,
-            state: formData.state,
-            pincode: formData.pincode,
-            country: formData.country,
-            description: formData.description,
-            number_of_units: formData.numberOfUnits,
-            amenities: formData.amenities,
-            size_sqft: formData.sizeSqft,
-            bedrooms: formData.bedrooms,
-            bathrooms: formData.bathrooms,
-            kitchens: formData.kitchens,
-            garages: formData.garages,
-            garage_size: formData.garageSize,
-            year_built: formData.yearBuilt,
-            floors: formData.floors,
-            listed_in: formData.listedIn,
-            price: formData.price,
-            yearly_tax_rate: formData.yearlyTaxRate,
-            survey_number: formData.surveyNumber,
-            door_number: formData.doorNumber,
-            // Add image_urls if the array exists and has URLs
-            ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
+        if (!user) {
+          toast.error("You must be logged in to create a property.");
+          toast.dismiss();
+          return;
+        }
+
+        const createPayload = {
+          owner_id: user.id,
+          property_name: formData.propertyName,
+          property_type: formData.propertyType,
+          address_line1: formData.addressLine1,
+          address_line2: formData.addressLine2 || undefined,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          country: formData.country,
+          description: formData.description || undefined,
+          number_of_units: formData.numberOfUnits,
+          category: formData.category || undefined,
+          listed_in: formData.listedIn || undefined,
+          price: formData.price,
+          yearly_tax_rate: formData.yearlyTaxRate,
+          size_sqft: formData.sizeSqft,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          kitchens: formData.kitchens,
+          garages: formData.garages,
+          garage_size: formData.garageSize,
+          year_built: formData.yearBuilt,
+          floors: formData.floors,
+          amenities: formData.amenities || [],
+          survey_number: formData.surveyNumber || undefined,
+          door_number: formData.doorNumber || undefined,
+          status: formData.status || undefined,
+          image_urls: [],
         };
         
         console.log("[handlePropertyFormSubmit] Payload constructed:", JSON.stringify(createPayload, null, 2)); // Log constructed payload
@@ -138,6 +110,39 @@ export default function Layout({ children }: LayoutProps) {
         console.log("[handlePropertyFormSubmit] createProperty API call finished.");
         
         toast.success('Property added successfully!');
+      } else {
+        // --- UPDATE LOGIC (Implementation) ---
+        const updatePayload = {
+          property_name: formData.propertyName,
+          property_type: formData.propertyType,
+          address_line1: formData.addressLine1,
+          address_line2: formData.addressLine2 || undefined,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          country: formData.country,
+          description: formData.description || undefined,
+          number_of_units: formData.numberOfUnits,
+          category: formData.category || undefined,
+          listed_in: formData.listedIn || undefined,
+          price: formData.price,
+          yearly_tax_rate: formData.yearlyTaxRate,
+          size_sqft: formData.sizeSqft,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          kitchens: formData.kitchens,
+          garages: formData.garages,
+          garage_size: formData.garageSize,
+          year_built: formData.yearBuilt,
+          floors: formData.floors,
+          amenities: formData.amenities || [],
+          survey_number: formData.surveyNumber || undefined,
+          door_number: formData.doorNumber || undefined,
+          status: formData.status || undefined,
+        };
+        
+        console.log("Updating property with payload:", updatePayload);
+        toast.success('Property updated successfully! (Simulation)');
       }
       
       if (onSuccessCallback) {

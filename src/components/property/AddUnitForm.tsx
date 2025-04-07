@@ -6,9 +6,11 @@ import { UnitCreate } from '@/api/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from "@/components/ui/button";
 
 interface AddUnitFormProps {
     onSubmit: (data: UnitCreate) => void;
+    onCancel: () => void;
     isLoading?: boolean;
 }
 
@@ -26,7 +28,7 @@ const formSchema = z.object({
 // Define the form values type
 type FormValues = z.infer<typeof formSchema>;
 
-export default function AddUnitForm({ onSubmit, isLoading = false }: AddUnitFormProps) {
+export default function AddUnitForm({ onSubmit, onCancel, isLoading = false }: AddUnitFormProps) {
     // Initialize the form with react-hook-form
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -211,7 +213,15 @@ export default function AddUnitForm({ onSubmit, isLoading = false }: AddUnitForm
                     )}
                 />
 
-                {/* The form buttons will be handled by parent component */}
+                {/* Add Submit and Cancel Buttons */} 
+                <div className="flex justify-end space-x-2 pt-4">
+                     <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+                        Cancel
+                     </Button>
+                     <Button type="submit" form="add-unit-form" disabled={isLoading}>
+                        {isLoading ? "Adding..." : "Add Unit"}
+                     </Button>
+                 </div>
             </form>
         </Form>
     );
