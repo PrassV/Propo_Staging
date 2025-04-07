@@ -30,7 +30,13 @@ async def get_documents(
         if status:
             query = query.eq("status", status)
 
-        response = await query.order("created_at", desc=True).execute()
+        # Execute the query synchronously
+        response = query.order("created_at", desc=True).execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching documents DB: {response.error.message}")
+            return []
+
         logger.debug(f"Supabase get_documents response: {response}")
         return response.data if response.data else []
     except Exception as e:

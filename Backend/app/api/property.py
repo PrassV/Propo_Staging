@@ -97,7 +97,7 @@ async def get_properties(
 @router.get("/{property_id}", response_model=Property)
 async def get_property(
     property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """Get a specific property by ID."""
@@ -105,7 +105,7 @@ async def get_property(
     if not property_data:
         raise HTTPException(status_code=404, detail="Property not found")
     # Verify ownership
-    if property_data.get("owner_id") != current_user.id:
+    if property_data.get("owner_id") != current_user.get("id"):
         raise HTTPException(status_code=403, detail="Not authorized to access this property")
     return property_data
 
