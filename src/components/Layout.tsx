@@ -37,28 +37,34 @@ export default function Layout({ children }: LayoutProps) {
       formData: PropertyFormData,
       images: File[]
   ): Promise<void> => {
+    console.log("[handlePropertyFormSubmit] Starting submission..."); // Log entry
     toast.loading(propertyDialogInitialData ? 'Updating property...' : 'Adding property...');
     let submissionError = null;
     try {
-      // Store the list of URLs, not just one
       let uploadedImageUrls: string[] | undefined = undefined; 
+      console.log(`[handlePropertyFormSubmit] Found ${images?.length || 0} image(s) to upload.`); // Log image count
       if (images && images.length > 0) {
           try {
+              console.log("[handlePropertyFormSubmit] Attempting image upload...");
               const uploadResponse = await api.property.uploadPropertyImages(images);
-              // Store the entire array if it exists and is not empty
+              console.log("[handlePropertyFormSubmit] Image upload API call finished.");
               if (uploadResponse && uploadResponse.imageUrls && uploadResponse.imageUrls.length > 0) {
                   uploadedImageUrls = uploadResponse.imageUrls;
-                  console.log("Images uploaded successfully. URLs:", uploadedImageUrls); 
+                  console.log("[handlePropertyFormSubmit] Image upload successful. URLs:", uploadedImageUrls);
+              } else {
+                   console.warn("[handlePropertyFormSubmit] Image upload response missing expected data:", uploadResponse);
               }
           } catch (uploadError) {
-              console.error('Image upload failed:', uploadError);
+              console.error('[handlePropertyFormSubmit] Image upload failed:', uploadError);
               toast.error('Image upload failed. Property saved without image(s).');
+              // Clear the URLs if upload failed to prevent potential reuse
+              uploadedImageUrls = undefined; 
           }
       }
 
       if (propertyDialogInitialData && propertyDialogInitialData.id) {
+        console.log("[handlePropertyFormSubmit] Proceeding with UPDATE logic (Placeholder). ID:", propertyDialogInitialData.id); // Log update path
         // --- UPDATE LOGIC (Still Placeholder) ---
-        // TODO: Implement mapping and actual API call for updating property
         const updatePayload = { 
             // Map fields from formData to backend model (snake_case)
             property_name: formData.propertyName, 
@@ -88,11 +94,12 @@ export default function Layout({ children }: LayoutProps) {
             // Add image_urls if the array exists and has URLs
             ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
          };
-        console.info("Update Property Payload (Placeholder):", updatePayload);
+        console.info("[handlePropertyFormSubmit] Update Property Payload (Placeholder):", updatePayload);
         toast.success('Property updated successfully! (Simulation)');
         // Example: await api.property.updateProperty(propertyDialogInitialData.id, updatePayload);
 
       } else {
+        console.log("[handlePropertyFormSubmit] Proceeding with CREATE logic."); // Log create path
         // --- CREATE LOGIC (Implementation) ---
         const createPayload = { 
             // Map fields from formData to backend model (snake_case)
@@ -124,28 +131,34 @@ export default function Layout({ children }: LayoutProps) {
             ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
         };
         
-        console.log("Payload sent to POST /properties/:", JSON.stringify(createPayload, null, 2));
-        console.info("Calling api.property.createProperty with payload:", createPayload);
+        console.log("[handlePropertyFormSubmit] Payload constructed:", JSON.stringify(createPayload, null, 2)); // Log constructed payload
+        
+        console.log("[handlePropertyFormSubmit] Calling createProperty API...");
         await api.property.createProperty(createPayload); 
+        console.log("[handlePropertyFormSubmit] createProperty API call finished.");
         
         toast.success('Property added successfully!');
       }
       
       if (onSuccessCallback) {
+        console.log("[handlePropertyFormSubmit] Executing success callback...");
         try {
             await onSuccessCallback();
         } catch (callbackError) {
-            console.error("Error executing success callback:", callbackError);
+            console.error("[handlePropertyFormSubmit] Error executing success callback:", callbackError);
             toast.error("Action succeeded, but failed to refresh data.");
         }
       }
+      console.log("[handlePropertyFormSubmit] Submission try block finished.");
       
     } catch (error) {
         submissionError = error;
-        console.error("Error saving property:", error);
+        // Log the specific error caught during property save/creation
+        console.error("[handlePropertyFormSubmit] Error during property save/create API call or payload construction:", error); 
         toast.error('Failed to save property.');
     } finally {
         toast.dismiss();
+        console.log(`[handlePropertyFormSubmit] Finally block. Submission error: ${!!submissionError}`);
         if (!submissionError) {
             closePropertyDialog();
         }
