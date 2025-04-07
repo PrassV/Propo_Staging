@@ -4,7 +4,7 @@ from datetime import datetime
 import uuid
 from supabase import Client # Import Client type
 
-from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate # Import new model
+from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails # Import new model
 from ..db import properties as property_db
 # Import other necessary services if needed for cross-service calls
 # from . import tenant_service, maintenance_service # Example
@@ -242,3 +242,32 @@ async def get_revenue_for_property(db_client: Client, property_id: str, owner_id
     logger.info(f"Placeholder: Calculating revenue for property {property_id} by user {owner_id}")
     # Replace with actual implementation
     return {"calculated_revenue": 0.00} # Placeholder response 
+
+async def create_unit(db_client: Client, property_id: str, unit_data: UnitCreate, owner_id: str) -> Optional[UnitDetails]:
+    """Create a new unit for a property after verifying ownership."""
+    try:
+        # 1. Verify property ownership
+        existing_property = await property_db.get_property_by_id(db_client, property_id)
+        if not existing_property or existing_property.get("owner_id") != owner_id:
+            logger.warning(f"User {owner_id} unauthorized or property {property_id} not found for creating unit.")
+            return None
+
+        # 2. Prepare data for insertion
+        insert_data = unit_data.dict(exclude_unset=True)
+        insert_data["property_id"] = property_id
+        # ID, created_at, updated_at are handled by DB defaults/triggers
+
+        # 3. Call DB function to insert
+        created_unit_dict = await property_db.create_unit(db_client, insert_data)
+
+        if not created_unit_dict:
+            logger.error(f"Failed to create unit in DB for property {property_id}")
+            return None
+
+        # 4. Return as Pydantic model (optional, but good practice)
+        # Assuming UnitDetails model exists and matches the structure
+        return UnitDetails(**created_unit_dict)
+
+    except Exception as e:
+        logger.error(f"Error in property_service.create_unit: {str(e)}", exc_info=True)
+        return None 

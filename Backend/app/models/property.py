@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from datetime import datetime, date
 from enum import Enum
 import uuid
+from .tenant import Tenant # Make sure Tenant is imported if used
 
 # --- Enums based on potential usage, adjust if needed ---
 class PropertyCategory(str, Enum):
@@ -103,3 +104,40 @@ class Property(PropertyBase):
 
     class Config:
         from_attributes = True # Enable ORM mode 
+
+# --- Unit Models --- Based on units table and frontend types
+
+class UnitBase(BaseModel):
+    unit_number: str
+    status: Optional[str] = 'Vacant' # Default status?
+    bedrooms: Optional[int] = Field(None, ge=0)
+    bathrooms: Optional[float] = Field(None, ge=0)
+    area_sqft: Optional[int] = Field(None, ge=0)
+    rent: Optional[float] = Field(None, ge=0)
+    deposit: Optional[float] = Field(None, ge=0)
+
+class UnitCreate(UnitBase):
+    # property_id will be added by the endpoint/service
+    pass
+
+class UnitDetails(UnitBase):
+    id: uuid.UUID
+    property_id: uuid.UUID
+    # Potentially add tenant info if joining later
+    # current_tenant: Optional[Tenant] = None 
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# --- Update PropertyDetails ---
+
+class PropertyDetails(Property): # New/Updated PropertyDetails model
+    # Inherits fields from Property
+    units: List[UnitDetails] = [] # Add the units list
+    # Add other related details if needed, e.g., documents
+    # documents: List[PropertyDocument] = []
+
+    class Config:
+        from_attributes = True 

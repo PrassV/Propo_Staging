@@ -3,6 +3,7 @@ import logging
 import uuid
 from supabase import Client
 import json
+from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate # Import UnitCreate
 
 logger = logging.getLogger(__name__)
 
@@ -137,28 +138,36 @@ async def get_properties_count(
 
 async def get_property_by_id(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get a property by ID from Supabase.
+    Get a property by ID from Supabase, including its related units.
     Uses the provided authenticated client instance.
     """
     try:
-        # Removed await based on previous TypeErrors
-        response = db_client.table('properties').select('*').eq('id', property_id).single().execute()
+        # Select property columns and all columns from the related 'units' table
+        response = db_client.table('properties')\
+            .select('*, units(*)')\
+            .eq('id', property_id)\
+            .single()\
+            .execute()
         
         if hasattr(response, 'error') and response.error:
              if response.error.code == 'PGRST116':
                  logger.info(f"Property {property_id} not found (single query).")
                  return None
              else:
-                 logger.error(f"Error fetching property {property_id}: {response.error.message}")
+                 logger.error(f"Error fetching property {property_id} with units: {response.error.message}")
                  return None
         
         if not hasattr(response, 'data'):
-            logger.error(f"Error fetching property {property_id}: Response has no data attribute.")
+            logger.error(f"Error fetching property {property_id} with units: Response has no data attribute.")
             return None
+            
+        # Ensure 'units' key exists, defaulting to empty list if null/missing
+        if 'units' not in response.data or response.data['units'] is None:
+            response.data['units'] = []
             
         return response.data
     except Exception as e:
-        logger.error(f"Failed to get property {property_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to get property {property_id} with units: {str(e)}", exc_info=True)
         return None
 
 async def create_property(db_client: Client, property_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -332,4 +341,23 @@ async def get_property_owner(db_client: Client, property_id: str) -> Optional[st
             
     except Exception as e:
         logger.error(f"Failed to get owner for property {property_id}: {str(e)}", exc_info=True)
+        return None 
+
+async def create_unit(db_client: Client, unit_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Insert a new unit record into the public.units table."""
+    try:
+        logger.info(f"[db.create_unit] Attempting to insert unit: {unit_data}")
+        response = await db_client.table('units').insert(unit_data).execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"[db.create_unit] Error inserting unit: {response.error.message}")
+            return None
+        if not hasattr(response, 'data') or not response.data:
+            logger.error(f"[db.create_unit] Insert unit returned no data.")
+            return None
+            
+        logger.info(f"[db.create_unit] Successfully inserted unit: {response.data[0]}")
+        return response.data[0]
+    except Exception as e:
+        logger.error(f"[db.create_unit] Exception inserting unit: {str(e)}", exc_info=True)
         return None 

@@ -14,7 +14,10 @@ from app.models.property import (
     PropertyDocument,
     PropertyDocumentCreate,
     PropertyType,
-    PropertyCategory
+    PropertyCategory,
+    UnitCreate,
+    UnitDetails,
+    PropertyDetails
 )
 # Assuming tenant, maintenance, payment models exist elsewhere
 from app.models.tenant import Tenant # Placeholder
@@ -94,13 +97,13 @@ async def get_properties(
         logging.error(f"Error getting properties: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve properties: {str(e)}")
 
-@router.get("/{property_id}", response_model=Property)
+@router.get("/{property_id}", response_model=PropertyDetails)
 async def get_property(
     property_id: uuid.UUID = Path(..., description="The property ID"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated),
 ):
-    """Get a specific property by ID."""
+    """Get a specific property by ID, including its units."""
     property_data = await property_service.get_property(db_client, str(property_id))
     if not property_data:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -337,3 +340,33 @@ async def get_property_revenue(
 
 # Remove or adapt the old image upload endpoint if image_urls are now part of PropertyUpdate
 # @router.post("/{property_id}/images", response_model=PropertyResponse) ... 
+
+# --- Unit Endpoints ---
+
+@router.post("/{property_id}/units", response_model=UnitDetails, status_code=status.HTTP_201_CREATED)
+async def create_property_unit(
+    property_id: uuid.UUID = Path(..., description="The property ID"),
+    unit_data: UnitCreate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """Create a new unit for a specific property."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+    try:
+        created_unit = await property_service.create_unit(
+            db_client=db_client,
+            property_id=str(property_id),
+            unit_data=unit_data,
+            owner_id=user_id
+        )
+        if not created_unit:
+            # Service function returns None if unauthorized or property not found
+            raise HTTPException(status_code=404, detail="Property not found or not authorized to add unit")
+        
+        return created_unit
+    except Exception as e:
+        logger.error(f"Error creating unit for property {property_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating unit: {str(e)}") 
