@@ -201,16 +201,16 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls:
         formData.append('file', fileToUpload); // Append only the first file
         formData.append('context', 'property_image');
         
-        // Expecting { file_url: string } from the backend
-        const response = await apiClient.post<{ file_url: string }>('/uploads/', formData);
+        // Expecting { file_urls: List[str] } from the backend
+        const response = await apiClient.post<{ file_urls: string[] }>('/uploads/', formData);
         
-        // Check if response.data and file_url exist
-        if (response.data && response.data.file_url) {
+        // Check if response.data and file_urls exist and is an array
+        if (response.data && Array.isArray(response.data.file_urls)) {
             // Return the structure expected by the calling function (Layout.tsx)
-            return { imageUrls: [response.data.file_url] }; 
+            return { imageUrls: response.data.file_urls }; 
         } else {
-            console.error("Upload API response missing file_url:", response.data);
-            throw new Error("Upload succeeded but API response did not contain the file URL.");
+            console.error("Upload API response missing file_urls array:", response.data);
+            throw new Error("Upload succeeded but API response did not contain the file URLs array.");
         }
 
     } catch (error: unknown) {

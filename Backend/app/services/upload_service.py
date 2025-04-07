@@ -2,6 +2,7 @@ import logging
 import uuid
 from fastapi import UploadFile, HTTPException, status
 from supabase import create_client, Client
+from typing import List
 
 # Assuming settings are correctly configured with necessary Supabase details
 from app.config.settings import settings
@@ -25,21 +26,22 @@ def get_supabase_service_client() -> Client:
         raise ValueError(f"Failed to initialize Supabase service client: {e}")
 
 async def handle_upload(
-    file: UploadFile,
+    files: List[UploadFile], # Accept a list of files
     user_id: str,
     context: str | None = None,
     related_id: str | None = None
-) -> str:
+) -> List[str]: # Return a list of URLs
     """
-    Handles file upload to Supabase Storage using the service role key.
+    Handles upload of multiple files to Supabase Storage using the service role key.
     Selects the bucket based on the provided context.
-    Constructs a path based on context, user_id, related_id, and a unique filename.
-    Returns the public URL of the uploaded file.
+    Constructs a path for each file based on context, user_id, related_id, and a unique filename.
+    Returns a list of signed URLs for the uploaded files.
     """
+    signed_urls = []
     try:
         storage_client = get_supabase_service_client()
 
-        # Select bucket based on context
+        # Select bucket based on context (outside the loop)
         if context == 'property_image':
             bucket_name = settings.PROPERTY_IMAGE_BUCKET
         elif context == 'tenant_document':
@@ -50,87 +52,79 @@ async def handle_upload(
             bucket_name = settings.MAINTENANCE_FILES_BUCKET
         elif context == 'agreement':
             bucket_name = settings.AGREEMENTS_BUCKET
-        # Add more elif blocks for other contexts as needed
         else:
-            # Default to a general bucket if context is unknown or missing
             bucket_name = settings.GENERAL_UPLOAD_BUCKET 
             logger.warning(f"Upload context '{context}' not recognized or missing. Using default bucket: {bucket_name}")
-            # Use 'general' for path if context was None
             context = context or "general" 
 
         if not bucket_name:
             logger.error(f"Storage bucket name is not configured for context '{context}' or default.")
             raise ValueError("Storage bucket name not configured correctly.")
 
-        # Generate a unique filename to prevent overwrites and sanitize input
-        # Using UUID + original extension is safer than using original filename directly
-        file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
-        unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
+        # Set expiration time for signed URLs
+        expires_in = 3600 # 1 hour
 
-        # Construct path within the bucket (e.g., context/user_id/related_id/unique_filename.ext)
-        # Reverted: Context is needed in the path for signed URLs
-        path_parts = [context, str(user_id)] 
-        if related_id:
-            path_parts.append(str(related_id))
-        path_parts.append(unique_filename)
-        storage_path = "/".join(path_parts)
+        for file in files:
+            # Generate a unique filename for each file
+            file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
+            unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
 
-        logger.info(f"Attempting to upload file to Supabase Storage: Bucket='{bucket_name}', Path='{storage_path}'")
+            # Construct path within the bucket
+            path_parts = [context, str(user_id)] 
+            if related_id:
+                path_parts.append(str(related_id))
+            path_parts.append(unique_filename)
+            storage_path = "/".join(path_parts)
 
-        # Read file content
-        content = await file.read()
-        if not content:
-             logger.warning(f"Upload attempted with empty file: {file.filename}")
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot upload empty file.")
+            logger.info(f"Attempting to upload file '{file.filename}' to: Bucket='{bucket_name}', Path='{storage_path}'")
 
-        # Perform the upload using the storage client
-        # Make sure the bucket specified exists in your Supabase project
-        # and the service role key has permission to upload to it.
-        upload_response = storage_client.storage.from_(bucket_name).upload(
-            path=storage_path,
-            file=content,
-            file_options={"content-type": file.content_type or 'application/octet-stream'}
-        )
+            content = await file.read()
+            if not content:
+                logger.warning(f"Skipping empty file: {file.filename}")
+                continue # Skip empty files
 
-        # Basic check: supabase-py v2 might raise an error on failure, 
-        # but explicit checks can be useful depending on version/configuration.
-        # Add more robust checking based on the actual response if needed.
-        # For example, check upload_response.status_code if available and not 2xx.
+            # Perform the upload
+            upload_response = storage_client.storage.from_(bucket_name).upload(
+                path=storage_path,
+                file=content,
+                file_options={"content-type": file.content_type or 'application/octet-stream'}
+            )
+            # Add basic error check for upload if needed based on library version
+            logger.info(f"File '{file.filename}' uploaded to path: {storage_path}")
 
-        logger.info(f"File uploaded to path: {storage_path}")
+            # Get a signed URL for the uploaded file
+            signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
+                path=storage_path, 
+                expires_in=expires_in
+            )
+            signed_url = signed_url_response.get('signedURL')
 
-        # Get a signed URL for the uploaded file (valid for a default duration, e.g., 1 hour)
-        # Adjust expiration time (in seconds) as needed. Longer times may have security implications.
-        # Example: 60 * 60 * 24 * 7 for one week validity
-        expires_in = 3600 # Default: 1 hour
-        signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
-            path=storage_path, 
-            expires_in=expires_in
-        )
+            if signed_url:
+                logger.info(f"Signed URL generated for '{file.filename}': {signed_url}")
+                signed_urls.append(signed_url)
+            else:
+                logger.error(f"Upload succeeded for '{file.filename}' but failed to get signed URL. Path: {storage_path}. Response: {signed_url_response}")
+                # Decide whether to raise an error for the whole batch or just skip this file's URL
+                # Raising an error might be safer to signal partial failure.
+                # For now, we just log the error and the URL won't be included.
 
-        # Assuming create_signed_url returns a dict like {'signedURL': '...'}
-        # Check the actual response structure from supabase-py documentation/testing
-        signed_url = signed_url_response.get('signedURL')
-
-        if not signed_url:
-             logger.error(f"Upload succeeded but failed to get signed URL for path: {storage_path}. Response: {signed_url_response}")
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File uploaded but could not retrieve access URL.")
-
-        logger.info(f"Signed URL generated (valid for {expires_in}s): {signed_url}")
-        return signed_url # Return the signed URL
+        # Return the list of successfully generated signed URLs
+        if not signed_urls and len(files) > 0:
+             # Check if we attempted uploads but got no URLs back
+             logger.error("File upload process completed, but no signed URLs were generated.")
+             # Raise error if no URLs were generated despite having files
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload succeeded but failed to retrieve access URLs.")
+             
+        return signed_urls
 
     except ValueError as ve:
-         # Configuration errors (missing settings, client init failure)
          logger.error(f"Configuration error during upload handle: {ve}")
-         # Raising as 500 Internal Server Error as it's a backend config issue
          raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(ve))
     except HTTPException as http_exc:
-         # Re-raise HTTPExceptions coming from nested calls or validation
          raise http_exc
     except Exception as e:
-        # Catch unexpected errors during the process (file read, upload, URL generation)
         logger.exception(f"Unexpected error handling file upload for user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred processing the file: {str(e)}"
+            detail=f"An unexpected error occurred processing the file(s): {str(e)}"
         ) 

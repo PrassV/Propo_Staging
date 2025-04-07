@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import logging
 
 from app.config.auth import get_current_user
@@ -15,19 +15,19 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 class UploadResponse(BaseModel):
-    file_url: str
-    message: str = "File uploaded successfully"
+    file_urls: List[str]
+    message: str = "Files uploaded successfully"
 
 @router.post("/", response_model=UploadResponse)
-async def upload_file(
-    file: UploadFile = File(..., description="The file to upload"),
-    context: Optional[str] = Form(None, description="Context for the upload (e.g., 'profile', 'maintenance')"),
-    related_id: Optional[str] = Form(None, description="ID related to the context (e.g., user ID, request ID)"),
+async def upload_files(
+    files: List[UploadFile] = File(..., description="The file(s) to upload"),
+    context: Optional[str] = Form(None, description="Context for the upload (e.g., 'property_image')"),
+    related_id: Optional[str] = Form(None, description="ID related to the context (e.g., property ID)"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Uploads a file to storage.
-    Requires authentication. Context and related_id can be used for organization and potential authorization.
+    Uploads one or more files to storage.
+    Requires authentication. Context and related_id can be used for organization.
     """
     try:
         user_id = current_user.get("id")
@@ -36,17 +36,17 @@ async def upload_file(
 
         # TODO: Add authorization checks based on context and related_id if necessary
 
-        file_url = await upload_service.handle_upload(
-            file=file,
+        file_urls = await upload_service.handle_upload(
+            files=files,
             user_id=user_id,
             context=context,
             related_id=related_id
         )
 
-        if not file_url:
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed")
+        if not file_urls:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed or returned no URLs")
 
-        return {"file_url": file_url, "message": "File uploaded successfully"}
+        return {"file_urls": file_urls, "message": "Files uploaded successfully"}
 
     except HTTPException as http_exc:
         logger.error(f"HTTPException during upload for user {user_id}: {http_exc.detail}")
