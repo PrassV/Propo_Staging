@@ -17,9 +17,32 @@ interface PropertyFormProps {
 }
 
 const amenitiesList = [
-  'Air Conditioning', 'Heating', 'Washer', 'Dryer', 'Dishwasher', 'Refrigerator', 
-  'Stove', 'Oven', 'Microwave', 'Balcony/Patio', 'Pool', 'Gym', 'Parking', 
-  'Fireplace', 'Hardwood Floors', 'Pet Friendly', 'Furnished', 'Wheelchair Accessible'
+  'power_backup', 
+  'water_storage', 
+  'security_guard', 
+  'cctv', 
+  'intercom', 
+  'covered_parking', 
+  'visitor_parking', 
+  'two_wheeler_parking', 
+  'piped_gas', 
+  'rainwater_harvesting', 
+  'solar_panels', 
+  'lift', 
+  'garden', 
+  'temple', 
+  'community_hall', 
+  'children_play_area', 
+  'vastu_compliant', 
+  'pooja_room', 
+  'servant_room', 
+  'study_room', 
+  'store_room', 
+  'balcony', 
+  'modular_kitchen', 
+  'gym', 
+  'swimming_pool', 
+  'clubhouse'
 ];
 
 export default function PropertyForm({ initialData, onSubmit, onCancel }: PropertyFormProps) {
@@ -241,6 +264,14 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
                  <div className="space-y-1.5">
                      <Label htmlFor="yearBuilt">Year Built</Label>
                      <Input id="yearBuilt" name="yearBuilt" type="number" value={formData.yearBuilt} onChange={handleInputChange} disabled={loading} min={1800} max={new Date().getFullYear()} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="surveyNumber">Survey Number *</Label>
+                     <Input id="surveyNumber" name="surveyNumber" value={formData.surveyNumber} onChange={handleInputChange} required disabled={loading} />
+                 </div>
+                 <div className="space-y-1.5">
+                     <Label htmlFor="doorNumber">Door Number</Label>
+                     <Input id="doorNumber" name="doorNumber" value={formData.doorNumber} onChange={handleInputChange} disabled={loading} />
                  </div>
              </div>
 
