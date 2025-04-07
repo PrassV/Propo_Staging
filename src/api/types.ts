@@ -187,6 +187,7 @@ export interface PropertyDetails extends Property {
   image_urls: string[];
   units: UnitDetails[];
   documents: Document[];
+  amenities?: string[];
   description?: string;
   bedrooms?: number;
   bathrooms?: number;

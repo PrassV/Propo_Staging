@@ -1,28 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
-import { PropertyDetails, UnitDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
+import { PropertyDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
 import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Edit, Plus } from 'lucide-react'; // Removed unused icons
 import { usePropertyDialog } from '@/contexts/PropertyDialogContext';
 import ImageGallery from '@/components/property/ImageGallery'; // Import the new component
 import UnitCard from '@/components/property/UnitCard'; // Import UnitCard
-import TenantInfoTab from '@/components/property/details/TenantInfoTab'; // Import the tab component
-import LeaseInfoTab from '@/components/property/details/LeaseInfoTab'; // Import Lease tab
-import MaintenanceListTab from '@/components/property/details/MaintenanceListTab'; // Import Maintenance tab
-import PaymentListTab from '@/components/property/details/PaymentListTab'; // Import Payment tab
 import DocumentList from '@/components/documents/DocumentList'; // Import DocumentList
 import AddUnitForm from '@/components/property/AddUnitForm'; // Import the AddUnitForm component
-// Import other potential components needed (assumed locations):
-// import ImageGallery from '@/components/property/ImageGallery';
-// import UnitCard from '@/components/property/UnitCard'; 
-// import DocumentList from '@/components/documents/DocumentList'; 
-// import AddUnitForm from '@/components/property/AddUnitForm'; // etc.
 
-// Import Dialog components - we'll use these for the Add Unit dialog
+// Import Dialog components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function PropertyDetailsPage() {
@@ -34,7 +24,6 @@ export default function PropertyDetailsPage() {
     const [documentsError, setDocumentsError] = useState<string | null>(null); // Error state for documents
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedUnit, setSelectedUnit] = useState<UnitDetails | null>(null);
     const [addUnitDialogOpen, setAddUnitDialogOpen] = useState(false); // State for dialog visibility
     const [addingUnit, setAddingUnit] = useState(false); // Loading state for unit creation
     
@@ -52,14 +41,12 @@ export default function PropertyDetailsPage() {
             // Replace placeholder with actual (placeholder) API call
             const fetchedProperty = await api.property.getPropertyById(propertyId);
             setProperty(fetchedProperty);
-            setSelectedUnit(fetchedProperty.units?.[0] || null); // Select first unit initially
             
             // **** Remove Placeholder Data ****
             // console.warn("Using placeholder data for PropertyDetailsPage");
             // await new Promise(resolve => setTimeout(resolve, 500)); 
             // const placeholder: PropertyDetails = { /* ... placeholder object ... */ };
             // setProperty(placeholder);
-            // setSelectedUnit(placeholder.units?.[0] || null); 
             // **** End Placeholder Data Removal ****
             
         } catch (err: unknown) {
@@ -194,111 +181,81 @@ export default function PropertyDetailsPage() {
                 </CardContent>
             </Card>
 
-            {/* Units Selection & Details Tabs */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Units List */} 
-                <div className="lg:col-span-1 space-y-3"> {/* Reduced space-y */} 
-                    <h2 className="text-xl font-semibold px-1">Units</h2> {/* Added padding */} 
-                     <Button variant="outline" className="w-full" onClick={() => setAddUnitDialogOpen(true)}>
-                         <Plus className="mr-2 h-4 w-4" /> Add Unit
-                     </Button>
-                    {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm px-1">No units added yet.</p>}
-                    {property?.units?.map(unit => (
-                        // Use the UnitCard component
-                        <UnitCard 
-                            key={unit.id} 
-                            unit={unit}
-                            isSelected={selectedUnit?.id === unit.id}
-                            onClick={() => setSelectedUnit(unit)}
-            />
-          ))}
-      </div>
+            {/* NEW: Property Overview & Amenities Card */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Overview & Amenities</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {/* Display overview details if they exist */}
+                        {property.area && <div><span className="font-semibold">Size:</span> {property.area} {property.area_unit || 'sqft'}</div>} {/* Use area and area_unit */} 
+                        {typeof property.bedrooms === 'number' && <div><span className="font-semibold">Bedrooms:</span> {property.bedrooms}</div>}
+                        {typeof property.bathrooms === 'number' && <div><span className="font-semibold">Bathrooms:</span> {property.bathrooms}</div>}
+                        {property.year_built && <div><span className="font-semibold">Year Built:</span> {property.year_built}</div>}
+                        {/* Add other fields like floors, kitchens, garages if available in PropertyDetails type */} 
+                    </div>
+                    {/* Display amenities if they exist */} 
+                    {property.amenities && property.amenities.length > 0 && (
+                        <div>
+                            <h4 className="font-semibold mb-2 text-sm">Amenities:</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {property.amenities.map((amenity) => (
+                                    <span key={amenity} className="bg-secondary text-secondary-foreground text-xs font-medium px-2.5 py-0.5 rounded">
+                                        {amenity}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                     {/* Display description if it exists */}
+                     {property.description && (
+                        <div>
+                            <h4 className="font-semibold mb-2 text-sm">Description:</h4>
+                            <p className="text-sm text-muted-foreground">{property.description}</p>
+                        </div>
+                     )}
+                </CardContent>
+            </Card>
 
-                {/* Unit Details Tabs */} 
-                <div className="lg:col-span-2">
-                   {selectedUnit ? (
-                     <Tabs defaultValue="tenant" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4 mb-4"> {/* Adjust grid-cols based on tabs */}
-                            <TabsTrigger value="tenant">Tenant</TabsTrigger>
-                            <TabsTrigger value="lease">Lease</TabsTrigger>
-                            <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-                            <TabsTrigger value="payments">Payments</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="tenant">
-                            <Card>
-                                <CardHeader><CardTitle>Tenant Information</CardTitle></CardHeader>
-                                <CardContent>
-                                   {selectedUnit.status === 'Occupied' && selectedUnit.current_tenant_id ? (
-                                       // Use the TenantInfoTab component
-                                       <TenantInfoTab tenantId={selectedUnit.current_tenant_id} />
-                                   ) : (
-                                       <div className="space-y-4">
-                                           <p className="text-muted-foreground">This unit is vacant.</p>
-                                           <Button variant="outline">
-                                               <Plus className="mr-2 h-4 w-4" /> Assign Tenant
-                                           </Button>
-                                       </div>
-                                   )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                        <TabsContent value="lease">
-                            <Card>
-                                <CardHeader><CardTitle>Lease Agreement</CardTitle></CardHeader>
-                                <CardContent>
-                                   {/* Use the LeaseInfoTab component */} 
-                                   <LeaseInfoTab unitId={selectedUnit.id} /> 
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                        <TabsContent value="maintenance">
-                             <Card>
-                                <CardHeader><CardTitle>Maintenance History</CardTitle></CardHeader>
-                                <CardContent>
-                                   {/* Use the MaintenanceListTab component */} 
-                                   <MaintenanceListTab unitId={selectedUnit.id} /> 
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                         <TabsContent value="payments">
-                             <Card>
-                                <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
-                                <CardContent>
-                                    {/* Use the PaymentListTab component */} 
-                                    <PaymentListTab unitId={selectedUnit.id} tenantId={selectedUnit.current_tenant_id} />
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                    </Tabs>
-                   ) : (
-                       <Card className="flex items-center justify-center h-64">
-                           <p className="text-muted-foreground">Select a unit to view details.</p>
-                       </Card>
-                   )}
-              </div>
-            </div>
-            
-            {/* Property-Level Documents */}
+            {/* NEW: Property-Level Documents Card */}
             <Card>
                 <CardHeader>
                     <CardTitle>Property Documents</CardTitle>
-                    <CardDescription>Deeds, insurance, or other property-wide documents.</CardDescription>
+                    {/* TODO: Add button/mechanism to upload property-level documents */} 
                 </CardHeader>
                 <CardContent>
-                    {/* Document list with upload button */}
-                    <div className="space-y-4">
-                        <Button variant="outline" className="w-full sm:w-auto">
-                            <Plus className="mr-2 h-4 w-4" /> Upload Document
-                        </Button>
-                        
-                        <DocumentList 
-                            documents={documents} 
-                            isLoading={documentsLoading}
-                            error={documentsError}
-                        />
-                    </div>
+                    <DocumentList 
+                        documents={documents} 
+                        isLoading={documentsLoading} 
+                        error={documentsError} 
+                        // Add delete/upload handlers if needed
+                    />
                 </CardContent>
             </Card>
+
+            {/* Units Section - To be potentially restructured */}
+            <div className="text-xl font-semibold mb-4">Units</div>
+            {/* Add button or mechanism to add units */} 
+            <Button variant="outline" className="mb-4" onClick={() => setAddUnitDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Add Unit
+            </Button>
+            {/* Unit List */} 
+            <div className="space-y-4"> 
+                {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm">No units added yet.</p>}
+                {property?.units?.map(unit => (
+                    <UnitCard 
+                        key={unit.id} 
+                        unit={unit}
+                        // Add placeholders to satisfy type temporarily
+                        isSelected={false} 
+                        onClick={() => {}} 
+                    />
+                ))}
+            </div>
+            
+            {/* REMOVED: Old Unit Details Tabs Section */}
+            {/* <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"> ... Tabs ... </div> */}
 
             {/* Add Unit Dialog */}
             <Dialog open={addUnitDialogOpen} onOpenChange={setAddUnitDialogOpen}>
