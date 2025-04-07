@@ -182,33 +182,44 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
 }; 
 
 /**
- * Upload property images
+ * Upload property images - Modified to handle only the FIRST image
+ * and match the backend /uploads endpoint response.
  * Calls POST /uploads endpoint for image files
  */
 export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls: string[] }> => {
+    if (!images || images.length === 0) {
+        console.warn("uploadPropertyImages called with no images.");
+        return { imageUrls: [] }; // Return empty array if no images
+    }
+
+    // Handle only the first image for now, as backend expects a single file
+    const fileToUpload = images[0];
+    console.log(`Uploading first image: ${fileToUpload.name}`);
+
     try {
         const formData = new FormData();
-        images.forEach((file) => {
-            formData.append('file', file);
-        });
-        
+        formData.append('file', fileToUpload); // Append only the first file
         formData.append('context', 'property_image');
         
-        const response = await apiClient.post<{ imageUrls: string[] }>('/uploads/', formData, {
-            headers: {
-                // Content-Type is usually set automatically by browser/client for FormData
-                // 'Content-Type': 'multipart/form-data',
-            },
-        });
+        // Expecting { file_url: string } from the backend
+        const response = await apiClient.post<{ file_url: string }>('/uploads/', formData);
         
-        return response.data;
+        // Check if response.data and file_url exist
+        if (response.data && response.data.file_url) {
+            // Return the structure expected by the calling function (Layout.tsx)
+            return { imageUrls: [response.data.file_url] }; 
+        } else {
+            console.error("Upload API response missing file_url:", response.data);
+            throw new Error("Upload succeeded but API response did not contain the file URL.");
+        }
+
     } catch (error: unknown) {
         console.error("Error uploading property images:", error);
-        let errorMessage = 'Failed to upload images';
-        if (error && typeof error === 'object' && 'formattedMessage' in error) {
-            errorMessage = (error as { formattedMessage: string }).formattedMessage;
-        } else if (error instanceof Error) {
+        let errorMessage = 'Failed to upload image';
+        if (error instanceof Error) {
             errorMessage = error.message;
+        } else if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+            errorMessage = error.response.data.detail as string;
         }
         throw new Error(errorMessage);
     }
