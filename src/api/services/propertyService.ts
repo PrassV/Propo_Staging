@@ -198,7 +198,12 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls:
 
     try {
         const formData = new FormData();
-        formData.append('file', fileToUpload); // Append only the first file
+        // Append each file with the key 'files' (plural) to match backend parameter
+        images.forEach((file) => { 
+            formData.append('files', file); 
+        });
+        
+        // Add the context field for the backend
         formData.append('context', 'property_image');
         
         // Expecting { file_urls: List[str] } from the backend
