@@ -139,6 +139,7 @@ export default function Layout({ children }: LayoutProps) {
           survey_number: formData.surveyNumber || undefined,
           door_number: formData.doorNumber || undefined,
           status: formData.status || undefined,
+          image_urls: [],
         };
         
         console.log("Updating property with payload:", updatePayload);
