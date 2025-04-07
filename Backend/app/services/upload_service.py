@@ -67,8 +67,9 @@ async def handle_upload(
         file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
         unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
 
-        # Construct path (e.g., context/user_id/related_id/unique_filename.ext)
-        path_parts = [context, str(user_id)]
+        # Construct path within the bucket (e.g., context/user_id/related_id/unique_filename.ext)
+        # Reverted: Context is needed in the path for signed URLs
+        path_parts = [context, str(user_id)] 
         if related_id:
             path_parts.append(str(related_id))
         path_parts.append(unique_filename)
@@ -98,22 +99,25 @@ async def handle_upload(
 
         logger.info(f"File uploaded to path: {storage_path}")
 
-        # Get the public URL for the uploaded file
-        # Ensure the bucket's public access settings allow this if needed, 
-        # or handle signed URLs if files should be private.
-        public_url_data = storage_client.storage.from_(bucket_name).get_public_url(storage_path)
+        # Get a signed URL for the uploaded file (valid for a default duration, e.g., 1 hour)
+        # Adjust expiration time (in seconds) as needed. Longer times may have security implications.
+        # Example: 60 * 60 * 24 * 7 for one week validity
+        expires_in = 3600 # Default: 1 hour
+        signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
+            path=storage_path, 
+            expires_in=expires_in
+        )
 
-        # Assuming get_public_url returns the string URL directly (common in newer versions)
-        public_url = public_url_data
+        # Assuming create_signed_url returns a dict like {'signedURL': '...'}
+        # Check the actual response structure from supabase-py documentation/testing
+        signed_url = signed_url_response.get('signedURL')
 
-        if not public_url:
-             logger.error(f"Upload succeeded but failed to get public URL for path: {storage_path}")
-             # Depending on requirements, you might still return the path or raise an error.
-             # Raising an error ensures the frontend knows the URL isn't available.
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File uploaded but could not retrieve public URL.")
+        if not signed_url:
+             logger.error(f"Upload succeeded but failed to get signed URL for path: {storage_path}. Response: {signed_url_response}")
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File uploaded but could not retrieve access URL.")
 
-        logger.info(f"Public URL generated: {public_url}")
-        return public_url
+        logger.info(f"Signed URL generated (valid for {expires_in}s): {signed_url}")
+        return signed_url # Return the signed URL
 
     except ValueError as ve:
          # Configuration errors (missing settings, client init failure)
