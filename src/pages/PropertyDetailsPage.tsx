@@ -108,7 +108,7 @@ export default function PropertyDetailsPage() {
       addressLine2: property.address_line2,
       city: property.city,
       state: property.state,
-            pincode: property.zip_code, 
+            pincode: property.pincode,
             country: property.country,
       description: property.description,
       bedrooms: property.bedrooms,
@@ -202,8 +202,8 @@ export default function PropertyDetailsPage() {
                      <Button variant="outline" className="w-full" onClick={() => setAddUnitDialogOpen(true)}>
                          <Plus className="mr-2 h-4 w-4" /> Add Unit
                      </Button>
-                    {property.units.length === 0 && <p className="text-muted-foreground text-sm px-1">No units added yet.</p>}
-                    {property.units.map(unit => (
+                    {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm px-1">No units added yet.</p>}
+                    {property?.units?.map(unit => (
                         // Use the UnitCard component
                         <UnitCard 
                             key={unit.id} 
