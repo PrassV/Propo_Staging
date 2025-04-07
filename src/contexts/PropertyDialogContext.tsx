@@ -1,8 +1,11 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
 import { PropertyFormData } from '@/api/types';
 
-// Allow initialData to potentially include an ID for editing
-type InitialDataType = Partial<PropertyFormData> & { id?: string };
+// Allow initialData to potentially include an ID and existing image URLs/Paths
+type InitialDataType = Partial<PropertyFormData> & { 
+    id?: string;
+    image_urls?: string[]; // Add existing image paths/URLs
+};
 type SuccessCallbackType = () => void | Promise<void>; // Callback type
 
 // Define the shape of the context data

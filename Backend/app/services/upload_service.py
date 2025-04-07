@@ -30,14 +30,14 @@ async def handle_upload(
     user_id: str,
     context: str | None = None,
     related_id: str | None = None
-) -> List[str]: # Return a list of URLs
+) -> List[str]: # Return a list of PATHS now
     """
     Handles upload of multiple files to Supabase Storage using the service role key.
     Selects the bucket based on the provided context.
     Constructs a path for each file based on context, user_id, related_id, and a unique filename.
-    Returns a list of signed URLs for the uploaded files.
+    Returns a list of permanent storage paths for the uploaded files. 
     """
-    signed_urls = []
+    file_paths = [] # Changed variable name
     try:
         storage_client = get_supabase_service_client()
 
@@ -61,8 +61,8 @@ async def handle_upload(
             logger.error(f"Storage bucket name is not configured for context '{context}' or default.")
             raise ValueError("Storage bucket name not configured correctly.")
 
-        # Set expiration time for signed URLs
-        expires_in = 3600 # 1 hour
+        # Expiration time no longer needed here
+        # expires_in = 3600 # 1 hour
 
         for file in files:
             # Generate a unique filename for each file
@@ -89,33 +89,29 @@ async def handle_upload(
                 file=content,
                 file_options={"content-type": file.content_type or 'application/octet-stream'}
             )
-            # Add basic error check for upload if needed based on library version
+            # TODO: Add better error checking for upload_response if needed
             logger.info(f"File '{file.filename}' uploaded to path: {storage_path}")
 
-            # Get a signed URL for the uploaded file
-            signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
-                path=storage_path, 
-                expires_in=expires_in
-            )
-            signed_url = signed_url_response.get('signedURL')
+            # --- Removed signed URL generation ---
+            # signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
+            #     path=storage_path, 
+            #     expires_in=expires_in
+            # )
+            # signed_url = signed_url_response.get('signedURL')
 
-            if signed_url:
-                logger.info(f"Signed URL generated for '{file.filename}': {signed_url}")
-                signed_urls.append(signed_url)
-            else:
-                logger.error(f"Upload succeeded for '{file.filename}' but failed to get signed URL. Path: {storage_path}. Response: {signed_url_response}")
-                # Decide whether to raise an error for the whole batch or just skip this file's URL
-                # Raising an error might be safer to signal partial failure.
-                # For now, we just log the error and the URL won't be included.
+            # Append the storage path instead of the signed URL
+            file_paths.append(storage_path)
+            logger.info(f"Stored path for '{file.filename}': {storage_path}")
 
-        # Return the list of successfully generated signed URLs
-        if not signed_urls and len(files) > 0:
-             # Check if we attempted uploads but got no URLs back
-             logger.error("File upload process completed, but no signed URLs were generated.")
-             # Raise error if no URLs were generated despite having files
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload succeeded but failed to retrieve access URLs.")
+
+        # Return the list of successfully generated storage paths
+        if not file_paths and len(files) > 0:
+             # Check if we attempted uploads but got no paths back (shouldn't happen if upload worked)
+             logger.error("File upload process completed, but no storage paths were generated/collected.")
+             # Raise error if no paths were generated despite having files
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload succeeded but failed to retrieve storage paths.")
              
-        return signed_urls
+        return file_paths # Return paths
 
     except ValueError as ve:
          logger.error(f"Configuration error during upload handle: {ve}")

@@ -182,45 +182,40 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
 }; 
 
 /**
- * Upload property images - Modified to handle only the FIRST image
- * and match the backend /uploads endpoint response.
- * Calls POST /uploads endpoint for image files
+ * Upload property images
+ * Calls POST /uploads endpoint and expects paths back.
+ * Returns a promise resolving to an object containing the image paths.
  */
-export const uploadPropertyImages = async (images: File[]): Promise<{ imageUrls: string[] }> => {
+export const uploadPropertyImages = async (images: File[]): Promise<{ imagePaths: string[] }> => {
     if (!images || images.length === 0) {
         console.warn("uploadPropertyImages called with no images.");
-        return { imageUrls: [] }; // Return empty array if no images
+        return { imagePaths: [] };
     }
 
-    // Handle only the first image for now, as backend expects a single file
-    const fileToUpload = images[0];
-    console.log(`Uploading first image: ${fileToUpload.name}`);
+    console.log(`Uploading ${images.length} image(s)...`);
 
     try {
         const formData = new FormData();
-        // Append each file with the key 'files' (plural) to match backend parameter
         images.forEach((file) => { 
             formData.append('files', file); 
         });
-        
-        // Add the context field for the backend
         formData.append('context', 'property_image');
         
-        // Expecting { file_urls: List[str] } from the backend
-        const response = await apiClient.post<{ file_urls: string[] }>('/uploads/', formData);
+        // Expecting { file_paths: List[str] } from the backend
+        const response = await apiClient.post<{ file_paths: string[] }>('/uploads/', formData);
         
-        // Check if response.data and file_urls exist and is an array
-        if (response.data && Array.isArray(response.data.file_urls)) {
-            // Return the structure expected by the calling function (Layout.tsx)
-            return { imageUrls: response.data.file_urls }; 
+        // Check if response.data and file_paths exist and is an array
+        if (response.data && Array.isArray(response.data.file_paths)) {
+            // Return the paths with the new key
+            return { imagePaths: response.data.file_paths };
         } else {
-            console.error("Upload API response missing file_urls array:", response.data);
-            throw new Error("Upload succeeded but API response did not contain the file URLs array.");
+            console.error("Upload API response missing file_paths array:", response.data);
+            throw new Error("Upload succeeded but API response did not contain the file paths array.");
         }
 
     } catch (error: unknown) {
         console.error("Error uploading property images:", error);
-        let errorMessage = 'Failed to upload image';
+        let errorMessage = 'Failed to upload image(s)';
         if (error instanceof Error) {
             errorMessage = error.message;
         } else if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {

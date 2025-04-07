@@ -15,7 +15,7 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 class UploadResponse(BaseModel):
-    file_urls: List[str]
+    file_paths: List[str]
     message: str = "Files uploaded successfully"
 
 @router.post("/", response_model=UploadResponse)
@@ -28,6 +28,7 @@ async def upload_files(
     """
     Uploads one or more files to storage.
     Requires authentication. Context and related_id can be used for organization.
+    Returns a list of permanent storage paths.
     """
     try:
         user_id = current_user.get("id")
@@ -36,17 +37,18 @@ async def upload_files(
 
         # TODO: Add authorization checks based on context and related_id if necessary
 
-        file_urls = await upload_service.handle_upload(
+        file_paths = await upload_service.handle_upload(
             files=files,
             user_id=user_id,
             context=context,
             related_id=related_id
         )
 
-        if not file_urls:
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed or returned no URLs")
+        if not file_paths:
+             logger.warning(f"handle_upload returned empty list for user {user_id}")
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed or returned no paths")
 
-        return {"file_urls": file_urls, "message": "Files uploaded successfully"}
+        return {"file_paths": file_paths, "message": "Files uploaded successfully"}
 
     except HTTPException as http_exc:
         logger.error(f"HTTPException during upload for user {user_id}: {http_exc.detail}")

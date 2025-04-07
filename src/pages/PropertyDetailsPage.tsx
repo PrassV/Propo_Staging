@@ -172,9 +172,9 @@ export default function PropertyDetailsPage() {
                     <CardDescription>{`${property.address_line1}, ${property.city}, ${property.state}`}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                     {/* Use the ImageGallery component */}
+                     {/* Use the ImageGallery component - Pass paths to imagePaths prop */}
                      <ImageGallery 
-                        imageUrls={property.image_urls} 
+                        imagePaths={property.image_urls} // Changed prop name
                         propertyName={property.property_name}
                         className="mb-6" // Add margin if needed
                      />

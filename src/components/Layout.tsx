@@ -37,38 +37,47 @@ export default function Layout({ children }: LayoutProps) {
       formData: PropertyFormData,
       images: File[]
   ): Promise<void> => {
-    console.log("[handlePropertyFormSubmit] Starting submission..."); // Log entry
+    console.log("[handlePropertyFormSubmit] Starting submission...");
     toast.loading(propertyDialogInitialData ? 'Updating property...' : 'Adding property...');
     let submissionError = null;
     try {
-      let uploadedImageUrls: string[] | undefined = undefined; 
-      console.log(`[handlePropertyFormSubmit] Found ${images?.length || 0} image(s) to upload.`); // Log image count
+      let uploadedImagePaths: string[] = []; // Initialize as empty array, will store paths
+      console.log(`[handlePropertyFormSubmit] Found ${images?.length || 0} image(s) to upload.`);
       if (images && images.length > 0) {
           try {
               console.log("[handlePropertyFormSubmit] Attempting image upload...");
+              // Call the updated function, expect imagePaths back
               const uploadResponse = await api.property.uploadPropertyImages(images);
               console.log("[handlePropertyFormSubmit] Image upload API call finished.");
-              if (uploadResponse && uploadResponse.imageUrls && uploadResponse.imageUrls.length > 0) {
-                  uploadedImageUrls = uploadResponse.imageUrls;
-                  console.log("[handlePropertyFormSubmit] Image upload successful. URLs:", uploadedImageUrls);
+              // Use the returned imagePaths
+              if (uploadResponse && uploadResponse.imagePaths && uploadResponse.imagePaths.length > 0) {
+                  uploadedImagePaths = uploadResponse.imagePaths;
+                  console.log("[handlePropertyFormSubmit] Image upload successful. Paths:", uploadedImagePaths);
               } else {
-                   console.warn("[handlePropertyFormSubmit] Image upload response missing expected data:", uploadResponse);
+                   console.warn("[handlePropertyFormSubmit] Image upload response missing expected path data:", uploadResponse);
+                   // Decide if we should proceed without images or throw an error
+                   // For now, we let it proceed but the paths array will be empty.
               }
           } catch (uploadError) {
               console.error('[handlePropertyFormSubmit] Image upload failed:', uploadError);
-              toast.error('Image upload failed. Property saved without image(s).');
-              // Clear the URLs if upload failed to prevent potential reuse
-              uploadedImageUrls = undefined; 
+              // Don't proceed with property save if image upload was intended but failed?
+              // Or save without images? Current logic: Save without images.
+              toast.error('Image upload failed. Property saved without new image(s).'); 
+              uploadedImagePaths = []; // Ensure paths are empty if upload fails
           }
       }
 
       const propertyId = propertyDialogInitialData?.id;
+      // Combine existing image paths (if any) with new ones
+      // Now accessing image_urls which exists on the updated InitialDataType
+      const existingImagePaths = propertyDialogInitialData?.image_urls || []; 
+      const finalImagePaths = [...existingImagePaths, ...uploadedImagePaths];
 
       if (!propertyId) {
-        // --- CREATE LOGIC (Implementation) ---
+        // --- CREATE LOGIC ---
         if (!user) {
           toast.error("You must be logged in to create a property.");
-          toast.dismiss();
+          toast.dismiss(); // Dismiss loading toast
           return;
         }
 
@@ -100,10 +109,11 @@ export default function Layout({ children }: LayoutProps) {
           survey_number: formData.surveyNumber || undefined,
           door_number: formData.doorNumber || undefined,
           status: formData.status || undefined,
-          image_urls: [],
+          // Use the collected paths here
+          image_urls: finalImagePaths, // Store paths in image_urls field
         };
         
-        console.log("[handlePropertyFormSubmit] Payload constructed:", JSON.stringify(createPayload, null, 2)); // Log constructed payload
+        console.log("[handlePropertyFormSubmit] Create Payload with image paths:", JSON.stringify(createPayload, null, 2));
         
         console.log("[handlePropertyFormSubmit] Calling createProperty API...");
         await api.property.createProperty(createPayload); 
@@ -111,7 +121,10 @@ export default function Layout({ children }: LayoutProps) {
         
         toast.success('Property added successfully!');
       } else {
-        // --- UPDATE LOGIC (Implementation) ---
+        // --- UPDATE LOGIC ---
+        // TODO: Fully implement the update logic, including fetching existing images if needed
+        // The current initialData might not have the full image list depending on how it's populated.
+        // For now, just using the paths from the dialog's initial data + new uploads.
         const updatePayload = {
           property_name: formData.propertyName,
           property_type: formData.propertyType,
@@ -139,10 +152,14 @@ export default function Layout({ children }: LayoutProps) {
           survey_number: formData.surveyNumber || undefined,
           door_number: formData.doorNumber || undefined,
           status: formData.status || undefined,
-          image_urls: [],
+          // Use the combined paths here as well
+          image_urls: finalImagePaths, // Store paths in image_urls field
         };
         
-        console.log("Updating property with payload:", updatePayload);
+        console.log("[handlePropertyFormSubmit] Update Payload with image paths:", JSON.stringify(updatePayload, null, 2));
+        // TODO: Uncomment and implement actual update API call
+        // await api.property.updateProperty(propertyId, updatePayload);
+        console.log("Simulating update property API call...");
         toast.success('Property updated successfully! (Simulation)');
       }
       
@@ -159,11 +176,10 @@ export default function Layout({ children }: LayoutProps) {
       
     } catch (error) {
         submissionError = error;
-        // Log the specific error caught during property save/creation
         console.error("[handlePropertyFormSubmit] Error during property save/create API call or payload construction:", error); 
-        toast.error('Failed to save property.');
+        toast.error('Failed to save property details.'); // More specific error message
     } finally {
-        toast.dismiss();
+        toast.dismiss(); // Dismiss loading toast
         console.log(`[handlePropertyFormSubmit] Finally block. Submission error: ${!!submissionError}`);
         if (!submissionError) {
             closePropertyDialog();
