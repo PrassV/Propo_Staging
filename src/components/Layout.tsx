@@ -124,6 +124,7 @@ export default function Layout({ children }: LayoutProps) {
             ...(uploadedImageUrls && uploadedImageUrls.length > 0 && { image_urls: uploadedImageUrls })
         };
         
+        console.log("Payload sent to POST /properties/:", JSON.stringify(createPayload, null, 2));
         console.info("Calling api.property.createProperty with payload:", createPayload);
         await api.property.createProperty(createPayload); 
         
