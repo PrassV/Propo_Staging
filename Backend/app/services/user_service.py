@@ -7,10 +7,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]:
+def update_user_profile(user_id: str, update_data: UserUpdate, email: Optional[str] = None) -> Optional[Dict]:
     """
     Updates a user's profile information in the database.
     If profile doesn't exist, creates a new one using upsert.
+    Requires user's email for initial insert due to NOT NULL constraint.
     """
     try:
         # Use the imported client with service role key
@@ -33,6 +34,15 @@ def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]
             "id": user_id,
             **update_dict
         }
+        
+        # Ensure email is included, especially for the initial insert
+        if email and "email" not in insert_data:
+            insert_data["email"] = email
+        elif "email" not in insert_data:
+            # If email wasn't passed and isn't in update_dict, we have a problem for INSERT
+            # Log a warning, the upsert might fail if it's an insert.
+            logger.warning(f"Email is missing for user {user_id} profile upsert. This may fail if the profile doesn't exist.")
+
         
         # Simple upsert operation (service role bypasses RLS)
         response = supabase.table("user_profiles").upsert(insert_data).execute()

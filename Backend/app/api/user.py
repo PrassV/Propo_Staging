@@ -51,6 +51,17 @@ async def update_current_user_profile(update_data: Dict[str, Any] = Body(...), c
             detail="Could not validate credentials - user ID missing"
         )
     
+    # --- Get Email --- 
+    user_email = None
+    if isinstance(current_user, dict):
+        user_email = current_user.get("email")
+    elif hasattr(current_user, "email"):
+        user_email = current_user.email
+    
+    if not user_email:
+         logger.warning(f"User email missing in auth token payload for user {user_id}. Update might fail if profile needs creation.")
+    # --- End Get Email ---
+    
     # Use dict method if available, otherwise manually handle fields
     update_dict = {}
     if hasattr(update_data, "dict"):
@@ -83,8 +94,8 @@ async def update_current_user_profile(update_data: Dict[str, Any] = Body(...), c
     try:
         logger.info(f"Attempting to update user profile for user {user_id}")
         
-        # Use the user service to update the profile
-        updated_user = user_service.update_user_profile(user_id, UserUpdate(**update_dict))
+        # Use the user service to update the profile, passing email
+        updated_user = user_service.update_user_profile(user_id, UserUpdate(**update_dict), email=user_email)
         
         if not updated_user:
             logger.warning(f"Profile update through service failed for user {user_id}, trying direct DB access")

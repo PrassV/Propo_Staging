@@ -324,6 +324,17 @@ async def update_profile(update_data: Dict[str, Any] = Body(...), current_user: 
             detail="Could not validate credentials - User ID missing"
         )
     
+    # --- Get Email --- 
+    user_email = None
+    if isinstance(current_user, dict):
+        user_email = current_user.get("email")
+    elif hasattr(current_user, "email"):
+        user_email = current_user.email
+    
+    if not user_email:
+         logger.warning(f"User email missing in auth token payload for user {user_id}. Update might fail if profile needs creation.")
+    # --- End Get Email ---
+    
     # We'll skip the dynamic model creation which can cause issues
     # Instead, directly extract only the fields we need from update_data
     safe_update_data = {
@@ -359,8 +370,8 @@ async def update_profile(update_data: Dict[str, Any] = Body(...), current_user: 
             update_model = SimpleNamespace(**safe_update_data)
             update_model.dict = lambda exclude_unset=False: safe_update_data
         
-        # Now update the profile
-        updated_user = user_service.update_user_profile(user_id, update_model)
+        # Now update the profile, passing email
+        updated_user = user_service.update_user_profile(user_id, update_model, email=user_email)
         if not updated_user:
             logger.error(f"Profile update failed for user {user_id}")
             # Try direct DB access as a last resort
