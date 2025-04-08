@@ -5,14 +5,19 @@ from jose import JWTError, jwt
 from .settings import settings
 from ..models.user import User
 from ..services import user_service
+from .database import get_supabase_client_authenticated
+from supabase import Client
 import logging
 
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[Dict[str, Any]]:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security),
+                           db_client: Client = Depends(get_supabase_client_authenticated)
+                          ) -> Optional[Dict[str, Any]]:
     """
-    Validate JWT token, fetch the user's profile from the DB, and return current user object.
+    Validate JWT token, fetch the user's profile from the DB using an authenticated client,
+    and return current user object.
     Ensures profile fields are present (even if null) and maps user_type to role.
     """
     try:
@@ -33,7 +38,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 detail="Invalid authentication token: User ID (sub) missing",
             )
             
-        profile_data = user_service.get_user_profile(user_id)
+        profile_data = user_service.get_user_profile(db_client, user_id)
         
         # Start with base JWT data
         user_dict = {

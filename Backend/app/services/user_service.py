@@ -4,6 +4,7 @@ from typing import Dict, Optional
 from app.config.database import supabase_client 
 from app.models.user import UserUpdate
 import logging
+from supabase import create_client, Client # Import Client
 
 logger = logging.getLogger(__name__)
 
@@ -51,22 +52,23 @@ def update_user_profile(user_id: str, update_data: UserUpdate, email: Optional[s
             logger.info(f"Successfully processed profile for user {user_id}.")
             return response.data[0] if isinstance(response.data, list) and response.data else response.data
         
-        # If response empty, try direct fetch
-        return get_user_profile(user_id)
+        # If response empty, log error and return None (or raise)
+        logger.error(f"Upsert response for user {user_id} did not contain expected data.")
+        return None # Removed potentially incorrect recursive call
 
     except Exception as e:
         logger.error(f"Database error processing profile for user {user_id}: {e}", exc_info=True)
         raise
 
-def get_user_profile(user_id: str) -> Optional[Dict]:
-    """Fetch user profile data by user ID."""
+def get_user_profile(db_client: Client, user_id: str) -> Optional[Dict]:
+    """Fetch user profile data by user ID using the provided client."""
     logger.info(f"Attempting to fetch profile for user_id: {user_id}")
     try:
-        supabase = supabase_client
-        logger.debug(f"Using supabase client: {type(supabase)}")
+        # supabase = supabase_client # Use the passed-in client
+        logger.debug(f"Using supabase client: {type(db_client)}")
         
-        # Execute the query against the correct table
-        response = supabase.table("user_profiles").select("*", count='exact').eq("id", user_id).execute()
+        # Execute the query against the correct table using the provided client
+        response = db_client.table("user_profiles").select("*", count='exact').eq("id", user_id).execute()
         
         # Log the raw response
         logger.info(f"Raw Supabase response for user {user_id}: {response}")
