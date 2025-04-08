@@ -35,7 +35,7 @@ def update_user_profile(user_id: str, update_data: UserUpdate) -> Optional[Dict]
         }
         
         # Simple upsert operation (service role bypasses RLS)
-        response = supabase.table("profiles").upsert(insert_data).execute()
+        response = supabase.table("user_profiles").upsert(insert_data).execute()
         
         if response and hasattr(response, 'data') and response.data:
             logger.info(f"Successfully processed profile for user {user_id}.")
