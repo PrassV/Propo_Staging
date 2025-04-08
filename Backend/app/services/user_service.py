@@ -65,8 +65,8 @@ def get_user_profile(user_id: str) -> Optional[Dict]:
         supabase = supabase_client
         logger.debug(f"Using supabase client: {type(supabase)}")
         
-        # Execute the query
-        response = supabase.table("profiles").select("*", count='exact').eq("id", user_id).execute()
+        # Execute the query against the correct table
+        response = supabase.table("user_profiles").select("*", count='exact').eq("id", user_id).execute()
         
         # Log the raw response
         logger.info(f"Raw Supabase response for user {user_id}: {response}")
