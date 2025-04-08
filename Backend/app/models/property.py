@@ -55,7 +55,7 @@ class PropertyBase(BaseModel):
     floors: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
     amenities: Optional[List[str]] = None
-    image_urls: Optional[List[HttpUrl]] = None # List of image URLs
+    image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
     # image_paths: Optional[List[str]] = None # Decide if needed alongside URLs
     listed_in: Optional[str] = None # E.g., Zillow, Realtor.com
     price: Optional[float] = Field(None, ge=0) # Purchase price or market value?
@@ -89,7 +89,7 @@ class PropertyUpdate(BaseModel):
     floors: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
     amenities: Optional[List[str]] = None
-    image_urls: Optional[List[HttpUrl]] = None
+    image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
     listed_in: Optional[str] = None
     price: Optional[float] = Field(None, ge=0)
     yearly_tax_rate: Optional[float] = Field(None, ge=0)
@@ -101,6 +101,8 @@ class Property(PropertyBase):
     owner_id: uuid.UUID
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    # image_urls type is inherited from PropertyBase, now List[str]
 
     class Config:
         from_attributes = True # Enable ORM mode 
@@ -135,6 +137,7 @@ class UnitDetails(UnitBase):
 
 class PropertyDetails(Property): # New/Updated PropertyDetails model
     # Inherits fields from Property
+    # image_urls type is inherited from Property, now List[str]
     units: List[UnitDetails] = [] # Add the units list
     # Add other related details if needed, e.g., documents
     # documents: List[PropertyDocument] = []
