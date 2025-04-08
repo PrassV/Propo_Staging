@@ -93,12 +93,34 @@ async def handle_upload(
             # TODO: Add better error checking for upload_response if needed
             logger.info(f"File '{file.filename}' uploaded to path: {storage_path}")
 
-            # --- Removed signed URL generation ---
-            # signed_url_response = storage_client.storage.from_(bucket_name).create_signed_url(
-            #     path=storage_path, 
-            #     expires_in=expires_in
-            # )
-            # signed_url = signed_url_response.get('signedURL')
+            # --- Start: Update owner_id ---
+            try:
+                # Fetch the object ID first using the path (more reliable than assuming upload_response structure)
+                # Note: This uses the service client which bypasses RLS select policies
+                object_select_response = storage_client.table('objects').select('id').eq('bucket_id', bucket_name).eq('name', storage_path).single().execute()
+                
+                if hasattr(object_select_response, 'data') and object_select_response.data and 'id' in object_select_response.data:
+                    object_id = object_select_response.data['id']
+                    logger.info(f"Found object ID {object_id} for path {storage_path}. Attempting to update owner_id to {user_id}.")
+                    
+                    # Update the owner_id using the service client
+                    update_response = storage_client.table('objects')\
+                        .update({'owner_id': str(user_id)})\
+                        .eq('id', object_id)\
+                        .execute()
+                        
+                    if hasattr(update_response, 'error') and update_response.error:
+                         logger.error(f"Failed to update owner_id for object {object_id} (path: {storage_path}): {update_response.error.message}")
+                         # Decide if this should be a fatal error for the upload? For now, just log it.
+                    else:
+                         logger.info(f"Successfully updated owner_id for object {object_id} (path: {storage_path}) to {user_id}")
+                else:
+                    logger.error(f"Could not find object ID for path {storage_path} after upload. Cannot update owner_id.")
+                    # This might indicate an issue with the upload itself or timing
+            except Exception as owner_update_err:
+                 logger.exception(f"Error occurred while trying to update owner_id for path {storage_path}: {owner_update_err}")
+                 # Decide if this should be a fatal error for the upload? For now, just log it.
+            # --- End: Update owner_id ---
 
             # Append the storage path instead of the signed URL
             file_paths.append(storage_path)
