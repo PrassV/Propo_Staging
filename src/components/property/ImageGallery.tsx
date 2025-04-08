@@ -22,7 +22,7 @@ interface SignedImageData {
   error?: Error | null;
 }
 
-const DEFAULT_BUCKET = 'property_image';
+const DEFAULT_BUCKET = 'propertyimage';
 const SIGNED_URL_EXPIRY = 60 * 60; // 1 hour
 
 export default function ImageGallery({ 

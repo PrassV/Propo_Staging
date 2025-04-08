@@ -69,14 +69,15 @@ async def handle_upload(
             file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
             unique_filename = f"{uuid.uuid4()}.{file_extension}" if file_extension else str(uuid.uuid4())
 
-            # Construct path within the bucket
-            path_parts = [context, str(user_id)] 
-            if related_id:
+            # Construct path RELATIVE to the bucket (user_id/filename)
+            # Context is used only for bucket selection, not path prefix
+            path_parts = [str(user_id)] 
+            if related_id: # Keep related_id if needed for organization within user folder
                 path_parts.append(str(related_id))
             path_parts.append(unique_filename)
-            storage_path = "/".join(path_parts)
+            storage_path = "/".join(path_parts) # Path is now e.g., "USER_ID/FILENAME.jpg"
 
-            logger.info(f"Attempting to upload file '{file.filename}' to: Bucket='{bucket_name}', Path='{storage_path}'")
+            logger.info(f"Attempting to upload file '{file.filename}' to: Bucket='{bucket_name}', Relative Path='{storage_path}'")
 
             content = await file.read()
             if not content:
