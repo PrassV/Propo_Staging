@@ -3,6 +3,7 @@ import uuid
 from fastapi import UploadFile, HTTPException, status
 from supabase import create_client, Client
 from typing import List
+from supabase.exceptions import APIError
 
 # Assuming settings are correctly configured with necessary Supabase details
 from app.config.settings import settings
@@ -103,22 +104,30 @@ async def handle_upload(
                 
                 if hasattr(object_select_response, 'data') and object_select_response.data and 'id' in object_select_response.data:
                     object_id = object_select_response.data['id']
-                    logger.info(f"[OwnerUpdate] Found object ID {object_id} for path {storage_path}. Attempting to update owner_id to {user_id}.")
+                    logger.info(f"[OwnerUpdate] Found object ID {object_id} for path {storage_path}. Attempting RPC update for owner_id to {user_id}.")
                     
-                    # Update the owner_id using the service client
-                    update_response = storage_client.table('objects', schema="storage")\
-                        .update({'owner_id': str(user_id)})\
-                        .eq('id', object_id)\
-                        .execute()
-                    logger.info(f"[OwnerUpdate] Update response: {update_response}") # Log raw update response
+                    # --- Start: Replace .table().update() with RPC call ---
+                    try:
+                        rpc_params = {'p_object_id': str(object_id), 'p_new_owner_id': str(user_id)}
+                        # Use the same service client (storage_client)
+                        rpc_response = storage_client.rpc(
+                            'update_storage_object_owner', # Function name in public schema
+                            params=rpc_params
+                        ).execute()
+
+                        # Check for errors in the RPC response
+                        if hasattr(rpc_response, 'error') and rpc_response.error:
+                            logger.error(f"[OwnerUpdate] RPC call 'update_storage_object_owner' failed for object {object_id}: Code={rpc_response.error.code}, Msg={rpc_response.error.message}, Details={rpc_response.error.details}, Hint={rpc_response.error.hint}")
+                        else:
+                            # Log success (void function usually returns minimal/no data)
+                            logger.info(f"[OwnerUpdate] RPC call 'update_storage_object_owner' successful for object {object_id}.")
+
+                    except APIError as rpc_api_error: # Catch PostgREST errors specifically
+                        logger.error(f"[OwnerUpdate] APIError during RPC call for object {object_id}: {rpc_api_error}")
+                    except Exception as rpc_general_error: # Catch other potential errors
+                        logger.exception(f"[OwnerUpdate] Unexpected exception during RPC call for object {object_id}: {rpc_general_error}")
+                    # --- End: Replace .table().update() with RPC call ---
                         
-                    if hasattr(update_response, 'error') and update_response.error:
-                         logger.error(f"[OwnerUpdate] Failed to update owner_id for object {object_id} (path: {storage_path}): {update_response.error.message}")
-                         # Decide if this should be a fatal error for the upload? For now, just log it.
-                    elif hasattr(update_response, 'data') and update_response.data: # Check if data exists on success
-                         logger.info(f"[OwnerUpdate] Successfully updated owner_id for object {object_id} (path: {storage_path}) to {user_id}. Response data: {update_response.data}")
-                    else:
-                         logger.warning(f"[OwnerUpdate] Update owner_id for object {object_id} completed but response had no error or data.")
                 elif hasattr(object_select_response, 'error') and object_select_response.error:
                     logger.error(f"[OwnerUpdate] Error selecting object ID for path {storage_path}: {object_select_response.error.message}")
                 else:
