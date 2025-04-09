@@ -97,28 +97,35 @@ async def handle_upload(
             try:
                 # Fetch the object ID first using the path (more reliable than assuming upload_response structure)
                 # Note: This uses the service client which bypasses RLS select policies
-                object_select_response = storage_client.table('objects').select('id').eq('bucket_id', bucket_name).eq('name', storage_path).single().execute()
+                logger.info(f"[OwnerUpdate] Selecting object ID for bucket={bucket_name}, path={storage_path}")
+                object_select_response = storage_client.table('objects', schema="storage").select('id').eq('bucket_id', bucket_name).eq('name', storage_path).single().execute()
+                logger.info(f"[OwnerUpdate] Select response: {object_select_response}") # Log raw select response
                 
                 if hasattr(object_select_response, 'data') and object_select_response.data and 'id' in object_select_response.data:
                     object_id = object_select_response.data['id']
-                    logger.info(f"Found object ID {object_id} for path {storage_path}. Attempting to update owner_id to {user_id}.")
+                    logger.info(f"[OwnerUpdate] Found object ID {object_id} for path {storage_path}. Attempting to update owner_id to {user_id}.")
                     
                     # Update the owner_id using the service client
-                    update_response = storage_client.table('objects')\
+                    update_response = storage_client.table('objects', schema="storage")\
                         .update({'owner_id': str(user_id)})\
                         .eq('id', object_id)\
                         .execute()
+                    logger.info(f"[OwnerUpdate] Update response: {update_response}") # Log raw update response
                         
                     if hasattr(update_response, 'error') and update_response.error:
-                         logger.error(f"Failed to update owner_id for object {object_id} (path: {storage_path}): {update_response.error.message}")
+                         logger.error(f"[OwnerUpdate] Failed to update owner_id for object {object_id} (path: {storage_path}): {update_response.error.message}")
                          # Decide if this should be a fatal error for the upload? For now, just log it.
+                    elif hasattr(update_response, 'data') and update_response.data: # Check if data exists on success
+                         logger.info(f"[OwnerUpdate] Successfully updated owner_id for object {object_id} (path: {storage_path}) to {user_id}. Response data: {update_response.data}")
                     else:
-                         logger.info(f"Successfully updated owner_id for object {object_id} (path: {storage_path}) to {user_id}")
+                         logger.warning(f"[OwnerUpdate] Update owner_id for object {object_id} completed but response had no error or data.")
+                elif hasattr(object_select_response, 'error') and object_select_response.error:
+                    logger.error(f"[OwnerUpdate] Error selecting object ID for path {storage_path}: {object_select_response.error.message}")
                 else:
-                    logger.error(f"Could not find object ID for path {storage_path} after upload. Cannot update owner_id.")
+                    logger.error(f"[OwnerUpdate] Could not find object ID for path {storage_path} after upload (data missing or malformed). Cannot update owner_id.")
                     # This might indicate an issue with the upload itself or timing
             except Exception as owner_update_err:
-                 logger.exception(f"Error occurred while trying to update owner_id for path {storage_path}: {owner_update_err}")
+                 logger.exception(f"[OwnerUpdate] Exception occurred while trying to update owner_id for path {storage_path}: {owner_update_err}")
                  # Decide if this should be a fatal error for the upload? For now, just log it.
             # --- End: Update owner_id ---
 
