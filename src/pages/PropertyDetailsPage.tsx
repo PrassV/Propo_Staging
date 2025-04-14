@@ -338,6 +338,7 @@ export default function PropertyDetailsPage() {
                     />
                 </DialogContent>
             </Dialog>
-        </div>
+            </div> { /* Closing tag for div starting at line 295 */ }
+        </div> { /* Closing tag for outermost div starting at line 157 */ }
     );
-}
+};
