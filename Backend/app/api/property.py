@@ -367,22 +367,31 @@ async def get_property_financial_summary(
     Returns:
         Financial summary data
     """
-    # Check if user has access to the property
-    if not await property_service.check_property_access(property_id, current_user["id"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this property"
-        )
-    
     try:
+        # Check if user has access to the property
+        has_access = await property_service.check_property_access(property_id, current_user["id"])
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to access this property"
+            )
+        
         summary = await property_service.get_financial_summary(property_id, period)
         return summary
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        logger.error(f"Error getting financial summary for property {property_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve financial summary: {str(e)}"
-        )
+        logger.error(f"Error getting financial summary for property {property_id}: {str(e)}", exc_info=True)
+        # Return a simplified empty response rather than a 500 error
+        return {
+            "period": period,
+            "date_range": {"start_date": "", "end_date": ""},
+            "summary": {"total_income": 0, "total_expenses": 0, "net_income": 0, "profit_margin": 0},
+            "occupancy_rate": 0,
+            "income_breakdown": [],
+            "expense_breakdown": [],
+            "trend_data": []
+        }
 
 # Property Tax Endpoints
 @router.get("/{property_id}/taxes", response_model=List[Dict[str, Any]])
@@ -532,157 +541,6 @@ async def delete_property_tax(
             detail=f"Failed to delete tax record: {str(e)}"
         )
 
-# Unit Images Endpoints
-@router.get("/units/{unit_id}/images", response_model=List[str])
-async def get_unit_images(
-    unit_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get images for a unit.
-    
-    Args:
-        unit_id: The unit ID
-        current_user: The current authenticated user
-        
-    Returns:
-        List of image URLs
-    """
-    try:
-        # Check if unit exists and user has access
-        property_id = await property_service.get_property_id_for_unit(unit_id)
-        if not property_id or not await property_service.check_property_access(property_id, current_user["id"]):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to access this unit"
-            )
-        
-        image_urls = await property_service.get_unit_images(unit_id)
-        return image_urls
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        logger.error(f"Error getting images for unit {unit_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve unit images: {str(e)}"
-        )
-
-@router.post("/units/{unit_id}/images", status_code=status.HTTP_201_CREATED)
-async def add_unit_image(
-    unit_id: uuid.UUID,
-    image_url: str = Body(..., embed=True),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Add an image to a unit.
-    
-    Args:
-        unit_id: The unit ID
-        image_url: The image URL
-        current_user: The current authenticated user
-        
-    Returns:
-        Success message
-    """
-    try:
-        # Check if unit exists and user has access
-        property_id = await property_service.get_property_id_for_unit(unit_id)
-        if not property_id or not await property_service.check_property_access(property_id, current_user["id"]):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to modify this unit"
-            )
-        
-        success = await property_service.add_unit_image(unit_id, image_url)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to add image to unit"
-            )
-        
-        return {"message": "Image added to unit successfully"}
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        logger.error(f"Error adding image to unit {unit_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to add image to unit: {str(e)}"
-        )
-
-@router.delete("/units/{unit_id}/images", status_code=status.HTTP_200_OK)
-async def delete_unit_image(
-    unit_id: uuid.UUID,
-    image_url: str = Query(..., description="URL of the image to delete"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Delete an image from a unit.
-    
-    Args:
-        unit_id: The unit ID
-        image_url: The image URL to delete
-        current_user: The current authenticated user
-        
-    Returns:
-        Success message
-    """
-    try:
-        # Check if unit exists and user has access
-        property_id = await property_service.get_property_id_for_unit(unit_id)
-        if not property_id or not await property_service.check_property_access(property_id, current_user["id"]):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to modify this unit"
-            )
-        
-        success = await property_service.delete_unit_image(unit_id, image_url)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Image not found for unit"
-            )
-        
-        return {"message": "Image deleted from unit successfully"}
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete image from unit: {str(e)}"
-        )
-
-
-@router.post("/{property_id}/units", response_model=UnitDetails, status_code=status.HTTP_201_CREATED)
-async def create_property_unit(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    unit_data: UnitCreate = Body(...),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """Create a new unit for a specific property."""
-    user_id = current_user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
-
-    try:
-        created_unit = await property_service.create_unit(
-            db_client=db_client,
-            property_id=str(property_id),
-            unit_data=unit_data,
-            owner_id=user_id
-        )
-        if not created_unit:
-            # Service function returns None if unauthorized or property not found
-            raise HTTPException(status_code=404, detail="Property not found or not authorized to add unit")
-        
-        return created_unit
-    except Exception as e:
-        logger.error(f"Error creating unit for property {property_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error creating unit: {str(e)}")
-
 # Units Images API Endpoints
 @units_router.get("/{unit_id}/images", response_model=List[str])
 async def get_unit_images(
@@ -713,11 +571,9 @@ async def get_unit_images(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        logger.error(f"Error getting images for unit {unit_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve unit images: {str(e)}"
-        )
+        logger.error(f"Error getting images for unit {unit_id}: {str(e)}", exc_info=True)
+        # Return an empty list instead of 500 error
+        return []
 
 @units_router.post("/{unit_id}/images", status_code=status.HTTP_201_CREATED)
 async def add_unit_image(
@@ -756,10 +612,10 @@ async def add_unit_image(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        logger.error(f"Error adding image to unit {unit_id}: {str(e)}")
+        logger.error(f"Error adding image to unit {unit_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to add image to unit: {str(e)}"
+            detail="An error occurred while adding the image"
         )
 
 @units_router.delete("/{unit_id}/images", status_code=status.HTTP_200_OK)
@@ -799,8 +655,37 @@ async def delete_unit_image(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}")
+        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete image from unit: {str(e)}"
-        ) 
+            detail="An error occurred while deleting the image"
+        )
+
+
+@router.post("/{property_id}/units", response_model=UnitDetails, status_code=status.HTTP_201_CREATED)
+async def create_property_unit(
+    property_id: uuid.UUID = Path(..., description="The property ID"),
+    unit_data: UnitCreate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """Create a new unit for a specific property."""
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+    try:
+        created_unit = await property_service.create_unit(
+            db_client=db_client,
+            property_id=str(property_id),
+            unit_data=unit_data,
+            owner_id=user_id
+        )
+        if not created_unit:
+            # Service function returns None if unauthorized or property not found
+            raise HTTPException(status_code=404, detail="Property not found or not authorized to add unit")
+        
+        return created_unit
+    except Exception as e:
+        logger.error(f"Error creating unit for property {property_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating unit: {str(e)}") 

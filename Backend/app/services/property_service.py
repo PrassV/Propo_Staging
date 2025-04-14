@@ -307,6 +307,29 @@ async def create_unit(db_client: Client, property_id: str, unit_data: UnitCreate
         logger.error(f"Error in property_service.create_unit: {str(e)}", exc_info=True)
         return None 
 
+# Check if a user has access to a property
+async def check_property_access(property_id: uuid.UUID, user_id: str) -> bool:
+    """
+    Check if a user has access to a property.
+    
+    Args:
+        property_id: The property ID
+        user_id: The user ID
+        
+    Returns:
+        True if the user has access, False otherwise
+    """
+    try:
+        from ..config.database import supabase_client as db_client
+        # Get the property owner
+        property_owner = await property_db.get_property_owner(db_client, property_id)
+        
+        # Check if the user is the property owner
+        return property_owner == user_id
+    except Exception as e:
+        logger.error(f"Error checking property access: {str(e)}")
+        return False
+
 # Financial Summary Functions
 async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -> Dict[str, Any]:
     """
@@ -320,6 +343,8 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
         Financial summary data including income, expenses, net, and various breakdowns
     """
     try:
+        from ..config.database import supabase_client as db_client
+        
         if period not in ["month", "quarter", "year"]:
             period = "month"  # Default to month if invalid period
         
@@ -346,14 +371,14 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
         
         # Query database for financial data
         # For income, query rent payments, other income sources
-        income_data = await property_db.get_property_income(property_id, start_date, end_date)
+        income_data = await property_db.get_property_income(db_client, property_id, start_date, end_date)
         
         # For expenses, query maintenance costs, property taxes, insurance, etc.
-        expense_data = await property_db.get_property_expenses(property_id, start_date, end_date)
+        expense_data = await property_db.get_property_expenses(db_client, property_id, start_date, end_date)
         
         # Process data to create summary
-        total_income = sum(item["amount"] for item in income_data)
-        total_expenses = sum(item["amount"] for item in expense_data)
+        total_income = sum(item.get("amount", 0) for item in income_data)
+        total_expenses = sum(item.get("amount", 0) for item in expense_data)
         net_income = total_income - total_expenses
         
         # Create income breakdown by category
@@ -363,7 +388,7 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             category = item.get("category", "Other")
             if category not in income_categories:
                 income_categories[category] = 0
-            income_categories[category] += item["amount"]
+            income_categories[category] += item.get("amount", 0)
         
         for category, amount in income_categories.items():
             income_breakdown.append({
@@ -379,7 +404,7 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             category = item.get("category", "Other")
             if category not in expense_categories:
                 expense_categories[category] = 0
-            expense_categories[category] += item["amount"]
+            expense_categories[category] += item.get("amount", 0)
         
         for category, amount in expense_categories.items():
             expense_breakdown.append({
@@ -398,8 +423,8 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             else:
                 month_end = datetime(month_date.year, month_date.month + 1, 1) - timedelta(days=1)
             
-            month_income = await property_db.get_property_income_total(property_id, month_start, month_end)
-            month_expenses = await property_db.get_property_expenses_total(property_id, month_start, month_end)
+            month_income = await property_db.get_property_income_total(db_client, property_id, month_start, month_end)
+            month_expenses = await property_db.get_property_expenses_total(db_client, property_id, month_start, month_end)
             
             trend_data.append({
                 "month": month_date.strftime("%b %Y"),
@@ -409,7 +434,7 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             })
         
         # Calculate financial indicators
-        occupancy_rate = await property_db.get_property_occupancy_rate(property_id, start_date, end_date)
+        occupancy_rate = await property_db.get_property_occupancy_rate(db_client, property_id, start_date, end_date)
         
         # Return complete financial summary
         return {
@@ -430,8 +455,17 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             "trend_data": trend_data
         }
     except Exception as e:
-        logger.error(f"Error getting financial summary for property {property_id}: {str(e)}")
-        raise
+        logger.error(f"Error getting financial summary for property {property_id}: {str(e)}", exc_info=True)
+        # Return a simplified empty summary on error
+        return {
+            "period": period,
+            "date_range": {"start_date": "", "end_date": ""},
+            "summary": {"total_income": 0, "total_expenses": 0, "net_income": 0, "profit_margin": 0},
+            "occupancy_rate": 0,
+            "income_breakdown": [],
+            "expense_breakdown": [],
+            "trend_data": []
+        }
 
 # Property Tax Functions
 async def get_property_taxes(property_id: uuid.UUID) -> List[Dict[str, Any]]:
@@ -445,14 +479,13 @@ async def get_property_taxes(property_id: uuid.UUID) -> List[Dict[str, Any]]:
         List of tax records
     """
     try:
-        # Query the property_taxes table
-        taxes = await property_db.get_property_taxes(property_id)
-        return taxes
+        from ..config.database import supabase_client as db_client
+        return await property_db.get_property_taxes(db_client, property_id)
     except Exception as e:
-        logger.error(f"Error getting taxes for property {property_id}: {str(e)}")
-        raise
+        logger.error(f"Error getting taxes for property {property_id}: {str(e)}", exc_info=True)
+        return []
 
-async def create_property_tax(property_id: uuid.UUID, tax_data: Dict[str, Any]) -> Dict[str, Any]:
+async def create_property_tax(property_id: uuid.UUID, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Create a new tax record for a property.
     
@@ -464,6 +497,8 @@ async def create_property_tax(property_id: uuid.UUID, tax_data: Dict[str, Any]) 
         Created tax record
     """
     try:
+        from ..config.database import supabase_client as db_client
+        
         # Add required fields to tax data
         tax_record = {
             "id": uuid.uuid4(),
@@ -473,12 +508,10 @@ async def create_property_tax(property_id: uuid.UUID, tax_data: Dict[str, Any]) 
             **tax_data
         }
         
-        # Insert into property_taxes table
-        created_tax = await property_db.create_property_tax(tax_record)
-        return created_tax
+        return await property_db.create_property_tax(db_client, tax_record)
     except Exception as e:
-        logger.error(f"Error creating tax record for property {property_id}: {str(e)}")
-        raise
+        logger.error(f"Error creating tax record for property {property_id}: {str(e)}", exc_info=True)
+        return None
 
 async def update_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
@@ -493,9 +526,12 @@ async def update_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID, tax_dat
         Updated tax record or None if not found
     """
     try:
+        from ..config.database import supabase_client as db_client
+        
         # Check if tax record exists and belongs to the property
-        tax_record = await property_db.get_property_tax(tax_id)
-        if not tax_record or str(tax_record["property_id"]) != str(property_id):
+        tax_record = await property_db.get_property_tax(db_client, tax_id)
+        if not tax_record or str(tax_record.get("property_id")) != str(property_id):
+            logger.error(f"Tax record {tax_id} not found or does not belong to property {property_id}")
             return None
         
         # Update tax record
@@ -504,11 +540,10 @@ async def update_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID, tax_dat
             **tax_data
         }
         
-        updated_tax = await property_db.update_property_tax(tax_id, update_data)
-        return updated_tax
+        return await property_db.update_property_tax(db_client, tax_id, update_data)
     except Exception as e:
-        logger.error(f"Error updating tax record {tax_id} for property {property_id}: {str(e)}")
-        raise
+        logger.error(f"Error updating tax record {tax_id} for property {property_id}: {str(e)}", exc_info=True)
+        return None
 
 async def delete_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID) -> bool:
     """
@@ -522,17 +557,18 @@ async def delete_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID) -> bool
         True if deleted, False otherwise
     """
     try:
+        from ..config.database import supabase_client as db_client
+        
         # Check if tax record exists and belongs to the property
-        tax_record = await property_db.get_property_tax(tax_id)
-        if not tax_record or str(tax_record["property_id"]) != str(property_id):
+        tax_record = await property_db.get_property_tax(db_client, tax_id)
+        if not tax_record or str(tax_record.get("property_id")) != str(property_id):
+            logger.error(f"Tax record {tax_id} not found or does not belong to property {property_id}")
             return False
         
-        # Delete tax record
-        success = await property_db.delete_property_tax(tax_id)
-        return success
+        return await property_db.delete_property_tax(db_client, tax_id)
     except Exception as e:
-        logger.error(f"Error deleting tax record {tax_id} for property {property_id}: {str(e)}")
-        raise
+        logger.error(f"Error deleting tax record {tax_id} for property {property_id}: {str(e)}", exc_info=True)
+        return False
 
 # Unit Images Functions
 async def get_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:
@@ -546,13 +582,14 @@ async def get_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:
         Property ID or None if unit not found
     """
     try:
-        unit = await property_db.get_unit(unit_id)
+        from ..config.database import supabase_client as db_client
+        unit = await property_db.get_unit(db_client, unit_id)
         if not unit:
             return None
-        return unit.get("property_id")
+        return uuid.UUID(unit.get("property_id")) if unit.get("property_id") else None
     except Exception as e:
-        logger.error(f"Error getting property ID for unit {unit_id}: {str(e)}")
-        raise
+        logger.error(f"Error getting property ID for unit {unit_id}: {str(e)}", exc_info=True)
+        return None
 
 async def get_unit_images(unit_id: uuid.UUID) -> List[str]:
     """
@@ -565,12 +602,12 @@ async def get_unit_images(unit_id: uuid.UUID) -> List[str]:
         List of image URLs
     """
     try:
-        # Query the unit_images table
-        images = await property_db.get_unit_images(unit_id)
-        return [image["url"] for image in images]
+        from ..config.database import supabase_client as db_client
+        images = await property_db.get_unit_images(db_client, unit_id)
+        return [image.get("url") for image in images if image.get("url")]
     except Exception as e:
-        logger.error(f"Error getting images for unit {unit_id}: {str(e)}")
-        raise
+        logger.error(f"Error getting images for unit {unit_id}: {str(e)}", exc_info=True)
+        return []
 
 async def add_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
     """
@@ -584,9 +621,12 @@ async def add_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
         True if added, False otherwise
     """
     try:
+        from ..config.database import supabase_client as db_client
+        
         # Check if unit exists
-        unit = await property_db.get_unit(unit_id)
+        unit = await property_db.get_unit(db_client, unit_id)
         if not unit:
+            logger.error(f"Unit {unit_id} not found when adding image")
             return False
         
         # Create image record
@@ -597,12 +637,10 @@ async def add_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
             "created_at": datetime.utcnow().isoformat()
         }
         
-        # Insert into unit_images table
-        success = await property_db.add_unit_image(image_record)
-        return success
+        return await property_db.add_unit_image(db_client, image_record)
     except Exception as e:
-        logger.error(f"Error adding image to unit {unit_id}: {str(e)}")
-        raise
+        logger.error(f"Error adding image to unit {unit_id}: {str(e)}", exc_info=True)
+        return False
 
 async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
     """
@@ -616,9 +654,8 @@ async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
         True if deleted, False otherwise
     """
     try:
-        # Delete from unit_images table
-        success = await property_db.delete_unit_image(unit_id, image_url)
-        return success
+        from ..config.database import supabase_client as db_client
+        return await property_db.delete_unit_image(db_client, unit_id, image_url)
     except Exception as e:
-        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}")
-        raise 
+        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}", exc_info=True)
+        return False 

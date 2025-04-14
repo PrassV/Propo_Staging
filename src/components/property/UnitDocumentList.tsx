@@ -32,8 +32,8 @@ export default function UnitDocumentList({ unitId }: UnitDocumentListProps) {
       try {
         const response = await api.document.getDocuments({ unit_id: unitId });
         setDocuments(response.documents || []);
-      } catch {
-        console.error("API with unit_id may not be implemented yet, using placeholder data");
+      } catch (error) {
+        console.error("API with unit_id may not be implemented yet, using placeholder data", error);
         // Placeholder data until backend is ready
         setDocuments([
           {
@@ -66,9 +66,9 @@ export default function UnitDocumentList({ unitId }: UnitDocumentListProps) {
           }
         ] as Document[]);
       }
-    } catch (err) {
-      console.error("Error fetching unit documents:", err);
-      setError(err instanceof Error ? err.message : 'Failed to load unit documents');
+    } catch (error) {
+      console.error("Error fetching unit documents:", error);
+      setError(error instanceof Error ? error.message : 'Failed to load unit documents');
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -132,8 +132,8 @@ export default function UnitDocumentList({ unitId }: UnitDocumentListProps) {
         setDocuments([newDoc, ...documents]);
         toast.success('Document uploaded successfully (placeholder)');
       }
-    } catch (err) {
-      console.error("Error uploading document:", err);
+    } catch (error) {
+      console.error("Error uploading document:", error);
       toast.error('Failed to upload document');
     } finally {
       setUploading(false);
@@ -158,8 +158,8 @@ export default function UnitDocumentList({ unitId }: UnitDocumentListProps) {
         setDocuments(documents.filter(doc => doc.id !== documentId));
         toast.success('Document deleted successfully (placeholder)');
       }
-    } catch (err) {
-      console.error("Error deleting document:", err);
+    } catch (error) {
+      console.error("Error deleting document:", error);
       toast.error('Failed to delete document');
     }
   };
