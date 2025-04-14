@@ -7,7 +7,8 @@ from fastapi import HTTPException, status
 
 from ..models.tenant import (
     TenantCreate, TenantUpdate, Tenant,
-    PropertyTenantLink, TenantInvitationCreate, TenantInvitation
+    PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
+    TenantInvitationCreate, TenantInvitation
 )
 from ..db import tenants as tenants_db
 from ..db import properties as properties_db

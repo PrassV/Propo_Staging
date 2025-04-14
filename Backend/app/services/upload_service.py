@@ -29,8 +29,8 @@ def get_supabase_service_client() -> Client:
 async def handle_upload(
     files: List[UploadFile], # Accept a list of files
     user_id: str,
-    context: str | None = None,
-    related_id: str | None = None
+    context: Optional[str] = None,
+    related_id: Optional[str] = None
 ) -> List[str]: # Return a list of PATHS now
     """
     Handles upload of multiple files to Supabase Storage using the service role key.

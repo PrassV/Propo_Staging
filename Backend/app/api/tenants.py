@@ -2,11 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile,
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, UUID4, Field
 import uuid
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.models.tenant import (
     Tenant, TenantCreate, TenantUpdate,
-    PropertyTenantLink, TenantInvitationCreate, TenantInvitation
+    PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
+    TenantInvitationCreate, TenantInvitation
 )
 from app.models.user import User # Assuming User model exists for auth response
 
@@ -72,20 +76,20 @@ async def get_current_user_tenant(
         user_id_str = current_user.get("id")
         if not user_id_str:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication token invalid or missing user ID."
             )
-        
+
         user_id = uuid.UUID(user_id_str)
-        
+
         tenant_data = await tenant_service.get_tenant_by_user_id(user_id)
-        
+
         if not tenant_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No tenant profile found linked to the current user."
             )
-        
+
         return {
             "tenant": tenant_data,
             "message": "Current tenant profile retrieved successfully"
@@ -115,7 +119,7 @@ async def get_tenants(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         property_id_obj = uuid.UUID(str(property_id)) if property_id else None
-        
+
         tenants = await tenant_service.get_tenants(
             requesting_user_id=user_id,
             property_id=property_id_obj,
@@ -124,10 +128,10 @@ async def get_tenants(
             sort_by=sort_by,
             sort_order=sort_order
         )
-        
+
         # TODO: Add actual count query if needed for accurate pagination
         total_count = len(tenants)
-        
+
         return {
             "items": tenants,
             "total": total_count,
@@ -153,15 +157,15 @@ async def get_tenant(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         tenant_data = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
-        
+
         if not tenant_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tenant not found or you don't have permission to access this tenant"
             )
-        
+
         return {
             "tenant": tenant_data,
             "message": "Tenant retrieved successfully"
@@ -186,15 +190,15 @@ async def create_tenant(
     try:
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
-        
+
         created_tenant = await tenant_service.create_tenant(tenant_data, user_id)
-        
+
         if not created_tenant:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create tenant. Ensure the property exists and you are the owner."
             )
-        
+
         return {
             "tenant": created_tenant,
             "message": "Tenant created successfully"
@@ -223,15 +227,15 @@ async def update_tenant(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         updated_tenant = await tenant_service.update_tenant(tenant_id_obj, tenant_data, user_id)
-        
+
         if not updated_tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tenant not found or you don't have permission to update this tenant"
             )
-        
+
         return {
             "tenant": updated_tenant,
             "message": "Tenant updated successfully"
@@ -258,15 +262,15 @@ async def delete_tenant(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         success = await tenant_service.delete_tenant(tenant_id_obj, user_id)
-        
+
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tenant not found or you don't have permission to delete this tenant"
             )
-        
+
         # Return None for 204 No Content response
         return None
     except HTTPException as http_exc:
@@ -293,17 +297,17 @@ async def invite_tenant(
     try:
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
-        
+
         # Could add tenant_id to the invitation data here if needed
-        
+
         created_invitation = await tenant_service.create_tenant_invitation(invitation_data, user_id)
-        
+
         if not created_invitation:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create invitation. Ensure the property exists and you are the owner."
             )
-        
+
         return {
             "invitation": created_invitation,
             "message": "Invitation sent successfully"
@@ -324,19 +328,19 @@ async def verify_and_link_tenant(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Verifies if the current authenticated user matches the tenant details 
+    Verifies if the current authenticated user matches the tenant details
     associated with the given property ID and links the tenant record to the user ID.
     """
     try:
         user_id_str = current_user.get("id")
         user_email = current_user.get("email") # Assuming email is in the token payload
-        
+
         if not user_id_str or not user_email:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication token invalid or missing required user info (ID, email)."
             )
-        
+
         user_id = uuid.UUID(user_id_str)
         property_id = request_body.property_id
 
@@ -345,16 +349,16 @@ async def verify_and_link_tenant(
             user_id=user_id,
             user_email=user_email,
             # Pass other user details if needed for verification (e.g., name, phone)
-            # user_details=current_user 
+            # user_details=current_user
         )
-        
+
         if success:
             return {"message": "Tenant verified and linked successfully."}
         else:
             # The service layer should raise specific HTTPExceptions for not found or mismatch
             # This path might not be reached if service layer raises correctly.
              raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to verify or link tenant. Property ID might be invalid or tenant details do not match."
             )
 
@@ -385,9 +389,9 @@ async def get_tenant_properties(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         properties = await tenant_service.get_properties_for_tenant(tenant_id_obj, user_id)
-        
+
         return properties
     except Exception as e:
         raise HTTPException(
@@ -410,9 +414,9 @@ async def get_tenant_leases(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         leases = await tenant_service.get_leases_for_tenant(tenant_id_obj, user_id)
-        
+
         return leases
     except Exception as e:
         raise HTTPException(
@@ -435,9 +439,9 @@ async def get_tenant_payments(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         payments = await tenant_service.get_payments_for_tenant(tenant_id_obj, user_id)
-        
+
         return payments
     except Exception as e:
         raise HTTPException(
@@ -460,9 +464,9 @@ async def get_tenant_maintenance(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         maintenance_requests = await tenant_service.get_maintenance_for_tenant(tenant_id_obj, user_id)
-        
+
         return maintenance_requests
     except Exception as e:
         raise HTTPException(
@@ -481,7 +485,7 @@ async def get_tenant_payment_status(
     - Next payment due date and amount
     - Most recent payment date and amount
     - Whether any payment is overdue
-    
+
     Access is restricted to:
     - The tenant themselves
     - Property owners/managers for properties the tenant is linked to
@@ -490,7 +494,7 @@ async def get_tenant_payment_status(
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-        
+
         # Check if current user has permission to access this tenant
         tenant = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
         if not tenant:
@@ -498,60 +502,60 @@ async def get_tenant_payment_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tenant not found or you don't have permission to access this tenant's payment information"
             )
-            
+
         # Get payment history from database
         now = datetime.now()
-        
+
         # Look for the most recent payment
         payment_history_response = await tenant_service.get_tenant_payments(
-            tenant_id=tenant_id_obj, 
+            tenant_id=tenant_id_obj,
             limit=1,
             sort_by="payment_date",
             sort_order="desc"
         )
         last_payment = payment_history_response[0] if payment_history_response else None
-        
+
         # Look for upcoming or overdue payments
         payment_tracking_response = await tenant_service.get_tenant_payment_tracking(
             tenant_id=tenant_id_obj,
             sort_by="payment_date",
             sort_order="asc"
         )
-        
+
         # Filter for unpaid payments
         unpaid_payments = [p for p in payment_tracking_response if p.get('payment_status', '').lower() != 'paid']
-        
+
         # Find next due payment
         next_payment = None
         for payment in unpaid_payments:
             payment_date = payment.get('payment_date')
             if not payment_date:
                 continue
-                
+
             if isinstance(payment_date, str):
                 payment_date = datetime.fromisoformat(payment_date)
-                
+
             if payment_date >= now:
                 next_payment = payment
                 break
-                
+
         # Find overdue payments
-        overdue_payments = [p for p in unpaid_payments if p.get('payment_date') and 
+        overdue_payments = [p for p in unpaid_payments if p.get('payment_date') and
                             (isinstance(p.get('payment_date'), datetime) and p.get('payment_date') < now or
                             isinstance(p.get('payment_date'), str) and datetime.fromisoformat(p.get('payment_date')) < now)]
-        
+
         # Format the response
         response = {
             "message": "Payment status retrieved successfully"
         }
-        
+
         if next_payment:
             payment_date = next_payment.get('payment_date')
             if isinstance(payment_date, str):
                 payment_date = datetime.fromisoformat(payment_date)
-                
+
             response["nextDueDate"] = payment_date.isoformat() if payment_date else None
-            
+
             # Try to get amount from different possible fields
             amount = 0
             if 'total_amount' in next_payment:
@@ -560,16 +564,16 @@ async def get_tenant_payment_status(
                 amount = float(next_payment.get('rent_amount', 0))
                 if 'maintenance_fee' in next_payment:
                     amount += float(next_payment.get('maintenance_fee', 0))
-                    
+
             response["nextDueAmount"] = amount
-        
+
         if last_payment:
             payment_date = last_payment.get('payment_date')
             if isinstance(payment_date, str):
                 payment_date = datetime.fromisoformat(payment_date)
-                
+
             response["lastPaymentDate"] = payment_date.isoformat() if payment_date else None
-            
+
             # Try to get amount from different possible fields
             amount = 0
             if 'total_amount' in last_payment:
@@ -578,14 +582,14 @@ async def get_tenant_payment_status(
                 amount = float(last_payment.get('rent_amount', 0))
                 if 'maintenance_fee' in last_payment:
                     amount += float(last_payment.get('maintenance_fee', 0))
-                    
+
             response["lastPaymentAmount"] = amount
-        
+
         # Set overdue status
         response["isOverdue"] = len(overdue_payments) > 0
-        
+
         return response
-        
+
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
@@ -596,4 +600,4 @@ async def get_tenant_payment_status(
 
 # Note: The tenant document upload endpoint (POST /{tenant_id}/documents) has been removed
 # ID documents are now handled directly as part of the tenant profile (id_proof_url field)
-# Other documents are managed through the property document endpoints: /api/properties/{property_id}/documents 
+# Other documents are managed through the property document endpoints: /api/properties/{property_id}/documents
