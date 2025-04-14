@@ -50,7 +50,12 @@ app = FastAPI(
 # Configure CORS - make sure this is before any other middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins temporarily until we fix deployment
+    allow_origins=[
+        "https://propo-staging.vercel.app",  # Frontend staging URL
+        "http://localhost:3000",            # Local development
+        "http://localhost:5173",            # Vite dev server
+        "*"                                 # Allow all origins as a fallback
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

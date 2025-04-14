@@ -1,6 +1,8 @@
 from typing import Dict, List, Any, Optional
 import logging
 import uuid
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from supabase import Client
 import json
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate # Import UnitCreate
