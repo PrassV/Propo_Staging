@@ -80,30 +80,14 @@ async def get_property_images(
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated")
 
-        # Log the request
-        logger.info(f"Retrieving images for property {property_id} requested by user {user_id}")
-
         # Get signed URLs for property images
         signed_urls = await upload_service.get_property_images(db_client, str(property_id))
 
-        # Check if we got any URLs back
         if not signed_urls:
-            logger.warning(f"No image paths found for property {property_id}")
             # Return empty list instead of 404 to handle properties with no images gracefully
             return []
 
-        # Ensure all URLs are HTTPS
-        secure_urls = []
-        for url in signed_urls:
-            if url.startswith('http://'):
-                secure_url = url.replace('http://', 'https://')
-                logger.info(f"Converted image URL from HTTP to HTTPS for property {property_id}")
-                secure_urls.append(secure_url)
-            else:
-                secure_urls.append(url)
-
-        logger.info(f"Successfully retrieved {len(secure_urls)} image URLs for property {property_id}")
-        return secure_urls
+        return signed_urls
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:

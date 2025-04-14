@@ -177,55 +177,26 @@ async def get_file_url(db_client: Client, file_path: str, expires_in: int = 3600
         Signed URL string or None if file not found
     """
     try:
-        # Validate input
-        if not file_path or not isinstance(file_path, str):
-            logger.warning(f"Invalid file path provided: {file_path}")
-            return None
-
         # Extract bucket name and object path
         parts = file_path.split('/', 1)
         bucket = parts[0] if len(parts) > 0 else "propertyimage"  # Default to propertyimage bucket
         object_path = parts[1] if len(parts) > 1 else file_path
 
-        # Log the attempt
-        logger.info(f"Generating signed URL for path {object_path} in bucket {bucket}")
-
         # Get signed URL from Supabase
-        try:
-            response = db_client.storage.from_(bucket).create_signed_url(
-                object_path,
-                expires_in
-            )
-        except Exception as supabase_error:
-            logger.error(f"Error generating signed URL for path {object_path} in bucket {bucket}: {supabase_error}")
-            # Check if this is a 'not found' error
-            if "not found" in str(supabase_error).lower() or "404" in str(supabase_error):
-                logger.warning(f"Object not found: {bucket}/{object_path}")
-            return None
+        response = db_client.storage.from_(bucket).create_signed_url(
+            object_path,
+            expires_in
+        )
 
-        # Check for error in response
         if hasattr(response, 'error') and response.error:
-            error_msg = getattr(response.error, 'message', str(response.error))
-            logger.error(f"Error getting signed URL: {error_msg}")
+            logger.error(f"Error getting signed URL: {response.error}")
             return None
 
-        # Check for missing data
-        if not hasattr(response, 'data') or not response.data:
-            logger.error(f"No data in response for {file_path}")
+        if not hasattr(response, 'data') or not response.data or 'signedURL' not in response.data:
+            logger.error(f"No signed URL in response for {file_path}")
             return None
 
-        # Check for missing signedURL
-        if 'signedURL' not in response.data:
-            logger.error(f"No signedURL in response data for {file_path}. Data: {response.data}")
-            return None
-
-        # Get the URL and ensure it's HTTPS
-        url = response.data['signedURL']
-        if url.startswith('http://'):
-            url = url.replace('http://', 'https://', 1)
-            logger.info(f"Converted signed URL from HTTP to HTTPS for {file_path}")
-
-        return url
+        return response.data['signedURL']
     except Exception as e:
         logger.error(f"Error generating signed URL for {file_path}: {str(e)}", exc_info=True)
         return None
@@ -259,33 +230,14 @@ async def get_property_images(db_client: Client, property_id: str, expires_in: i
 
         # Generate signed URLs for each path
         signed_urls = []
-        valid_paths = 0
-        invalid_paths = 0
-
         for path in image_paths:
             if not path or not isinstance(path, str):
                 logger.warning(f"Skipping invalid image path: {path}")
-                invalid_paths += 1
                 continue
 
-            # Try to get a signed URL for this path
             signed_url = await get_file_url(db_client, path, expires_in)
             if signed_url:
-                # Ensure URL is HTTPS
-                if signed_url.startswith('http://'):
-                    signed_url = signed_url.replace('http://', 'https://')
-                    logger.info(f"Converted image URL from HTTP to HTTPS for property {property_id}")
-
                 signed_urls.append(signed_url)
-                valid_paths += 1
-            else:
-                invalid_paths += 1
-
-        # Log summary
-        if valid_paths > 0:
-            logger.info(f"Retrieved {valid_paths} valid image URLs for property {property_id}")
-        if invalid_paths > 0:
-            logger.warning(f"Found {invalid_paths} invalid image paths for property {property_id}")
 
         return signed_urls
     except Exception as e:
