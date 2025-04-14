@@ -13,3 +13,4 @@ from .document import router as document
 from .reporting import router as reporting
 from .notification import router as notification
 from .uploads import router as uploads
+from .lease import router as lease

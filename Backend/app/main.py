@@ -15,11 +15,11 @@ if ROOT_DIR not in sys.path:
 from .config.settings import settings
 from .config.auth import get_current_user
 from .api import (
-    property, 
-    tenant, 
-    user, 
-    auth, 
-    dashboard, 
+    property,
+    tenant,
+    user,
+    auth,
+    dashboard,
     rent_estimation,
     maintenance,
     vendor,
@@ -28,7 +28,8 @@ from .api import (
     document,
     reporting,
     notification,
-    uploads
+    uploads,
+    lease
 )
 
 # Setup logging
@@ -59,12 +60,12 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    
+
     response = await call_next(request)
-    
+
     process_time = time.time() - start_time
     logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.4f}s")
-    
+
     return response
 
 # Error handler
@@ -100,6 +101,7 @@ app.include_router(auth, prefix="/auth", tags=["Auth"])
 app.include_router(user)
 app.include_router(property)
 app.include_router(tenant)
+app.include_router(lease)
 app.include_router(dashboard)
 app.include_router(rent_estimation)
 app.include_router(maintenance)
@@ -113,4 +115,4 @@ app.include_router(uploads)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

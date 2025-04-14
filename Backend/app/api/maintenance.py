@@ -24,52 +24,6 @@ router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-# Mock maintenance data
-MOCK_MAINTENANCE = [
-    {
-        "id": "m1",
-        "property_id": "1",
-        "title": "Leaking Faucet",
-        "description": "The kitchen faucet is leaking and needs repair",
-        "category": "plumbing",
-        "priority": "medium",
-        "status": "open",
-        "tenant_id": "tenant1",
-        "owner_id": "user123",
-        "created_at": "2023-07-10T10:30:00",
-        "updated_at": "2023-07-10T10:30:00"
-    },
-    {
-        "id": "m2",
-        "property_id": "1",
-        "title": "Broken AC",
-        "description": "The air conditioning isn't working",
-        "category": "hvac",
-        "priority": "high",
-        "status": "in_progress",
-        "tenant_id": "tenant1",
-        "owner_id": "user123",
-        "vendor_id": "vendor1",
-        "created_at": "2023-07-05T14:20:00",
-        "updated_at": "2023-07-06T09:15:00"
-    },
-    {
-        "id": "m3",
-        "property_id": "2",
-        "title": "Light Fixture Broken",
-        "description": "The ceiling light in the living room doesn't work",
-        "category": "electrical",
-        "priority": "low",
-        "status": "completed",
-        "tenant_id": "tenant2",
-        "owner_id": "user123",
-        "vendor_id": "vendor2",
-        "created_at": "2023-06-28T16:45:00",
-        "updated_at": "2023-07-01T11:30:00",
-        "completed_date": "2023-07-01T11:30:00"
-    }
-]
-
 # Response Models
 class MaintenanceRequestResponse(BaseModel):
     request: Dict[str, Any]
@@ -96,25 +50,48 @@ async def get_maintenance_requests(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get all maintenance requests for the current user (using mock data for now).
-    
+    Get all maintenance requests for the current user.
+
     If the user is a landlord, returns requests for their properties.
     If the user is a tenant, returns only their requests.
     """
     try:
-        logger.info(f"Returning mock maintenance requests")
-        
-        # Apply filters if provided
-        result = MOCK_MAINTENANCE
-        if property_id:
-            result = [r for r in result if r["property_id"] == property_id]
-        if status:
-            result = [r for r in result if r["status"] == status]
-            
-        return result
+        # Extract user ID
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+        # Get user type/role
+        user_type = current_user.get("user_type") or current_user.get("role")
+
+        # Get requests based on user type
+        if user_type == "owner":
+            # Owners see requests for their properties
+            requests = await maintenance_service.get_maintenance_requests(
+                owner_id=user_id,
+                property_id=str(property_id) if property_id else None,
+                status=status.value if status else None
+            )
+        else:
+            # Tenants see only their requests
+            requests = await maintenance_service.get_maintenance_requests(
+                tenant_id=user_id,
+                property_id=str(property_id) if property_id else None,
+                status=status.value if status else None
+            )
+
+        # Apply additional filters if needed
+        if priority:
+            requests = [r for r in requests if r.get("priority") == priority.value]
+
+        # Apply pagination
+        total = len(requests)
+        paginated_requests = requests[skip:skip + limit]
+
+        return MaintenanceRequestsListResponse(items=paginated_requests, total=total)
     except Exception as e:
         logger.error(f"Error getting maintenance requests: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve maintenance requests")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve maintenance requests: {str(e)}")
 
 # Get a specific maintenance request by ID
 @router.get("/{request_id}", response_model=MaintenanceRequestResponse)
@@ -123,22 +100,39 @@ async def get_maintenance_request(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get a specific maintenance request (using mock data for now).
-    
+    Get a specific maintenance request.
+
     Users can only access their own requests or requests for their properties.
     """
     try:
-        # Find request in mock data
-        for request in MOCK_MAINTENANCE:
-            if request["id"] == request_id:
-                return request
-                
-        raise HTTPException(status_code=404, detail="Maintenance request not found")
+        # Extract user ID
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+        # Get the maintenance request
+        request = await maintenance_service.get_maintenance_request(str(request_id))
+
+        if not request:
+            raise HTTPException(status_code=404, detail="Maintenance request not found")
+
+        # Check authorization
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "owner":
+            # Owners can access requests for their properties
+            if request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to access this maintenance request")
+        else:
+            # Tenants can only access their own requests
+            if request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to access this maintenance request")
+
+        return MaintenanceRequestResponse(request=request, message="Success")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting maintenance request: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve maintenance request")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve maintenance request: {str(e)}")
 
 # Create a new maintenance request
 @router.post("/", response_model=MaintenanceRequestResponse, status_code=status.HTTP_201_CREATED)
@@ -147,22 +141,35 @@ async def create_maintenance_request(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Create a new maintenance request (using mock data for now).
-    
+    Create a new maintenance request.
+
     Tenants can create requests for their rented properties.
     Owners can create requests for any of their properties.
     """
     try:
-        # Correctly extract user_id from the dictionary
+        # Extract user ID
         user_id = current_user.get("id")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        # Service function should handle linking to user/tenant/property
-        request = await maintenance_service.create_maintenance_request(user_id, request_data)
-        if not request:
+        # Get user type/role
+        user_type = current_user.get("user_type") or current_user.get("role")
+
+        # Set tenant_id if user is a tenant
+        tenant_id = None
+        if user_type != "owner":
+            tenant_id = user_id
+
+        # Create the maintenance request
+        created_request = await maintenance_service.create_maintenance_request(
+            request_data=request_data,
+            tenant_id=tenant_id
+        )
+
+        if not created_request:
             raise HTTPException(status_code=400, detail="Maintenance request creation failed")
-        return MaintenanceRequestResponse(request=request, message="Maintenance request created successfully")
+
+        return MaintenanceRequestResponse(request=created_request, message="Maintenance request created successfully")
     except Exception as e:
         logger.error(f"Error creating maintenance request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create request: {str(e)}")
@@ -176,7 +183,7 @@ async def update_maintenance_request(
 ):
     """
     Update a maintenance request.
-    
+
     Tenants can update only certain fields of their own requests.
     Owners can update any field of requests for their properties.
     """
@@ -188,23 +195,23 @@ async def update_maintenance_request(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
-            
+
         # Update the request
         updated_request = await maintenance_service.update_maintenance_request(
             request_id=request_id,
             request_data=update_data
         )
-        
+
         if not updated_request:
             raise HTTPException(status_code=500, detail="Failed to update maintenance request")
-            
+
         return MaintenanceRequestResponse(request=updated_request, message="Request updated successfully")
     except HTTPException:
         raise
@@ -220,7 +227,7 @@ async def delete_maintenance_request(
 ):
     """
     Delete a maintenance request.
-    
+
     Only owners can delete maintenance requests for their properties.
     """
     try:
@@ -231,20 +238,20 @@ async def delete_maintenance_request(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Tenants are not authorized to delete maintenance requests")
-            
+
         # Delete the request
         success = await maintenance_service.delete_maintenance_request(request_id)
-        
+
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete maintenance request")
-            
+
         return None # No content
     except HTTPException:
         raise
@@ -261,7 +268,7 @@ async def assign_vendor(
 ):
     """
     Assign a vendor to a maintenance request.
-    
+
     Only owners can assign vendors to maintenance requests for their properties.
     """
     try:
@@ -272,25 +279,25 @@ async def assign_vendor(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") == user_id:
             raise HTTPException(status_code=403, detail="Tenants are not authorized to assign vendors")
         elif existing_request.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
-            
+
         # Assign the vendor
         updated_request = await maintenance_service.assign_vendor(
             request_id=request_id,
             vendor_id=vendor_id
         )
-        
+
         if not updated_request:
             raise HTTPException(status_code=500, detail="Failed to assign vendor")
-            
+
         return MaintenanceRequestResponse(request=updated_request, message="Vendor assigned successfully")
     except HTTPException:
         raise
@@ -307,7 +314,7 @@ async def update_status(
 ):
     """
     Update the status of a maintenance request.
-    
+
     Tenants can only mark requests as completed or cancelled.
     Owners can update to any status.
     """
@@ -319,31 +326,31 @@ async def update_status(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
-                
+
         # Tenants can only mark as completed or cancelled
         allowed_statuses = [MaintenanceStatus.COMPLETED.value, MaintenanceStatus.CANCELLED.value]
         if status not in allowed_statuses:
             raise HTTPException(
-                status_code=403, 
+                status_code=403,
                 detail=f"Tenants can only update status to {', '.join(allowed_statuses)}"
             )
-        
+
         # Update the status
         updated_request = await maintenance_service.update_request_status(
             request_id=request_id,
             status=status
         )
-        
+
         if not updated_request:
             raise HTTPException(status_code=500, detail="Failed to update status")
-            
+
         return MaintenanceRequestResponse(request=updated_request, message="Status updated successfully")
     except HTTPException:
         raise
@@ -361,7 +368,7 @@ async def add_image(
 ):
     """
     Add an image to a maintenance request.
-    
+
     Both tenants and owners can add images to their respective maintenance requests.
     """
     try:
@@ -372,24 +379,24 @@ async def add_image(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
-            
+
         # Add the image
         updated_request = await maintenance_service.add_maintenance_image(
             request_id=request_id,
             image_url=image_url,
             description=description
         )
-        
+
         if not updated_request:
             raise HTTPException(status_code=500, detail="Failed to add image")
-            
+
         return MaintenanceRequestResponse(request=updated_request, message="Image added successfully")
     except HTTPException:
         raise
@@ -406,7 +413,7 @@ async def add_comment(
 ):
     """
     Add a comment to a maintenance request.
-    
+
     Both tenants and owners can add comments to their respective maintenance requests.
     """
     try:
@@ -417,29 +424,29 @@ async def add_comment(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to comment on this maintenance request")
-            
+
         # Set the request_id and user_id in the comment data
         comment_data.request_id = request_id
         comment_data.user_id = user_id
         comment_data.user_type = current_user.get("user_type") or current_user.get("role")
-        
+
         # Log comment and attachments (if any)
         logger.info(f"Mock adding comment for request {request_id}: {comment_data.comment} Attachments: {comment_data.attachments}")
-        
+
         # Need to update the actual service to handle comment_data
         # Add the comment
         created_comment = await maintenance_service.add_maintenance_comment(comment_data)
-        
+
         if not created_comment:
             raise HTTPException(status_code=500, detail="Failed to add comment")
-            
+
         return {"message": "Comment added successfully", "comment": created_comment}
     except HTTPException:
         raise
@@ -455,7 +462,7 @@ async def get_comments(
 ):
     """
     Get comments for a maintenance request.
-    
+
     Both tenants and owners can view comments for their respective maintenance requests.
     """
     try:
@@ -466,17 +473,17 @@ async def get_comments(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to view comments for this maintenance request")
-            
+
         # Get the comments
         comments = await maintenance_service.get_maintenance_comments(request_id)
-        
+
         return comments
     except HTTPException:
         raise
@@ -493,7 +500,7 @@ async def get_recommended_vendors(
 ):
     """
     Get recommended vendors for a maintenance request based on category and rating.
-    
+
     Only owners can view recommended vendors.
     """
     try:
@@ -504,19 +511,19 @@ async def get_recommended_vendors(
 
         # Get the existing request
         existing_request = await maintenance_service.get_maintenance_request(request_id)
-        
+
         if not existing_request:
             raise HTTPException(status_code=404, detail="Maintenance request not found")
-            
+
         # Check authorization
         if existing_request.get("tenant_id") == user_id:
             raise HTTPException(status_code=403, detail="Tenants are not authorized to view recommended vendors")
         elif existing_request.get("owner_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to view vendors for this maintenance request")
-            
+
         # Get the recommended vendors
         vendors = await maintenance_service.get_recommended_vendors(request_id, limit)
-        
+
         return vendors
     except HTTPException:
         raise
@@ -531,7 +538,7 @@ async def get_maintenance_summary(
 ):
     """
     Get a summary of maintenance requests for the current owner.
-    
+
     Only owners can view the maintenance summary.
     """
     try:
@@ -539,7 +546,7 @@ async def get_maintenance_summary(
         owner_id = current_user.get("id")
         if not owner_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
-            
+
         # Assuming only owners see the summary for now
         if current_user.get("user_type") != 'owner':
              raise HTTPException(status_code=403, detail="Only property owners can view the maintenance summary")
@@ -558,35 +565,35 @@ async def get_maintenance_requests_count(
 ):
     """
     Get count of maintenance requests matching the specified filters.
-    
+
     This is particularly useful for dashboard widgets that show pending request counts.
     Users can only access counts for their own requests or requests related to their properties.
-    
+
     Args:
         tenant_id: Optional tenant ID to filter requests for a specific tenant
         status: Status to filter by (new, in_progress, completed, etc.) - defaults to 'new'
         current_user: The currently authenticated user
-        
+
     Returns:
         Dictionary with count of matching requests
     """
     try:
         # Convert string UUID to UUID object if present
         tenant_id_obj = uuid.UUID(tenant_id) if tenant_id else None
-        
+
         # Correctly and safely extract user_id from the dictionary
         user_id_str = current_user.get("id")
         if not user_id_str:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
         user_id = uuid.UUID(user_id_str)
-        
+
         # Get count from service
         count = await maintenance_service.count_maintenance_requests(
             user_id=user_id,
             tenant_id=tenant_id_obj,
             status=status
         )
-        
+
         return {"count": count}
     except ValueError as ve:
         # Catch potential UUID conversion errors specifically
@@ -597,4 +604,4 @@ async def get_maintenance_requests_count(
         raise http_exc
     except Exception as e:
         logger.error(f"Error counting maintenance requests: {e}", exc_info=True) # Added exc_info
-        raise HTTPException(status_code=500, detail="Failed to count maintenance requests") 
+        raise HTTPException(status_code=500, detail="Failed to count maintenance requests")

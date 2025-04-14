@@ -1,6 +1,22 @@
 import apiClient from '../client';
 import { LeaseAgreement } from '../types';
 
+interface LeaseParams {
+  property_id?: string;
+  tenant_id?: string;
+  active_only?: boolean;
+  skip?: number;
+  limit?: number;
+}
+
+interface LeaseData {
+  property_id: string;
+  tenant_id: string;
+  unit_number: string;
+  start_date: string;
+  end_date: string | null;
+}
+
 /**
  * Get lease agreement by unit ID
  * Calls GET /leases endpoint with unit_id parameter
@@ -103,4 +119,22 @@ export const deleteLease = async (leaseId: string): Promise<{ message: string }>
   }
 };
 
-// TODO: Add other lease service functions (create, update, terminate) as needed 
+/**
+ * Get all leases with optional filtering
+ * Calls GET /leases with optional parameters
+ */
+export const getLeases = async (params: LeaseParams = {}) => {
+  try {
+    const response = await apiClient.get('/leases', { params });
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error fetching leases:', error);
+    let errorMessage = 'Failed to fetch leases';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};

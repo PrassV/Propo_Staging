@@ -13,29 +13,46 @@ from . import notification_service # Import notification service
 logger = logging.getLogger(__name__)
 
 async def get_payments(
-    owner_id: str = None,
+    user_id: str = None,
+    user_type: str = None,
     property_id: str = None,
     tenant_id: str = None,
     status: str = None,
     payment_type: str = None,
     start_date: str = None,
-    end_date: str = None
-) -> List[Dict[str, Any]]:
+    end_date: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = "due_date",
+    sort_order: str = "desc"
+) -> tuple[List[Dict[str, Any]], int]:
     """
     Get payments, optionally filtered.
-    
+
     Args:
-        owner_id: Optional owner ID to filter by
+        user_id: The ID of the current user
+        user_type: The type of the current user (owner or tenant)
         property_id: Optional property ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         payment_type: Optional payment type to filter by
         start_date: Optional start date to filter by (format: YYYY-MM-DD)
         end_date: Optional end date to filter by (format: YYYY-MM-DD)
-        
+        skip: Number of records to skip for pagination
+        limit: Maximum number of records to return
+        sort_by: Field to sort by
+        sort_order: Sort direction (asc or desc)
+
     Returns:
-        List of payments
+        Tuple of (list of payments, total count)
     """
+    # Determine the owner_id based on user_type
+    owner_id = None
+    if user_type == 'owner':
+        owner_id = user_id
+    elif user_type == 'tenant':
+        tenant_id = user_id
+
     return await payment_db.get_payments(
         owner_id=owner_id,
         property_id=property_id,
@@ -43,16 +60,20 @@ async def get_payments(
         status=status,
         payment_type=payment_type,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        skip=skip,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order
     )
 
 async def get_payment(payment_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a specific payment by ID.
-    
+
     Args:
         payment_id: The payment ID
-        
+
     Returns:
         Payment data or None if not found
     """
@@ -61,35 +82,35 @@ async def get_payment(payment_id: str) -> Optional[Dict[str, Any]]:
 async def create_payment(payment_data: PaymentCreate, owner_id: str) -> Optional[Dict[str, Any]]:
     """
     Create a new payment.
-    
+
     Args:
         payment_data: The payment data
         owner_id: The owner ID
-        
+
     Returns:
         Created payment data or None if creation failed
     """
     try:
         # Prepare payment data
         insert_data = payment_data.dict()
-        
+
         # Add owner ID
         insert_data['owner_id'] = owner_id
-        
+
         # Set created_at and updated_at timestamps
         insert_data['created_at'] = datetime.utcnow().isoformat()
         insert_data['updated_at'] = insert_data['created_at']
-        
+
         # Generate unique ID
         insert_data['id'] = str(uuid.uuid4())
-        
+
         # Set initial status to pending if not provided
         if 'status' not in insert_data or not insert_data['status']:
             insert_data['status'] = PaymentStatus.PENDING.value
-            
+
         # Initialize amount_paid to 0
         insert_data['amount_paid'] = 0
-        
+
         # Create the payment
         return await payment_db.create_payment(insert_data)
     except Exception as e:
@@ -99,11 +120,11 @@ async def create_payment(payment_data: PaymentCreate, owner_id: str) -> Optional
 async def update_payment(payment_id: str, payment_data: PaymentUpdate) -> Optional[Dict[str, Any]]:
     """
     Update a payment.
-    
+
     Args:
         payment_id: The payment ID to update
         payment_data: The updated payment data
-        
+
     Returns:
         Updated payment data or None if update failed
     """
@@ -113,10 +134,10 @@ async def update_payment(payment_id: str, payment_data: PaymentUpdate) -> Option
         if not existing_payment:
             logger.error(f"Payment not found: {payment_id}")
             return None
-            
+
         # Prepare update data
         update_data = {k: v for k, v in payment_data.dict(exclude_unset=True).items() if v is not None}
-        
+
         # Update the payment
         return await payment_db.update_payment(payment_id, update_data)
     except Exception as e:
@@ -126,30 +147,30 @@ async def update_payment(payment_id: str, payment_data: PaymentUpdate) -> Option
 async def delete_payment(payment_id: str) -> bool:
     """
     Delete a payment.
-    
+
     Args:
         payment_id: The payment ID to delete
-        
+
     Returns:
         True if deletion succeeded, False otherwise
     """
     return await payment_db.delete_payment(payment_id)
 
 async def record_payment(
-    payment_id: str, 
-    amount: float, 
-    payment_method: str, 
+    payment_id: str,
+    amount: float,
+    payment_method: str,
     receipt_url: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Record a payment for an existing payment record.
-    
+
     Args:
         payment_id: The payment ID
         amount: The amount paid
         payment_method: The payment method used
         receipt_url: Optional URL to the receipt
-        
+
     Returns:
         Updated payment data or None if update failed
     """
@@ -167,11 +188,11 @@ async def record_payment(
 async def create_payment_receipt(payment_id: str, url: str) -> Optional[Dict[str, Any]]:
     """
     Create a payment receipt.
-    
+
     Args:
         payment_id: The payment ID
         url: URL to the receipt document
-        
+
     Returns:
         Created receipt data or None if creation failed
     """
@@ -180,18 +201,18 @@ async def create_payment_receipt(payment_id: str, url: str) -> Optional[Dict[str
 async def send_payment_reminder(payment_id: str, recipient_email: str, message: str) -> Optional[Dict[str, Any]]:
     """
     Send a payment reminder.
-    
+
     Args:
         payment_id: The payment ID
         recipient_email: Email address to send the reminder to
         message: Message content for the reminder
-        
+
     Returns:
         Created reminder data or None if creation failed
     """
     # In a real system, you would also implement the actual email sending here
     # For now, we just record that a reminder was sent
-    
+
     try:
         return await payment_db.create_payment_reminder(
             payment_id=payment_id,
@@ -205,10 +226,10 @@ async def send_payment_reminder(payment_id: str, recipient_email: str, message: 
 async def get_overdue_payments(owner_id: str = None) -> List[Dict[str, Any]]:
     """
     Get overdue payments.
-    
+
     Args:
         owner_id: Optional owner ID to filter by
-        
+
     Returns:
         List of overdue payments
     """
@@ -217,28 +238,28 @@ async def get_overdue_payments(owner_id: str = None) -> List[Dict[str, Any]]:
 async def get_upcoming_payments(owner_id: str = None, days: int = 7) -> List[Dict[str, Any]]:
     """
     Get upcoming payments due in the next specified number of days.
-    
+
     Args:
         owner_id: Optional owner ID to filter by
         days: Number of days to look ahead (default: 7)
-        
+
     Returns:
         List of upcoming payments
     """
     return await payment_db.get_upcoming_payments(owner_id, days)
 
 async def generate_rent_payments(
-    property_id: str, 
-    tenant_id: str, 
-    amount: float, 
-    due_day: int, 
-    start_date: date, 
+    property_id: str,
+    tenant_id: str,
+    amount: float,
+    due_day: int,
+    start_date: date,
     end_date: date,
     description: str = None
 ) -> List[Dict[str, Any]]:
     """
     Generate recurring rent payments for a tenant.
-    
+
     Args:
         property_id: The property ID
         tenant_id: The tenant ID
@@ -247,7 +268,7 @@ async def generate_rent_payments(
         start_date: Start date for recurring payments
         end_date: End date for recurring payments
         description: Optional payment description
-        
+
     Returns:
         List of created payment data
     """
@@ -257,16 +278,16 @@ async def generate_rent_payments(
         if not property_data:
             logger.error(f"Property not found: {property_id}")
             return []
-            
+
         owner_id = property_data.get('owner_id')
         if not owner_id:
             logger.error(f"Owner ID not found for property: {property_id}")
             return []
-            
+
         # Generate payments
         created_payments = []
         current_date = start_date
-        
+
         while current_date <= end_date:
             # Create payment for this month
             try:
@@ -275,7 +296,7 @@ async def generate_rent_payments(
                 days_in_month = calendar.monthrange(current_date.year, current_date.month)[1]
                 payment_due_day = min(due_day, days_in_month)
                 due_date = date(current_date.year, current_date.month, payment_due_day)
-                
+
                 # If current date is after the due date for this month, move to next month
                 if current_date.day > payment_due_day:
                     # Move to next month
@@ -283,11 +304,11 @@ async def generate_rent_payments(
                         next_month = date(current_date.year + 1, 1, 1)
                     else:
                         next_month = date(current_date.year, current_date.month + 1, 1)
-                    
+
                     days_in_next_month = calendar.monthrange(next_month.year, next_month.month)[1]
                     payment_due_day = min(due_day, days_in_next_month)
                     due_date = date(next_month.year, next_month.month, payment_due_day)
-                
+
                 # Only create if due date is not past the end date
                 if due_date <= end_date:
                     # Create payment
@@ -301,18 +322,18 @@ async def generate_rent_payments(
                         period_start_date=current_date.isoformat(),
                         # Set period end date to last day of the month
                         period_end_date=date(
-                            due_date.year, 
-                            due_date.month, 
+                            due_date.year,
+                            due_date.month,
                             calendar.monthrange(due_date.year, due_date.month)[1]
                         ).isoformat()
                     )
-                    
+
                     created_payment = await create_payment(payment_data, owner_id)
                     if created_payment:
                         created_payments.append(created_payment)
             except Exception as month_error:
                 logger.error(f"Error generating payment for {current_date}: {str(month_error)}")
-                
+
             # Move to next month
             if current_date.month == 12:
                 current_date = date(current_date.year + 1, 1, 1)
@@ -323,7 +344,7 @@ async def generate_rent_payments(
                 if next_month > 12:
                     next_month = 1
                     next_year += 1
-                    
+
                 last_day = calendar.monthrange(next_year, next_month)[1]
                 current_date = date(next_year, next_month, 1)
 
@@ -335,37 +356,37 @@ async def generate_rent_payments(
 async def get_payment_summary(owner_id: str) -> Dict[str, Any]:
     """
     Get a summary of payments for an owner.
-    
+
     Args:
         owner_id: The owner ID
-        
+
     Returns:
         Payment summary data
     """
     try:
         # Get all payments for the owner
         payments = await payment_db.get_payments(owner_id=owner_id)
-        
+
         # Count by status
         status_counts = {}
         for status in PaymentStatus:
             status_counts[status.value] = 0
-            
+
         for payment in payments:
             status = payment.get('status')
             if status in status_counts:
                 status_counts[status] += 1
-                
+
         # Count by payment type
         type_counts = {}
         for payment_type in PaymentType:
             type_counts[payment_type.value] = 0
-            
+
         for payment in payments:
             payment_type = payment.get('payment_type')
             if payment_type in type_counts:
                 type_counts[payment_type] += 1
-                
+
         # Calculate total amounts
         total_due = sum(payment.get('amount', 0) for payment in payments)
         total_paid = sum(payment.get('amount_paid', 0) or 0 for payment in payments)
@@ -374,15 +395,15 @@ async def get_payment_summary(owner_id: str) -> Dict[str, Any]:
             for payment in payments
             if payment.get('status') in [PaymentStatus.PENDING.value, PaymentStatus.PARTIALLY_PAID.value]
         )
-        
+
         # Count overdue and upcoming payments
         today = datetime.utcnow().date().isoformat()
         overdue_payments = [
-            p for p in payments 
-            if p.get('due_date') < today and 
+            p for p in payments
+            if p.get('due_date') < today and
                p.get('status') in [PaymentStatus.PENDING.value, PaymentStatus.PARTIALLY_PAID.value]
         ]
-        
+
         return {
             'total_payments': len(payments),
             'total_amount_due': total_due,
@@ -404,7 +425,7 @@ async def get_payment_summary(owner_id: str) -> Dict[str, Any]:
             'type_counts': {}
         }
 
-# --- Scheduled Task Logic --- 
+# --- Scheduled Task Logic ---
 
 async def check_and_notify_overdue_payments():
     """Scheduled task to find overdue payments, update status, and notify."""
@@ -477,4 +498,4 @@ async def check_and_notify_overdue_payments():
 # TODO: Add get_potentially_overdue_payments function to payment_db.py
 # This function should select payments WHERE status IN ('pending', 'partially_paid') AND due_date < today
 
-# TODO: Integrate call to check_and_notify_overdue_payments with a scheduler (APScheduler, Celery Beat, etc.) 
+# TODO: Integrate call to check_and_notify_overdue_payments with a scheduler (APScheduler, Celery Beat, etc.)

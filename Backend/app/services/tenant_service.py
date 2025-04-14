@@ -6,7 +6,7 @@ import secrets # For invitation tokens
 from fastapi import HTTPException, status
 
 from ..models.tenant import (
-    TenantCreate, TenantUpdate, Tenant, 
+    TenantCreate, TenantUpdate, Tenant,
     PropertyTenantLink, TenantInvitationCreate, TenantInvitation
 )
 from ..db import tenants as tenants_db
@@ -34,17 +34,17 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
     logger.warning(f"User {requesting_user_id} denied access to tenant {tenant_id}")
     return False
 
-# --- Tenant CRUD --- 
+# --- Tenant CRUD ---
 
 async def get_tenants(
-    requesting_user_id: uuid.UUID,
+    owner_id: uuid.UUID,
     property_id: Optional[uuid.UUID] = None,
     skip: int = 0,
     limit: int = 100,
     sort_by: str = 'created_at',
     sort_order: str = 'desc'
     # Add more filters as needed (e.g., name, email, status)
-) -> List[Tenant]:
+) -> tuple[List[Dict[str, Any]], int]:
     """
     Get tenants associated with properties owned by the requesting user.
     Optionally filter by a specific property ID.
@@ -52,18 +52,18 @@ async def get_tenants(
     """
     try:
         # Fetch tenants based on ownership and optional property filter
-        tenant_dicts = await tenants_db.get_tenants_for_owner(
-            owner_id=requesting_user_id,
+        tenant_dicts, total_count = await tenants_db.get_tenants_for_owner(
+            owner_id=owner_id,
             property_id=property_id,
             skip=skip,
             limit=limit,
             sort_by=sort_by,
             sort_order=sort_order
         )
-        return [Tenant(**t) for t in tenant_dicts]
+        return tenant_dicts, total_count
     except Exception as e:
         logger.error(f"Error in get_tenants service: {str(e)}")
-        return []
+        return [], 0
 
 async def get_tenant_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> Optional[Tenant]:
     """
@@ -72,7 +72,7 @@ async def get_tenant_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) 
     try:
         if not await _can_access_tenant(tenant_id, requesting_user_id):
             return None # Access denied
-            
+
         tenant_dict = await tenants_db.get_tenant_by_id(tenant_id)
         return Tenant(**tenant_dict) if tenant_dict else None
     except Exception as e:
@@ -93,11 +93,11 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
         if property_owner != creator_user_id:
             logger.error(f"User {creator_user_id} does not own property {tenant_data.property_id}")
             return None
-            
+
         # 2. Check if tenant already exists by email (optional - decide behavior)
         existing_tenant = await tenants_db.get_tenant_by_email(tenant_data.email)
         tenant_id = uuid.uuid4()
-        
+
         if existing_tenant:
             logger.warning(f"Tenant with email {tenant_data.email} already exists (ID: {existing_tenant['id']}). Linking existing tenant.")
             tenant_id = existing_tenant['id']
@@ -109,7 +109,7 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
             # tenant_dict["user_id"] = None # Should be linked upon registration/invite acceptance
             tenant_dict["created_at"] = datetime.utcnow()
             tenant_dict["updated_at"] = datetime.utcnow()
-            
+
             # Convert date/enums if necessary for DB layer
             for key in ['dob', 'rental_start_date', 'rental_end_date', 'lease_start_date', 'lease_end_date']:
                 if key in tenant_dict and tenant_dict[key]:
@@ -163,7 +163,7 @@ async def update_tenant(tenant_id: uuid.UUID, tenant_data: TenantUpdate, request
             logger.warning("Update tenant called with no data to update.")
             # Return current tenant data if no changes
             return await get_tenant_by_id(tenant_id, requesting_user_id)
-            
+
         update_dict["updated_at"] = datetime.utcnow()
 
         # Convert date/enums if necessary for DB layer
@@ -197,7 +197,7 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
             if property_owner == requesting_user_id:
                 can_delete = True
                 owned_property_links.append(link["id"])
-        
+
         if not can_delete:
             logger.warning(f"User {requesting_user_id} does not have permission to delete tenant {tenant_id}")
             return False
@@ -215,14 +215,14 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         if not tenant_deleted:
              logger.error(f"Failed to delete tenant record {tenant_id} after deleting links")
              return False
-             
+
         logger.info(f"Tenant {tenant_id} and associated links deleted by user {requesting_user_id}")
         return True
     except Exception as e:
         logger.exception(f"Error in delete_tenant service: {str(e)}")
         return False
 
-# --- Tenant Invitation --- 
+# --- Tenant Invitation ---
 
 async def create_tenant_invitation(
     invitation_data: TenantInvitationCreate,
@@ -241,7 +241,7 @@ async def create_tenant_invitation(
         # 2. Check if an active invitation already exists for this email/property?
         # existing_invite = await tenants_db.get_active_invitation(invitation_data.email, invitation_data.property_id)
         # if existing_invite: ... handle appropriately (resend? error?)
-        
+
         # 3. Generate token and expiry
         token = secrets.token_urlsafe(32)
         expires_at = datetime.utcnow() + timedelta(days=7) # Example: 7 day expiry
@@ -264,7 +264,7 @@ async def create_tenant_invitation(
         if not created_invite_dict:
             logger.error(f"Failed to save invitation for {invitation_data.email}")
             return None
-            
+
         # 6. Trigger notification (e.g., email)
         # await notification_service.send_tenant_invitation(created_invite_dict)
         logger.info(f"Tenant invitation created for {invitation_data.email}, token: {token}")
@@ -285,12 +285,138 @@ async def get_properties_for_tenant(tenant_id: uuid.UUID, requesting_user_id: uu
     logger.info("Placeholder: Fetching properties for tenant")
     return await tenants_db.get_properties_for_tenant_db(tenant_id) # Assumes DB function exists
 
-async def get_leases_for_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> List[PropertyTenantLink]:
+async def get_leases_for_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> List[Dict[str, Any]]:
     """Get lease/tenancy link details for a tenant."""
     if not await _can_access_tenant(tenant_id, requesting_user_id):
         return [] # Access denied
     links_dict = await tenants_db.get_property_links_for_tenant(tenant_id)
-    return [PropertyTenantLink(**link) for link in links_dict]
+    return links_dict
+
+async def get_leases(
+    owner_id: uuid.UUID,
+    property_id: Optional[uuid.UUID] = None,
+    tenant_id: Optional[uuid.UUID] = None,
+    active_only: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = 'created_at',
+    sort_order: str = 'desc'
+) -> tuple[List[Dict[str, Any]], int]:
+    """Get all leases for properties owned by the requesting user."""
+    try:
+        # Get leases based on filters
+        leases, total_count = await tenants_db.get_leases(
+            owner_id=owner_id,
+            property_id=property_id,
+            tenant_id=tenant_id,
+            active_only=active_only,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return leases, total_count
+    except Exception as e:
+        logger.error(f"Error in get_leases service: {str(e)}")
+        return [], 0
+
+async def get_lease_by_id(lease_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """Get a specific lease by ID."""
+    try:
+        lease = await tenants_db.get_property_tenant_link_by_id(lease_id)
+        return lease
+    except Exception as e:
+        logger.error(f"Error in get_lease_by_id service: {str(e)}")
+        return None
+
+async def can_access_lease(lease_id: uuid.UUID, requesting_user_id: uuid.UUID) -> bool:
+    """Check if the requesting user can access the lease."""
+    try:
+        # Get the lease
+        lease = await tenants_db.get_property_tenant_link_by_id(lease_id)
+        if not lease:
+            return False
+
+        # Get the property owner
+        property_owner = await properties_db.get_property_owner(lease.get('property_id'))
+        if property_owner == requesting_user_id:
+            return True
+
+        # Check if the requesting user is the tenant
+        tenant = await tenants_db.get_tenant_by_id(lease.get('tenant_id'))
+        if tenant and tenant.get('user_id') == requesting_user_id:
+            return True
+
+        return False
+    except Exception as e:
+        logger.error(f"Error in can_access_lease service: {str(e)}")
+        return False
+
+async def create_lease(lease_data: PropertyTenantLinkCreate) -> Optional[Dict[str, Any]]:
+    """Create a new lease."""
+    try:
+        # Prepare data for insertion
+        link_data = {
+            "id": uuid.uuid4(),
+            "property_id": lease_data.property_id,
+            "tenant_id": lease_data.tenant_id,
+            "unit_number": lease_data.unit_number,
+            "start_date": lease_data.start_date.isoformat(),
+            "end_date": lease_data.end_date.isoformat() if lease_data.end_date else None,
+            "created_at": datetime.now(datetime.timezone.utc),
+            "updated_at": datetime.now(datetime.timezone.utc)
+        }
+
+        # Create the lease
+        created_lease = await tenants_db.create_property_tenant_link(link_data)
+        return created_lease
+    except Exception as e:
+        logger.error(f"Error in create_lease service: {str(e)}")
+        return None
+
+async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate) -> Optional[Dict[str, Any]]:
+    """Update an existing lease."""
+    try:
+        # Get the current lease
+        current_lease = await tenants_db.get_property_tenant_link_by_id(lease_id)
+        if not current_lease:
+            return None
+
+        # Prepare data for update
+        update_data = lease_data.model_dump(exclude_unset=True)
+        update_data["updated_at"] = datetime.now(datetime.timezone.utc)
+
+        # Convert date fields to ISO format
+        if 'start_date' in update_data and update_data['start_date']:
+            update_data['start_date'] = update_data['start_date'].isoformat()
+        if 'end_date' in update_data and update_data['end_date']:
+            update_data['end_date'] = update_data['end_date'].isoformat()
+
+        # Update the lease
+        updated_lease = await tenants_db.update_property_tenant_link(lease_id, update_data)
+        return updated_lease
+    except Exception as e:
+        logger.error(f"Error in update_lease service: {str(e)}")
+        return None
+
+async def delete_lease(lease_id: uuid.UUID) -> bool:
+    """Delete a lease."""
+    try:
+        # Delete the lease
+        deleted = await tenants_db.delete_property_tenant_link(lease_id)
+        return deleted
+    except Exception as e:
+        logger.error(f"Error in delete_lease service: {str(e)}")
+        return False
+
+async def get_property_owner(property_id: uuid.UUID) -> Optional[str]:
+    """Get the owner ID of a property."""
+    try:
+        owner_id = await properties_db.get_property_owner(property_id)
+        return owner_id
+    except Exception as e:
+        logger.error(f"Error in get_property_owner service: {str(e)}")
+        return None
 
 async def get_payments_for_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> List[Dict]: # Use Payment model
     """Get payment history for a tenant (requires Payment service/db)."""
@@ -311,7 +437,7 @@ async def get_maintenance_for_tenant(tenant_id: uuid.UUID, requesting_user_id: u
     return []
 
 async def get_tenant_payments(
-    tenant_id: uuid.UUID, 
+    tenant_id: uuid.UUID,
     requesting_user_id: Optional[uuid.UUID] = None,  # Optional because this can be called internally
     limit: int = 100,
     sort_by: str = 'payment_date',
@@ -371,19 +497,19 @@ async def verify_and_link_tenant_by_property(
     user_details: Optional[Dict[str, Any]] = None # For potential future checks (name, phone)
 ) -> bool:
     """
-    Finds a tenant associated with a property ID, verifies their email 
+    Finds a tenant associated with a property ID, verifies their email
     against the provided user email, and links the tenant record to the user ID.
-    
+
     Raises HTTPException for specific failure reasons (not found, mismatch, already linked).
     Returns True on successful verification and linking.
     """
     logger.info(f"Attempting to verify/link tenant for user {user_id} and property {property_id}")
-    
+
     try:
         # 1. Find the tenant associated with the property
         # Assume tenant_db.get_tenant_by_property_id returns a Tenant-like object/dict or None
         tenant_record = await tenants_db.get_tenant_by_property_id(property_id)
-        
+
         if not tenant_record:
             logger.warning(f"Verification failed: No tenant found for property_id {property_id}")
             raise HTTPException(
@@ -407,7 +533,7 @@ async def verify_and_link_tenant_by_property(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This tenant profile is already linked to a different user account."
             )
-        
+
         # 3. Check if already linked to the SAME user (optional, can just succeed)
         if existing_user_id and uuid.UUID(str(existing_user_id)) == user_id:
             logger.info(f"Verification skipped: Tenant {tenant_id} already linked to user {user_id}")
@@ -422,19 +548,19 @@ async def verify_and_link_tenant_by_property(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Tenant details do not match the authenticated user."
             )
-        
+
         # 5. Link the tenant record to the user ID
         logger.info(f"Verification successful for tenant {tenant_id}. Linking to user {user_id}")
         # Assume tenant_db.update_tenant_user_id updates the record and returns success/failure
         update_success = await tenants_db.update_tenant_user_id(tenant_id, user_id)
-        
+
         if not update_success:
             logger.error(f"Failed to update user_id for tenant {tenant_id} in database.")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to link tenant account after verification."
             )
-        
+
         logger.info(f"Successfully linked tenant {tenant_id} to user {user_id}")
         return True
 
@@ -458,12 +584,12 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
     try:
         # Call the corresponding DB/CRUD function
         tenant_data = await tenants_db.get_tenant_by_user_id(user_id)
-        
+
         if tenant_data:
             logger.info(f"Found tenant profile {tenant_data.get('id')} for user {user_id}")
             # Assuming tenant_data is a dict-like object that can be parsed into the Tenant model
             # Add error handling if parsing fails
-            return Tenant(**tenant_data) 
+            return Tenant(**tenant_data)
         else:
             logger.info(f"No tenant profile found for user_id {user_id}")
             return None
@@ -471,4 +597,4 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
         logger.exception(f"Unexpected error retrieving tenant by user_id {user_id}: {e}")
         # Propagate the error or handle it (e.g., return None, raise specific exception)
         # For now, re-raising might be simplest if the API layer catches it.
-        raise # Or raise HTTPException(status.HTTP_500...) depending on desired handling 
+        raise # Or raise HTTPException(status.HTTP_500...) depending on desired handling

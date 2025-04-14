@@ -31,6 +31,12 @@ class UtilityResponsibility(str, Enum):
     OWNER = "owner"
     SPLIT = "split"
 
+class InvitationStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+
 # --- Tenant Model --- Based on tenants table
 class TenantBase(BaseModel):
     name: str
@@ -115,13 +121,23 @@ class Tenant(TenantBase):
         from_attributes = True # Enable ORM mode
 
 # Model for the property_tenants relationship (Lease/Tenancy)
-class PropertyTenantLink(BaseModel):
-    id: uuid.UUID
+class PropertyTenantLinkBase(BaseModel):
     property_id: uuid.UUID
     tenant_id: uuid.UUID
     unit_number: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
+
+class PropertyTenantLinkCreate(PropertyTenantLinkBase):
+    pass
+
+class PropertyTenantLinkUpdate(BaseModel):
+    unit_number: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+class PropertyTenantLink(PropertyTenantLinkBase):
+    id: uuid.UUID
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -148,4 +164,4 @@ class TenantInvitation(TenantInvitationBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True 
+        from_attributes = True

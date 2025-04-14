@@ -45,8 +45,8 @@ export const getPaymentsByUnitId = async (unitId: string, params?: { tenantId?: 
       unit_id: unitId,
       tenant_id: params?.tenantId
     };
-    
-    const response = await apiClient.get<RecentPayment[]>('/payments', { 
+
+    const response = await apiClient.get<RecentPayment[]>('/payments', {
       params: queryParams
     });
     return response.data;
@@ -184,11 +184,11 @@ export const recordPayment = async (
     {
       // Headers might not be needed if backend correctly parses FormData as Form fields
       // headers: {
-      //   'Content-Type': 'multipart/form-data', 
+      //   'Content-Type': 'multipart/form-data',
       // },
     }
   );
-  
+
   return response.data;
 };
 
@@ -253,7 +253,7 @@ export const getTenantPaymentStatus = async (tenantId: string): Promise<RecentPa
        // ... existing refined error handling ...
        console.error(`Error fetching payment status for tenant ${tenantId}:`, error);
        let errorMessage = 'Failed to fetch payment status';
-       if (error && typeof error === 'object' && 'response' in error && 
+       if (error && typeof error === 'object' && 'response' in error &&
            error.response && typeof error.response === 'object' && 'data' in error.response &&
            error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
             errorMessage = (error.response.data as { detail: string }).detail;
@@ -266,7 +266,7 @@ export const getTenantPaymentStatus = async (tenantId: string): Promise<RecentPa
 
 /*
 // Interface remains the same
-interface NotifyTenantParams { 
+interface NotifyTenantParams {
     email: string;
     name: string;
     type: 'electricity' | 'tax';
@@ -288,10 +288,10 @@ export async function notifyTenant(_params: NotifyTenantParams): Promise<{ succe
 export async function getPaymentHistory(tenantId: string, type: 'rent') : Promise<Payment[]> {
   try {
     const endpoint = '/payments'; // Use const
-    const params: Record<string, string> = { 
+    const params: Record<string, string> = {
       tenant_id: tenantId,
-      sort_by: 'period_start', 
-      sort_order: 'desc' 
+      sort_by: 'period_start',
+      sort_order: 'desc'
     };
 
     switch (type) {
@@ -304,13 +304,13 @@ export async function getPaymentHistory(tenantId: string, type: 'rent') : Promis
     }
 
     const response = await apiClient.get<Payment[]>(endpoint, { params });
-    return response.data || []; 
+    return response.data || [];
 
   } catch (error: unknown) {
     // ... existing refined error handling ...
     console.error('Error fetching payment history:', error);
     let errorMessage = 'Failed to fetch payment history';
-    if (error && typeof error === 'object' && 'response' in error && 
+    if (error && typeof error === 'object' && 'response' in error &&
         error.response && typeof error.response === 'object' && 'data' in error.response &&
         error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
          errorMessage = (error.response.data as { detail: string }).detail;
@@ -321,4 +321,81 @@ export async function getPaymentHistory(tenantId: string, type: 'rent') : Promis
   }
 }
 
-// TODO: Add other payment service functions (record payment, getById) as needed 
+/**
+ * Create a payment request
+ * Calls POST /payments
+ */
+export const createPaymentRequest = async (data: {
+  property_id: string;
+  tenant_id: string;
+  amount: number;
+  due_date: string;
+  payment_type: string;
+  description: string;
+}): Promise<any> => {
+  try {
+    const response = await apiClient.post('/payments', data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error creating payment request:', error);
+    let errorMessage = 'Failed to create payment request';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Record a manual payment
+ * Calls POST /payments/{id}/record
+ */
+export const recordManualPayment = async (paymentId: string, data: {
+  amount_paid: number;
+  payment_date: string;
+  payment_method: string;
+  notes?: string;
+}): Promise<any> => {
+  try {
+    const response = await apiClient.post(`/payments/${paymentId}/record`, data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error recording payment for ${paymentId}:`, error);
+    let errorMessage = 'Failed to record payment';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Send a payment reminder
+ * Calls POST /payments/{id}/reminders
+ */
+export const sendPaymentReminder = async (paymentId: string, data: {
+  recipient_email: string;
+  message: string;
+}): Promise<any> => {
+  try {
+    const formData = new FormData();
+    formData.append('recipient_email', data.recipient_email);
+    formData.append('message', data.message);
+
+    const response = await apiClient.post(`/payments/${paymentId}/reminders`, formData);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error sending payment reminder for ${paymentId}:`, error);
+    let errorMessage = 'Failed to send payment reminder';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};

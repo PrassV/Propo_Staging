@@ -4,6 +4,10 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
 import OnboardingFlow from '../components/onboarding/OnboardingFlow';
+import LeaseManagement from '../components/LeaseManagement';
+import MaintenanceList from '../components/maintenance/MaintenanceList';
+import MaintenanceDetails from '../components/maintenance/MaintenanceDetails';
+import PaymentList from '../components/payment/PaymentList';
 
 // Dashboard pages
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -115,6 +119,38 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth requireProfile>
         {withSuspense(RequestDetails)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/properties/:propertyId/leases',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        <LeaseManagement />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/maintenance',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        <MaintenanceList />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/maintenance/:id',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        <MaintenanceDetails />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/payments',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        <PaymentList />
       </RouteGuard>
     )
   },

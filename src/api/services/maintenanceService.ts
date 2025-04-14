@@ -1,7 +1,7 @@
 import apiClient from '../client';
-import { 
-  MaintenanceRequest, 
-  MaintenanceRequestCreate, 
+import {
+  MaintenanceRequest,
+  MaintenanceRequestCreate,
   MaintenanceRequestUpdate,
   MaintenanceIssue
 } from '../types';
@@ -68,6 +68,26 @@ export const getMaintenanceRequests = async (params: {
   } catch (error: unknown) {
     console.error('Error fetching maintenance requests:', error);
     let errorMessage = 'Failed to fetch maintenance requests';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get a specific maintenance request by ID
+ * Calls GET /maintenance/{id}
+ */
+export const getMaintenanceRequest = async (id: string): Promise<{ request: MaintenanceRequest }> => {
+  try {
+    const response = await apiClient.get<{ request: MaintenanceRequest }>(`/maintenance/${id}`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching maintenance request ${id}:`, error);
+    let errorMessage = 'Failed to fetch maintenance request';
     if (error && typeof error === 'object' && 'formattedMessage' in error) {
       errorMessage = (error as { formattedMessage: string }).formattedMessage;
     } else if (error instanceof Error) {
@@ -181,9 +201,9 @@ export const getMaintenanceComments = async (requestId: string): Promise<Mainten
  * Add a comment to a maintenance request
  * Calls POST /maintenance/{id}/comments
  */
-export const addMaintenanceComment = async (requestId: string, data: { comment: string; attachments?: string[] }): Promise<MaintenanceComment> => {
+export const addMaintenanceComment = async (requestId: string, content: string): Promise<MaintenanceComment> => {
   try {
-    const response = await apiClient.post<{ comment: MaintenanceComment }>(`/maintenance/${requestId}/comments`, data);
+    const response = await apiClient.post<{ comment: MaintenanceComment }>(`/maintenance/${requestId}/comments`, { content });
     return response.data.comment;
   } catch (error: unknown) {
     console.error(`Error adding comment to maintenance request ${requestId}:`, error);
@@ -227,7 +247,7 @@ export const assignMaintenanceRequest = async (
 export const getOpenTenantRequestsCount = async (tenantId: string): Promise<number> => {
   try {
     const response = await apiClient.get<{ count: number }>('/maintenance/requests/count', {
-      params: { 
+      params: {
         tenant_id: tenantId,
         status: 'new' // Assuming 'new' corresponds to 'open' requests
        }
@@ -243,4 +263,4 @@ export const getOpenTenantRequestsCount = async (tenantId: string): Promise<numb
     }
     throw new Error(errorMessage);
   }
-}; 
+};

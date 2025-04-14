@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { MaintenanceIssue } from '@/api/types';
-import { getMaintenanceByUnitId } from '@/api/services/maintenanceService';
+import { getMaintenanceByUnitId, createMaintenanceRequest } from '@/api/services/maintenanceService';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
 
 interface MaintenanceListTabProps {
     unitId: string;
@@ -16,14 +22,23 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
     const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        priority: 'medium',
+        category: 'plumbing'
+    });
+    const [submitting, setSubmitting] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
         const fetchMaintenanceIssues = async () => {
             if (!unitId) return;
-            
+
             setLoading(true);
             setError(null);
-            
+
             try {
                 const data = await getMaintenanceByUnitId(unitId);
                 setIssues(data || []);
@@ -35,7 +50,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
                 setLoading(false);
             }
         };
-        
+
         fetchMaintenanceIssues();
     }, [unitId]);
 
@@ -53,12 +68,70 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
     };
 
     const handleCreateRequest = () => {
-        // TODO: Implement create maintenance request functionality
-        console.log("Create maintenance request for unit:", unitId);
+        setDialogOpen(true);
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSelectChange = (name: string, value: string) => {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async () => {
+        if (!formData.title || !formData.description) {
+            toast({
+                title: "Error",
+                description: "Please fill in all required fields",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await createMaintenanceRequest({
+                title: formData.title,
+                description: formData.description,
+                priority: formData.priority,
+                category: formData.category,
+                property_id: '', // This will be filled by the backend based on the unit
+                unit_number: unitId
+            });
+
+            toast({
+                title: "Success",
+                description: "Maintenance request created successfully"
+            });
+
+            // Reset form and close dialog
+            setFormData({
+                title: '',
+                description: '',
+                priority: 'medium',
+                category: 'plumbing'
+            });
+            setDialogOpen(false);
+
+            // Refresh the list
+            const data = await getMaintenanceByUnitId(unitId);
+            setIssues(data || []);
+        } catch (err) {
+            console.error("Error creating maintenance request:", err);
+            toast({
+                title: "Error",
+                description: err instanceof Error ? err.message : 'Failed to create maintenance request',
+                variant: "destructive"
+            });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     if (loading) return <div className="flex justify-center p-4"><LoadingSpinner /></div>;
-    
+
     if (error) return (
         <Alert variant="destructive">
             <AlertTitle>Error</AlertTitle>
@@ -74,7 +147,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
                     <PlusCircle className="mr-2 h-4 w-4" /> New Request
                 </Button>
             </div>
-            
+
             {issues.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">No maintenance issues reported.</p>
             ) : (
@@ -99,6 +172,83 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
                     ))}
                 </div>
             )}
+
+            {/* Create Maintenance Request Dialog */}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create Maintenance Request</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="title">Title</Label>
+                            <Input
+                                id="title"
+                                name="title"
+                                value={formData.title}
+                                onChange={handleInputChange}
+                                placeholder="Brief description of the issue"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea
+                                id="description"
+                                name="description"
+                                value={formData.description}
+                                onChange={handleInputChange}
+                                placeholder="Detailed description of the maintenance issue"
+                                rows={4}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="priority">Priority</Label>
+                                <Select
+                                    value={formData.priority}
+                                    onValueChange={(value) => handleSelectChange('priority', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select priority" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="low">Low</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="emergency">Emergency</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="category">Category</Label>
+                                <Select
+                                    value={formData.category}
+                                    onValueChange={(value) => handleSelectChange('category', value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="plumbing">Plumbing</SelectItem>
+                                        <SelectItem value="electrical">Electrical</SelectItem>
+                                        <SelectItem value="hvac">HVAC</SelectItem>
+                                        <SelectItem value="appliance">Appliance</SelectItem>
+                                        <SelectItem value="structural">Structural</SelectItem>
+                                        <SelectItem value="pest_control">Pest Control</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSubmit} disabled={submitting}>
+                            {submitting ? 'Creating...' : 'Create Request'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
-} 
+}
