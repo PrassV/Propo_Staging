@@ -6,6 +6,7 @@ from supabase import Client # Import Client type
 
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails # Import new model
 from ..db import properties as property_db
+from ..config.settings import settings # Import settings for bucket name
 # Import other necessary services if needed for cross-service calls
 # from . import tenant_service, maintenance_service # Example
 
@@ -52,9 +53,42 @@ async def get_properties_count( # Add count function
         pincode=pincode
     )
 
-async def get_property(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]: # REMOVE headers parameter
-    """Get a specific property by ID"""
-    return await property_db.get_property_by_id(db_client, property_id) # REMOVE
+async def get_property(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]:
+    """Get a specific property by ID, generating signed URLs for images."""
+    property_data = await property_db.get_property_by_id(db_client, property_id)
+
+    if property_data:
+        image_paths = property_data.get('image_urls') # Assuming DB returns paths in 'image_urls' field
+        if image_paths and isinstance(image_paths, list):
+            signed_urls = []
+            bucket_name = settings.PROPERTY_IMAGE_BUCKET
+            expires_in = 60 # Signed URL expiry time in seconds
+
+            for path in image_paths:
+                if not path or not isinstance(path, str):
+                    logger.warning(f"Skipping invalid image path found for property {property_id}: {path}")
+                    continue
+                try:
+                    # Remove leading slash if present, as Supabase paths are relative to bucket root
+                    clean_path = path.lstrip('/') 
+                    signed_url_data = db_client.storage.from_(bucket_name).create_signed_url(clean_path, expires_in)
+                    # Check if 'signedURL' key exists and is not None
+                    if signed_url_data and signed_url_data.get('signedURL'):
+                        signed_urls.append(signed_url_data['signedURL'])
+                    else:
+                        logger.warning(f"Failed to generate signed URL for path: {path} in bucket {bucket_name}. Result: {signed_url_data}")
+                except Exception as e:
+                    # Catch potential errors like file not found from Supabase storage
+                    logger.error(f"Error generating signed URL for path {path} in bucket {bucket_name}: {e}")
+                    # Optionally append None or a placeholder, or just skip
+
+            # Replace the original paths with the generated signed URLs
+            property_data['image_urls'] = signed_urls
+        else:
+            # Ensure image_urls is at least an empty list if no paths were found or field is missing/invalid
+            property_data['image_urls'] = [] 
+
+    return property_data
 
 async def create_property(db_client: Client, property_data: PropertyCreate, owner_id: str) -> Optional[Dict[str, Any]]: # REMOVE headers parameter
     """Create a new property by calling the DB layer (which now uses RPC)."""
