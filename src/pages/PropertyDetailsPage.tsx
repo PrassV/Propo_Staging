@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Edit, Plus } from 'lucide-react'; // Removed unused icons
 import { usePropertyDialog } from '@/contexts/PropertyDialogContext';
-import ImageGallery from '@/components/property/ImageGallery'; // Import the new component
+import EnhancedImageGallery from '@/components/property/EnhancedImageGallery'; // Import the enhanced image gallery
 import UnitCard from '@/components/property/UnitCard'; // Import UnitCard
 import DocumentList from '@/components/documents/DocumentList'; // Import DocumentList
 import AddUnitForm from '@/components/property/AddUnitForm'; // Import the AddUnitForm component
+import PropertyFinancialSummary from '@/components/property/PropertyFinancialSummary'; // Import the financial summary component
+import PropertyLocationMap from '@/components/property/PropertyLocationMap'; // Import the location map component
 
 // Import Dialog components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -26,7 +28,7 @@ export default function PropertyDetailsPage() {
     const [error, setError] = useState<string | null>(null);
     const [addUnitDialogOpen, setAddUnitDialogOpen] = useState(false); // State for dialog visibility
     const [addingUnit, setAddingUnit] = useState(false); // Loading state for unit creation
-    
+
     const { openDialog: openEditPropertyDialog } = usePropertyDialog();
 
     const fetchPropertyDetails = async () => {
@@ -41,14 +43,14 @@ export default function PropertyDetailsPage() {
             // Replace placeholder with actual (placeholder) API call
             const fetchedProperty = await api.property.getPropertyById(propertyId);
             setProperty(fetchedProperty);
-            
+
             // **** Remove Placeholder Data ****
             // console.warn("Using placeholder data for PropertyDetailsPage");
-            // await new Promise(resolve => setTimeout(resolve, 500)); 
+            // await new Promise(resolve => setTimeout(resolve, 500));
             // const placeholder: PropertyDetails = { /* ... placeholder object ... */ };
             // setProperty(placeholder);
             // **** End Placeholder Data Removal ****
-            
+
         } catch (err: unknown) {
             console.error("Error fetching property details:", err);
             if (err instanceof Error && (err.message.includes('404') || err.message.includes('not found'))) {
@@ -101,8 +103,8 @@ export default function PropertyDetailsPage() {
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
             // Convert null to undefined for sizeSqft and yearBuilt
-            sizeSqft: property.area ?? undefined, 
-      yearBuilt: property.year_built ?? undefined, 
+            sizeSqft: property.area ?? undefined,
+      yearBuilt: property.year_built ?? undefined,
             category: '', // Placeholder
             listedIn: '', // Placeholder
             status: property.status, // Assuming PropertyDetails has status
@@ -138,7 +140,7 @@ export default function PropertyDetailsPage() {
         }
     };
 
-    // --- Loading / Error / Not Found States --- 
+    // --- Loading / Error / Not Found States ---
     if (loading) return <div className="p-6 flex justify-center"><LoadingSpinner /></div>;
     if (error) return (
         <div className="p-6 text-center">
@@ -150,7 +152,7 @@ export default function PropertyDetailsPage() {
     );
     if (!property) return <div className="p-6 text-center">Property data is unavailable.</div>; // Should ideally be covered by error state
 
-    // --- Main Render --- 
+    // --- Main Render ---
     return (
         <div className="p-6 space-y-6">
             {/* Back Button & Edit Button */}
@@ -165,92 +167,156 @@ export default function PropertyDetailsPage() {
                 </Button>
             </div>
 
-            {/* Property Header & Image Gallery */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-3xl">{property.property_name}</CardTitle>
-                    <CardDescription>{`${property.address_line1}, ${property.city}, ${property.state}`}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                     {/* Use the ImageGallery component - Pass paths to imagePaths prop */}
-                     <ImageGallery 
-                        imagePaths={property.image_urls} // Changed prop name
-                        propertyName={property.property_name}
-                        className="mb-6" // Add margin if needed
-                     />
-                </CardContent>
-            </Card>
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - 2/3 width */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Property Header & Image Gallery */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-3xl">{property.property_name}</CardTitle>
+                            <CardDescription>{`${property.address_line1}, ${property.city}, ${property.state}`}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {/* Use the EnhancedImageGallery component */}
+                            <EnhancedImageGallery
+                                propertyId={property.id}
+                                propertyName={property.property_name}
+                                className="mb-6" // Add margin if needed
+                            />
+                        </CardContent>
+                    </Card>
 
-            {/* NEW: Property Overview & Amenities Card */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Overview & Amenities</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        {/* Display overview details if they exist */}
-                        {property.area && <div><span className="font-semibold">Size:</span> {property.area} {property.area_unit || 'sqft'}</div>} {/* Use area and area_unit */} 
-                        {typeof property.bedrooms === 'number' && <div><span className="font-semibold">Bedrooms:</span> {property.bedrooms}</div>}
-                        {typeof property.bathrooms === 'number' && <div><span className="font-semibold">Bathrooms:</span> {property.bathrooms}</div>}
-                        {property.year_built && <div><span className="font-semibold">Year Built:</span> {property.year_built}</div>}
-                        {/* Add other fields like floors, kitchens, garages if available in PropertyDetails type */} 
-                    </div>
-                    {/* Display amenities if they exist */} 
-                    {property.amenities && property.amenities.length > 0 && (
-                        <div>
-                            <h4 className="font-semibold mb-2 text-sm">Amenities:</h4>
-                            <div className="flex flex-wrap gap-2">
-                                {property.amenities.map((amenity) => (
-                                    <span key={amenity} className="bg-secondary text-secondary-foreground text-xs font-medium px-2.5 py-0.5 rounded">
-                                        {amenity}
-                                    </span>
-                                ))}
+                    {/* Property Overview & Amenities Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Overview & Amenities</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                {/* Display overview details if they exist */}
+                                {property.area && <div><span className="font-semibold">Size:</span> {property.area} {property.area_unit || 'sqft'}</div>} {/* Use area and area_unit */}
+                                {typeof property.bedrooms === 'number' && <div><span className="font-semibold">Bedrooms:</span> {property.bedrooms}</div>}
+                                {typeof property.bathrooms === 'number' && <div><span className="font-semibold">Bathrooms:</span> {property.bathrooms}</div>}
+                                {property.year_built && <div><span className="font-semibold">Year Built:</span> {property.year_built}</div>}
+                                {/* Add other fields like floors, kitchens, garages if available in PropertyDetails type */}
                             </div>
-                        </div>
-                    )}
-                     {/* Display description if it exists */}
-                     {property.description && (
-                        <div>
-                            <h4 className="font-semibold mb-2 text-sm">Description:</h4>
-                            <p className="text-sm text-muted-foreground">{property.description}</p>
-                        </div>
-                     )}
-                </CardContent>
-            </Card>
+                            {/* Display amenities if they exist */}
+                            {property.amenities && property.amenities.length > 0 && (
+                                <div>
+                                    <h4 className="font-semibold mb-2 text-sm">Amenities:</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {property.amenities.map((amenity) => (
+                                            <span key={amenity} className="bg-secondary text-secondary-foreground text-xs font-medium px-2.5 py-0.5 rounded">
+                                                {amenity}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {/* Display description if it exists */}
+                            {property.description && (
+                                <div>
+                                    <h4 className="font-semibold mb-2 text-sm">Description:</h4>
+                                    <p className="text-sm text-muted-foreground">{property.description}</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
-            {/* NEW: Property-Level Documents Card */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Property Documents</CardTitle>
-                    {/* TODO: Add button/mechanism to upload property-level documents */} 
-                </CardHeader>
-                <CardContent>
-                    <DocumentList 
-                        documents={documents} 
-                        isLoading={documentsLoading} 
-                        error={documentsError} 
-                        // Add delete/upload handlers if needed
+                    {/* NEW: Financial Summary Card */}
+                    <PropertyFinancialSummary propertyId={property.id} />
+
+                    {/* NEW: Location Map Card */}
+                    <PropertyLocationMap
+                        address={property.address_line1}
+                        city={property.city}
+                        state={property.state}
+                        pincode={property.pincode || ''}
                     />
-                </CardContent>
-            </Card>
 
-            {/* Units Section - To be potentially restructured */}
-            <div className="text-xl font-semibold mb-4">Units</div>
-            {/* Add button or mechanism to add units */} 
-            <Button variant="outline" className="mb-4" onClick={() => setAddUnitDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" /> Add Unit
-            </Button>
-            {/* Unit List */} 
-            <div className="space-y-4"> 
+                    {/* Property-Level Documents Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Property Documents</CardTitle>
+                            {/* TODO: Add button/mechanism to upload property-level documents */}
+                        </CardHeader>
+                        <CardContent>
+                            <DocumentList
+                                documents={documents}
+                                isLoading={documentsLoading}
+                                error={documentsError}
+                                // Add delete/upload handlers if needed
+                            />
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column - 1/3 width */}
+                <div className="space-y-6">
+                    {/* Quick Stats Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Quick Stats</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <span>Total Units:</span>
+                                    <span className="font-medium">{property.units?.length || 0}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Occupied Units:</span>
+                                    <span className="font-medium">
+                                        {property.units?.filter(u => u.status === 'Occupied').length || 0}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Vacant Units:</span>
+                                    <span className="font-medium">
+                                        {property.units?.filter(u => u.status === 'Vacant').length || 0}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Occupancy Rate:</span>
+                                    <span className="font-medium">
+                                        {property.units?.length
+                                            ? Math.round((property.units.filter(u => u.status === 'Occupied').length / property.units.length) * 100)
+                                            : 0}%
+                                    </span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Property Actions Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Actions</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <Button className="w-full" onClick={() => setAddUnitDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Unit
+                            </Button>
+                            {/* Add more action buttons as needed */}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Units Section - Full Width */}
+            <div>
+                <div className="text-xl font-semibold mb-4">Units</div>
+                <div className="space-y-4">
                 {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm">No units added yet.</p>}
                 {property?.units?.map(unit => (
-                    <UnitCard 
-                        key={unit.id} 
+                    <UnitCard
+                        key={unit.id}
                         unit={unit}
                     />
                 ))}
             </div>
-            
+
             {/* REMOVED: Old Unit Details Tabs Section */}
             {/* <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"> ... Tabs ... </div> */}
 
@@ -263,12 +329,12 @@ export default function PropertyDetailsPage() {
                             Create a new unit for this property. Fill in the details below.
                         </DialogDescription>
                     </DialogHeader>
-                    
+
                     {/* Add the AddUnitForm component */}
-                    <AddUnitForm 
-                        onSubmit={handleAddUnit} 
+                    <AddUnitForm
+                        onSubmit={handleAddUnit}
                         onCancel={() => setAddUnitDialogOpen(false)}
-                        isLoading={addingUnit} 
+                        isLoading={addingUnit}
                     />
                 </DialogContent>
             </Dialog>

@@ -31,14 +31,14 @@ export const getProperties = async (
         // Log the URL being requested
         const requestUrl = apiClient.getUri({ url: endpointPath, params });
         console.log(`[propertyService.getProperties] Requesting URL: ${requestUrl}`);
-        
+
         const response = await apiClient.get<PropertiesListResponse>(endpointPath, { params }); // Use endpointPath
         console.log(`[propertyService.getProperties] Response status: ${response.status}`);
         return response.data;
     } catch (error: unknown) {
         // Log the error object for more details
         console.error(`[propertyService.getProperties] Error fetching properties from ${endpointPath}:`, error);
-        
+
         let errorMessage = 'Failed to fetch properties';
         // Extract error message more robustly
         if (axios.isAxiosError(error)) {
@@ -132,17 +132,17 @@ export const deleteProperty = async (id: string): Promise<void> => {
     }
 };
 
-/* 
+/*
 // TODO: Uncomment and adjust when backend image upload endpoint is confirmed/created.
 // The endpoint '/properties/{propertyId}/images' does not seem to exist in the current backend API.
 // Verify the correct endpoint and data format (e.g., direct upload or passing URL).
 
-// Upload property image 
+// Upload property image
 export const uploadPropertyImage = async (propertyId: string, imageUrl: string, isPrimary: boolean = false): Promise<Property> => {
   const formData = new FormData();
   formData.append('image_url', imageUrl);
   formData.append('is_primary', isPrimary.toString());
-  
+
   const response = await apiClient.post<Property>( // Use the correct response type from backend
     `/properties/${propertyId}/images`, // Use the correct backend endpoint
     formData,
@@ -152,10 +152,10 @@ export const uploadPropertyImage = async (propertyId: string, imageUrl: string, 
       },
     }
   );
-  
+
   return response.data; // Adjust based on actual backend response structure
-}; 
-*/ 
+};
+*/
 
 /**
  * Fetches units for a specific property.
@@ -165,7 +165,7 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
     if (!propertyId) {
         return [];
     }
-    
+
     try {
         const response = await apiClient.get<UnitDetails[]>(`/properties/${propertyId}/units`);
         return response.data || [];
@@ -179,7 +179,7 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
         }
         throw new Error(errorMessage);
     }
-}; 
+};
 
 /**
  * Upload property images
@@ -196,14 +196,14 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imagePaths
 
     try {
         const formData = new FormData();
-        images.forEach((file) => { 
-            formData.append('files', file); 
+        images.forEach((file) => {
+            formData.append('files', file);
         });
         formData.append('context', 'property_image');
-        
+
         // Expecting { file_paths: List[str] } from the backend
         const response = await apiClient.post<{ file_paths: string[] }>('/uploads/', formData);
-        
+
         // Check if response.data and file_paths exist and is an array
         if (response.data && Array.isArray(response.data.file_paths)) {
             // Return the paths with the new key
@@ -223,7 +223,7 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imagePaths
         }
         throw new Error(errorMessage);
     }
-}; 
+};
 
 /**
  * Create a unit for a property
@@ -243,4 +243,24 @@ export const createUnit = async (propertyId: string, unitData: UnitCreate): Prom
         }
         throw new Error(errorMessage);
     }
-}; 
+};
+
+/**
+ * Get images for a property
+ * Calls GET /uploads/property/{id}/images
+ */
+export const getPropertyImages = async (propertyId: string): Promise<string[]> => {
+    try {
+        const response = await apiClient.get<string[]>(`/uploads/property/${propertyId}/images`);
+        return response.data;
+    } catch (error: unknown) {
+        console.error(`Error fetching images for property ${propertyId}:`, error);
+        let errorMessage = 'Failed to fetch property images';
+        if (error && typeof error === 'object' && 'formattedMessage' in error) {
+            errorMessage = (error as { formattedMessage: string }).formattedMessage;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new Error(errorMessage);
+    }
+};

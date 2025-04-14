@@ -2,7 +2,7 @@ import logging
 import uuid
 from fastapi import UploadFile, HTTPException, status
 from supabase import create_client, Client
-from typing import List
+from typing import List, Optional, Dict, Any
 from postgrest import APIError
 
 # Assuming settings are correctly configured with necessary Supabase details
@@ -36,7 +36,7 @@ async def handle_upload(
     Handles upload of multiple files to Supabase Storage using the service role key.
     Selects the bucket based on the provided context.
     Constructs a path for each file based on context, user_id, related_id, and a unique filename.
-    Returns a list of permanent storage paths for the uploaded files. 
+    Returns a list of permanent storage paths for the uploaded files.
     """
     file_paths = [] # Changed variable name
     try:
@@ -54,9 +54,9 @@ async def handle_upload(
         elif context == 'agreement':
             bucket_name = settings.AGREEMENTS_BUCKET
         else:
-            bucket_name = settings.GENERAL_UPLOAD_BUCKET 
+            bucket_name = settings.GENERAL_UPLOAD_BUCKET
             logger.warning(f"Upload context '{context}' not recognized or missing. Using default bucket: {bucket_name}")
-            context = context or "general" 
+            context = context or "general"
 
         if not bucket_name:
             logger.error(f"Storage bucket name is not configured for context '{context}' or default.")
@@ -72,7 +72,7 @@ async def handle_upload(
 
             # Construct path RELATIVE to the bucket (user_id/filename)
             # Context is used only for bucket selection, not path prefix
-            path_parts = [str(user_id)] 
+            path_parts = [str(user_id)]
             if related_id: # Keep related_id if needed for organization within user folder
                 path_parts.append(str(related_id))
             path_parts.append(unique_filename)
@@ -101,11 +101,11 @@ async def handle_upload(
                 logger.info(f"[OwnerUpdate] Selecting object ID for bucket={bucket_name}, path={storage_path}")
                 object_select_response = storage_client.table('objects', schema="storage").select('id').eq('bucket_id', bucket_name).eq('name', storage_path).single().execute()
                 logger.info(f"[OwnerUpdate] Select response: {object_select_response}") # Log raw select response
-                
+
                 if hasattr(object_select_response, 'data') and object_select_response.data and 'id' in object_select_response.data:
                     object_id = object_select_response.data['id']
                     logger.info(f"[OwnerUpdate] Found object ID {object_id} for path {storage_path}. Attempting RPC update for owner_id to {user_id}.")
-                    
+
                     # --- Start: Replace .table().update() with RPC call ---
                     try:
                         rpc_params = {'p_object_id': str(object_id), 'p_new_owner_id': str(user_id)}
@@ -127,7 +127,7 @@ async def handle_upload(
                     except Exception as rpc_general_error: # Catch other potential errors
                         logger.exception(f"[OwnerUpdate] Unexpected exception during RPC call for object {object_id}: {rpc_general_error}")
                     # --- End: Replace .table().update() with RPC call ---
-                        
+
                 elif hasattr(object_select_response, 'error') and object_select_response.error:
                     logger.error(f"[OwnerUpdate] Error selecting object ID for path {storage_path}: {object_select_response.error.message}")
                 else:
@@ -149,7 +149,7 @@ async def handle_upload(
              logger.error("File upload process completed, but no storage paths were generated/collected.")
              # Raise error if no paths were generated despite having files
              raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload succeeded but failed to retrieve storage paths.")
-             
+
         return file_paths # Return paths
 
     except ValueError as ve:
@@ -162,4 +162,84 @@ async def handle_upload(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred processing the file(s): {str(e)}"
-        ) 
+        )
+
+async def get_file_url(db_client: Client, file_path: str, expires_in: int = 3600) -> Optional[str]:
+    """
+    Get a signed URL for a file in Supabase storage.
+
+    Args:
+        db_client: Authenticated Supabase client
+        file_path: Path to the file in storage
+        expires_in: URL expiration time in seconds (default: 1 hour)
+
+    Returns:
+        Signed URL string or None if file not found
+    """
+    try:
+        # Extract bucket name and object path
+        parts = file_path.split('/', 1)
+        bucket = parts[0] if len(parts) > 0 else "propertyimage"  # Default to propertyimage bucket
+        object_path = parts[1] if len(parts) > 1 else file_path
+
+        # Get signed URL from Supabase
+        response = db_client.storage.from_(bucket).create_signed_url(
+            object_path,
+            expires_in
+        )
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error getting signed URL: {response.error}")
+            return None
+
+        if not hasattr(response, 'data') or not response.data or 'signedURL' not in response.data:
+            logger.error(f"No signed URL in response for {file_path}")
+            return None
+
+        return response.data['signedURL']
+    except Exception as e:
+        logger.error(f"Error generating signed URL for {file_path}: {str(e)}", exc_info=True)
+        return None
+
+async def get_property_images(db_client: Client, property_id: str, expires_in: int = 3600) -> List[str]:
+    """
+    Get signed URLs for all images associated with a property.
+
+    Args:
+        db_client: Authenticated Supabase client
+        property_id: ID of the property
+        expires_in: URL expiration time in seconds (default: 1 hour)
+
+    Returns:
+        List of signed URLs for property images
+    """
+    try:
+        # Get property data to access image paths
+        from app.services import property_service
+        property_data = await property_service.get_property(db_client, property_id)
+
+        if not property_data:
+            logger.warning(f"Property {property_id} not found when retrieving images")
+            return []
+
+        # Get image paths from property data
+        image_paths = property_data.get("image_urls", [])
+        if not image_paths or not isinstance(image_paths, list):
+            logger.warning(f"No image paths found for property {property_id}")
+            return []
+
+        # Generate signed URLs for each path
+        signed_urls = []
+        for path in image_paths:
+            if not path or not isinstance(path, str):
+                logger.warning(f"Skipping invalid image path: {path}")
+                continue
+
+            signed_url = await get_file_url(db_client, path, expires_in)
+            if signed_url:
+                signed_urls.append(signed_url)
+
+        return signed_urls
+    except Exception as e:
+        logger.error(f"Error retrieving property images for {property_id}: {str(e)}", exc_info=True)
+        return []

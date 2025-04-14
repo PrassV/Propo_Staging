@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Path, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import logging
+import uuid
+from supabase import Client
+
+from app.config.database import get_supabase_client_authenticated
 
 from app.config.auth import get_current_user
 from app.services import upload_service # Assuming upload_service exists
@@ -58,4 +63,63 @@ async def upload_files(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred during file upload: {str(e)}"
-        ) 
+        )
+
+@router.get("/property/{property_id}/images", response_model=List[str])
+async def get_property_images(
+    property_id: uuid.UUID = Path(..., description="The property ID"),
+    db_client: Client = Depends(get_supabase_client_authenticated),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get all images for a specific property with signed URLs.
+    """
+    try:
+        # Verify user is authenticated
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated")
+
+        # Get signed URLs for property images
+        signed_urls = await upload_service.get_property_images(db_client, str(property_id))
+
+        if not signed_urls:
+            # Return empty list instead of 404 to handle properties with no images gracefully
+            return []
+
+        return signed_urls
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error retrieving property images: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving images: {str(e)}")
+
+@router.get("/{file_path:path}", response_class=Response)
+async def get_file(
+    file_path: str,
+    db_client: Client = Depends(get_supabase_client_authenticated),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Retrieve a file from storage by its path.
+    Returns a redirect to a signed URL.
+    """
+    try:
+        # Verify user is authenticated
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated")
+
+        # Get signed URL for the file
+        signed_url = await upload_service.get_file_url(db_client, file_path)
+
+        if not signed_url:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+        # Redirect to the signed URL
+        return RedirectResponse(url=signed_url)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error retrieving file {file_path}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving file: {str(e)}")
