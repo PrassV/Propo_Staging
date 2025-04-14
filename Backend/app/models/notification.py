@@ -18,7 +18,6 @@ class NotificationType(str, Enum):
 class NotificationMethod(str, Enum):
     EMAIL = "email"
     IN_APP = "in_app"
-    SMS = "sms"
     PUSH = "push"
 
 class NotificationStatus(str, Enum):

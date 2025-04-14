@@ -8,7 +8,7 @@ import os # For getting environment variables
 import resend
 
 # Twilio imports
-from twilio.rest import Client
+# from twilio.rest import Client # Removed
 
 from ..db import notifications as notifications_db
 from ..models.notification import (
@@ -28,10 +28,10 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 # Define a default sender email (Format: Name <email@domain.com>)
 FROM_EMAIL = os.environ.get("DEFAULT_SENDER_EMAIL", "Propify <noreply@propify.app>")
 
-# Get Twilio credentials from environment variables
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
+# Get Twilio credentials from environment variables - Removed
+# TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+# TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+# TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +41,17 @@ if RESEND_API_KEY:
 else:
     logger.warning("RESEND_API_KEY not found in environment. Email notifications will be disabled.")
 
-# Initialize Twilio client globally if credentials exist
-twilio_client = None
-if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER:
-    try:
-        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        logger.info("Twilio client initialized successfully.")
-    except Exception as e:
-        logger.error(f"Failed to initialize Twilio client: {e}", exc_info=True)
-        twilio_client = None # Ensure client is None if init fails
-else:
-    logger.warning("Twilio credentials not fully configured. SMS notifications will be disabled.")
+# Initialize Twilio client globally if credentials exist - Removed
+# twilio_client = None
+# if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER:
+#     try:
+#         twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+#         logger.info("Twilio client initialized successfully.")
+#     except Exception as e:
+#         logger.error(f"Failed to initialize Twilio client: {e}", exc_info=True)
+#         twilio_client = None # Ensure client is None if init fails
+# else:
+#     logger.warning("Twilio credentials not fully configured. SMS notifications will be disabled.")
 
 async def get_user_notifications(
     user_id: str,
@@ -205,25 +205,6 @@ async def send_notification(notification_id: str) -> bool:
                     logger.error(f"Could not find email for user {notification.get('user_id')} to send notification {notification_id}")
                     success = False
 
-            elif method == NotificationMethod.SMS.value:
-                if not twilio_client:
-                     logger.warning(f"Skipping SMS for notification {notification_id} as Twilio client is not configured.")
-                     success = False
-                     continue
-                
-                # Fetch user phone number
-                user_profile = await user_service.get_user_profile(notification.get('user_id'))
-                recipient_phone = user_profile.get('phone') if user_profile else None
-                
-                if recipient_phone:
-                    # Format phone number if necessary (e.g., ensure E.164 format)
-                    # formatted_phone = format_phone_number(recipient_phone) # Add helper if needed
-                    sms_sent = await send_sms_notification(notification, recipient_phone)
-                    success = success and sms_sent
-                else:
-                     logger.error(f"Could not find phone number for user {notification.get('user_id')} to send SMS notification {notification_id}")
-                     success = False
-
             elif method == NotificationMethod.PUSH.value:
                  # Placeholder - needs implementation
                  logger.warning(f"Push notification sending not implemented for notification {notification_id}")
@@ -279,34 +260,6 @@ async def send_email_notification(notification: Dict[str, Any], recipient_email:
         return True
     except Exception as e:
         logger.error(f"Failed to send Resend email for notification {notification.get('id')}: {e}", exc_info=True)
-        return False
-
-async def send_sms_notification(notification: Dict[str, Any], recipient_phone: str) -> bool:
-    """Send a notification via SMS using Twilio."""
-    if not twilio_client:
-        logger.error("Twilio client not configured. Cannot send SMS.")
-        return False
-
-    # Construct message body (Twilio SMS has character limits)
-    body = f"Propify: {notification.get('title', '')} - {notification.get('message', '')}" 
-    # Truncate if necessary
-    max_len = 1600 # Twilio limit
-    if len(body) > max_len:
-        body = body[:max_len-3] + "..."
-
-    try:
-        # Send SMS using Twilio client (synchronous call)
-        # Run in executor for true async: asyncio.to_thread(twilio_client.messages.create, ...)
-        message = twilio_client.messages.create(
-            body=body,
-            from_=TWILIO_PHONE_NUMBER,
-            to=recipient_phone # Assumes phone number is in E.164 format
-        )
-        logger.info(f"Twilio SMS initiated for notification {notification.get('id')}. SID: {message.sid}")
-        # Add check for message status if needed (e.g., message.status == 'queued', 'failed', etc.)
-        return message.status in ['queued', 'sending', 'sent'] # Consider queued/sending as success for now
-    except Exception as e:
-        logger.error(f"Failed to send Twilio SMS for notification {notification.get('id')}: {e}", exc_info=True)
         return False
 
 async def send_push_notification(notification: Dict[str, Any]) -> bool:
