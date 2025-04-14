@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { 
-  Box, 
-  Button, 
-  Typography, 
-  Paper, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
   TableRow,
   Dialog,
   DialogTitle,
@@ -22,10 +22,8 @@ import {
   Tooltip,
   CircularProgress
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { Plus as AddIcon, Pencil as EditIcon, Trash as DeleteIcon } from 'lucide-react';
+import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
@@ -72,7 +70,7 @@ interface LeaseFormData {
 const LeaseManagement: React.FC = () => {
   const { propertyId } = useParams<{ propertyId: string }>();
   const { enqueueSnackbar } = useSnackbar();
-  
+
   const [leases, setLeases] = useState<Lease[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -223,8 +221,8 @@ const LeaseManagement: React.FC = () => {
         <Typography variant="h5" component="h1">
           Lease Management
         </Typography>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
         >
@@ -261,7 +259,7 @@ const LeaseManagement: React.FC = () => {
                     <TableCell>{lease.unit_number}</TableCell>
                     <TableCell>{format(new Date(lease.start_date), 'MMM dd, yyyy')}</TableCell>
                     <TableCell>
-                      {lease.end_date 
+                      {lease.end_date
                         ? format(new Date(lease.end_date), 'MMM dd, yyyy')
                         : 'No end date'
                       }

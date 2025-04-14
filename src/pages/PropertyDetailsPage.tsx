@@ -5,7 +5,7 @@ import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Edit, Plus, Users, Tool, CreditCard } from 'lucide-react'; // Added icons
+import { ArrowLeft, Edit, Plus, Users, Wrench, CreditCard } from 'lucide-react'; // Added icons
 import { usePropertyDialog } from '@/contexts/PropertyDialogContext';
 import EnhancedImageGallery from '@/components/property/EnhancedImageGallery'; // Import the enhanced image gallery
 import UnitCard from '@/components/property/UnitCard'; // Import UnitCard
@@ -306,7 +306,7 @@ export default function PropertyDetailsPage() {
                             </Button>
                             <Button className="w-full" asChild>
                                 <Link to="/dashboard/maintenance">
-                                    <Tool className="mr-2 h-4 w-4" /> Maintenance
+                                    <Wrench className="mr-2 h-4 w-4" /> Maintenance
                                 </Link>
                             </Button>
                             <Button className="w-full" asChild>

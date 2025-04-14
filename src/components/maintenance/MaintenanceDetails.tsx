@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Grid, 
-  Chip, 
-  Button, 
-  Divider, 
-  TextField, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Grid,
+  Chip,
+  Button,
+  Divider,
+  TextField,
   CircularProgress,
   Card,
   CardContent,
@@ -27,20 +27,20 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
-import { 
-  ArrowBack as ArrowBackIcon, 
+import {
+  ArrowLeft as ArrowBackIcon,
   Home as HomeIcon,
-  Person as PersonIcon,
-  Comment as CommentIcon,
-  AttachFile as AttachFileIcon
-} from '@mui/icons-material';
+  User as PersonIcon,
+  MessageSquare as CommentIcon,
+  Paperclip as AttachFileIcon
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
-import { 
-  getMaintenanceRequest, 
-  updateMaintenanceRequest, 
-  addMaintenanceComment 
+import {
+  getMaintenanceRequest,
+  updateMaintenanceRequest,
+  addMaintenanceComment
 } from '../../api/services/maintenanceService';
 
 interface MaintenanceRequest {
@@ -104,7 +104,7 @@ const MaintenanceDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  
+
   const [maintenanceRequest, setMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [commentFormData, setCommentFormData] = useState<CommentFormData>({ content: '' });
@@ -141,7 +141,7 @@ const MaintenanceDetails: React.FC = () => {
     try {
       setLoading(true);
       if (!id) return;
-      
+
       const response = await getMaintenanceRequest(id);
       setMaintenanceRequest(response.request);
     } catch (error) {
@@ -163,7 +163,7 @@ const MaintenanceDetails: React.FC = () => {
   const handleAddComment = async () => {
     try {
       if (!id || !commentFormData.content.trim()) return;
-      
+
       await addMaintenanceComment(id, commentFormData.content);
       enqueueSnackbar('Comment added successfully', { variant: 'success' });
       setCommentFormData({ content: '' });
@@ -192,7 +192,7 @@ const MaintenanceDetails: React.FC = () => {
   const handleUpdateRequest = async () => {
     try {
       if (!id) return;
-      
+
       await updateMaintenanceRequest(id, updateFormData);
       enqueueSnackbar('Maintenance request updated successfully', { variant: 'success' });
       handleCloseUpdateDialog();
@@ -271,24 +271,24 @@ const MaintenanceDetails: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">{maintenanceRequest.title}</Typography>
               <Box>
-                <Chip 
-                  label={maintenanceRequest.status.replace('_', ' ')} 
+                <Chip
+                  label={maintenanceRequest.status.replace('_', ' ')}
                   color={getStatusColor(maintenanceRequest.status) as any}
                   sx={{ mr: 1 }}
                 />
-                <Chip 
-                  label={maintenanceRequest.priority} 
+                <Chip
+                  label={maintenanceRequest.priority}
                   color={getPriorityColor(maintenanceRequest.priority) as any}
                 />
               </Box>
             </Box>
-            
+
             <Typography variant="body1" sx={{ mb: 2 }}>
               {maintenanceRequest.description}
             </Typography>
-            
+
             <Divider sx={{ my: 2 }} />
-            
+
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <Typography variant="subtitle2">Category</Typography>
@@ -329,11 +329,11 @@ const MaintenanceDetails: React.FC = () => {
                 </Grid>
               )}
             </Grid>
-            
+
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button 
-                variant="contained" 
-                color="primary" 
+              <Button
+                variant="contained"
+                color="primary"
                 onClick={handleOpenUpdateDialog}
               >
                 Update Request
@@ -346,7 +346,7 @@ const MaintenanceDetails: React.FC = () => {
             <Typography variant="h6" sx={{ mb: 2 }}>
               Comments
             </Typography>
-            
+
             {maintenanceRequest.comments && maintenanceRequest.comments.length > 0 ? (
               <List>
                 {maintenanceRequest.comments.map((comment) => (
@@ -377,7 +377,7 @@ const MaintenanceDetails: React.FC = () => {
                 No comments yet
               </Typography>
             )}
-            
+
             <Box sx={{ mt: 3 }}>
               <TextField
                 fullWidth
@@ -388,9 +388,9 @@ const MaintenanceDetails: React.FC = () => {
                 onChange={handleCommentChange}
                 sx={{ mb: 2 }}
               />
-              <Button 
-                variant="contained" 
-                color="primary" 
+              <Button
+                variant="contained"
+                color="primary"
                 onClick={handleAddComment}
                 disabled={!commentFormData.content.trim()}
               >
@@ -403,8 +403,8 @@ const MaintenanceDetails: React.FC = () => {
         <Grid item xs={12} md={4}>
           {/* Property Information */}
           <Card sx={{ mb: 3 }}>
-            <CardHeader 
-              title="Property Information" 
+            <CardHeader
+              title="Property Information"
               avatar={<HomeIcon />}
             />
             <CardContent>
@@ -428,8 +428,8 @@ const MaintenanceDetails: React.FC = () => {
           {/* Tenant Information (if available) */}
           {maintenanceRequest.tenant_details && (
             <Card sx={{ mb: 3 }}>
-              <CardHeader 
-                title="Tenant Information" 
+              <CardHeader
+                title="Tenant Information"
                 avatar={<PersonIcon />}
               />
               <CardContent>
@@ -449,8 +449,8 @@ const MaintenanceDetails: React.FC = () => {
           {/* Attachments (if available) */}
           {maintenanceRequest.attachments && maintenanceRequest.attachments.length > 0 && (
             <Card>
-              <CardHeader 
-                title="Attachments" 
+              <CardHeader
+                title="Attachments"
                 avatar={<AttachFileIcon />}
               />
               <CardContent>

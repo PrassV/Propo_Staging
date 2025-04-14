@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
   TableRow,
   Button,
   Chip,
@@ -27,25 +27,23 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
-import { 
-  Add as AddIcon, 
-  Edit as EditIcon, 
-  Visibility as VisibilityIcon,
+import {
+  Plus as AddIcon,
+  Pencil as EditIcon,
+  Eye as VisibilityIcon,
   Receipt as ReceiptIcon,
   Send as SendIcon
-} from '@mui/icons-material';
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { format } from 'date-fns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@/components/ui/date-picker';
 
-import { 
-  getPayments, 
-  createPaymentRequest, 
-  recordManualPayment, 
-  sendPaymentReminder 
+import {
+  getPayments,
+  createPaymentRequest,
+  recordManualPayment,
+  sendPaymentReminder
 } from '../../api/services/paymentService';
 import { getProperties } from '../../api/services/propertyService';
 import { getTenants } from '../../api/services/tenantService';
@@ -134,20 +132,20 @@ function TabPanel(props: TabPanelProps) {
 const PaymentList: React.FC = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [tabValue, setTabValue] = useState<number>(0);
-  
+
   // Dialog states
   const [openCreateDialog, setOpenCreateDialog] = useState<boolean>(false);
   const [openRecordDialog, setOpenRecordDialog] = useState<boolean>(false);
   const [openReminderDialog, setOpenReminderDialog] = useState<boolean>(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>('');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  
+
   // Form data
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>({
     property_id: '',
@@ -157,14 +155,14 @@ const PaymentList: React.FC = () => {
     payment_type: 'rent',
     description: ''
   });
-  
+
   const [recordFormData, setRecordFormData] = useState<RecordPaymentFormData>({
     amount_paid: 0,
     payment_date: new Date(),
     payment_method: 'cash',
     notes: ''
   });
-  
+
   const [reminderFormData, setReminderFormData] = useState<ReminderFormData>({
     recipient_email: '',
     message: ''
@@ -410,8 +408,8 @@ const PaymentList: React.FC = () => {
         <Typography variant="h5" component="h1">
           Payments
         </Typography>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={handleOpenCreateDialog}
         >
@@ -725,8 +723,8 @@ const PaymentList: React.FC = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Chip 
-                      label={payment.status.replace('_', ' ')} 
+                    <Chip
+                      label={payment.status.replace('_', ' ')}
                       color={getStatusColor(payment.status) as any}
                       size="small"
                     />

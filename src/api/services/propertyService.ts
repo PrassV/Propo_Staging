@@ -264,3 +264,23 @@ export const getPropertyImages = async (propertyId: string): Promise<string[]> =
         throw new Error(errorMessage);
     }
 };
+
+/**
+ * Get all units
+ * Calls GET /units
+ */
+export const getUnits = async (): Promise<UnitDetails[]> => {
+    try {
+        const response = await apiClient.get<UnitDetails[]>('/units');
+        return response.data;
+    } catch (error: unknown) {
+        console.error('Error fetching units:', error);
+        let errorMessage = 'Failed to fetch units';
+        if (error && typeof error === 'object' && 'formattedMessage' in error) {
+            errorMessage = (error as { formattedMessage: string }).formattedMessage;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new Error(errorMessage);
+    }
+};

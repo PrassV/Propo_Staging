@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
+import {
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
   TableRow,
   Button,
   Chip,
@@ -25,7 +25,7 @@ import {
   InputLabel,
   Select
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Plus as AddIcon, Pencil as EditIcon, Eye as VisibilityIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { format } from 'date-fns';
@@ -74,14 +74,14 @@ interface MaintenanceFormData {
 const MaintenanceList: React.FC = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  
+
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [openDialog, setOpenDialog] = useState<boolean>(false);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
   const [units, setUnits] = useState<Array<{id: string, unit_number: string}>>([]);
-  
+
   const [formData, setFormData] = useState<MaintenanceFormData>({
     title: '',
     description: '',
@@ -217,8 +217,8 @@ const MaintenanceList: React.FC = () => {
         <Typography variant="h5" component="h1">
           Maintenance Requests
         </Typography>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={handleOpenDialog}
         >
@@ -257,15 +257,15 @@ const MaintenanceList: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={request.status.replace('_', ' ')} 
+                      <Chip
+                        label={request.status.replace('_', ' ')}
                         color={getStatusColor(request.status) as any}
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={request.priority} 
+                      <Chip
+                        label={request.priority}
                         color={getPriorityColor(request.priority) as any}
                         size="small"
                       />
