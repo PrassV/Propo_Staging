@@ -1,0 +1,68 @@
+Metadata-Version: 2.1
+Name: tailwind-merge
+Version: 0.2.0
+Summary: Merge Tailwind CSS classes without conflicts in python.
+License: MIT
+Keywords: python,tailwind,css,merge
+Author: Will Abbott
+Author-email: willabb83@gmail.com
+Requires-Python: >=3.8,<4.0
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Project-URL: Bug Tracker, https://github.com/wrabit/tailwind-merge-python/issues
+Project-URL: Homepage, https://github.com/wrabit/tailwind-merge-python
+Description-Content-Type: text/markdown
+
+# Tailwind Merge Python
+
+A Python implementation of the popular [tailwind-merge](https://github.com/dcastil/tailwind-merge) js package. This utility helps you merge Tailwind CSS classes while handling conflicts appropriately.
+
+## Installation
+
+Using pip:
+```bash
+pip install tailwind-merge
+```
+
+## Usage
+
+```python
+from tailwind_merge import TailwindMerge
+
+merger = TailwindMerge()
+
+# Basic usage
+result = merger.merge(
+    "p-4 w-6 text-blue-500",
+    "w-8 text-red-500" 
+)
+print(result)  # Output: "p-4 w-8 text-red-500"
+
+# Add custom conflict patterns
+merger.add_rule('custom', ['custom-'])
+```
+
+## Features
+
+- Handles conflicting Tailwind utility classes
+- Category-based merging
+- Later classes override earlier ones within the same category
+- Extensible with custom conflict patterns
+- Zero dependencies
+
+## Roadmap
+
+- Introduce class validation to ensure we only merge valid Tailwind classes
+- Check support for Tailwind CSS v4
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+

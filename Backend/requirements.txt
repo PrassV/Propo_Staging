@@ -6,7 +6,10 @@ email-validator>=1.1.3
 httpx[http2]>=0.25.0
 
 # Database
-supabase[aio]>=2.0.0,<3.0.0
+supabase>=2.0.0
+postgrest>=0.10.6
+gotrue>=2.0.0
+storage3>=0.5.2
 
 # Authentication
 python-jose==3.3.0
