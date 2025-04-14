@@ -31,6 +31,7 @@ class DocumentCreate(BaseModel):
     description: Optional[str] = None
     property_id: Optional[str] = None
     tenant_id: Optional[str] = None
+    unit_id: Optional[str] = None
     file_url: str = Field(..., min_length=1)
     file_name: str = Field(..., min_length=1, max_length=255)
     file_type: Optional[str] = None
@@ -39,7 +40,7 @@ class DocumentCreate(BaseModel):
     access_level: DocumentAccess = Field(default=DocumentAccess.PRIVATE)
     tags: Optional[List[str]] = None
     
-    @validator('property_id', 'tenant_id')
+    @validator('property_id', 'tenant_id', 'unit_id')
     def validate_ids(cls, v):
         if v is not None:
             try:
@@ -53,6 +54,7 @@ class DocumentUpdate(BaseModel):
     description: Optional[str] = None
     property_id: Optional[str] = None
     tenant_id: Optional[str] = None
+    unit_id: Optional[str] = None
     file_url: Optional[str] = None
     file_name: Optional[str] = Field(None, min_length=1, max_length=255)
     file_type: Optional[str] = None
@@ -61,7 +63,7 @@ class DocumentUpdate(BaseModel):
     access_level: Optional[DocumentAccess] = None
     tags: Optional[List[str]] = None
     
-    @validator('property_id', 'tenant_id')
+    @validator('property_id', 'tenant_id', 'unit_id')
     def validate_ids(cls, v):
         if v is not None:
             try:
@@ -77,6 +79,7 @@ class Document(BaseModel):
     owner_id: str
     property_id: Optional[str] = None
     tenant_id: Optional[str] = None
+    unit_id: Optional[str] = None
     file_url: str
     file_name: str
     file_type: str

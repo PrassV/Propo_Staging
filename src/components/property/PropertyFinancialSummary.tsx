@@ -1,36 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import api from '@/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { FinancialSummary } from '@/api/types';
 
 interface PropertyFinancialSummaryProps {
   propertyId: string;
 }
 
-interface FinancialData {
-  total_revenue: number;
-  total_expenses: number;
-  net_income: number;
-  occupancy_rate: number;
-  rent_collection_rate: number;
-  payment_history: {
-    month: string;
-    revenue: number;
-    expenses: number;
-    net_income: number;
-  }[];
-  expense_breakdown: {
-    category: string;
-    amount: number;
-  }[];
-}
-
 export default function PropertyFinancialSummary({ propertyId }: PropertyFinancialSummaryProps) {
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
-  const [financialData, setFinancialData] = useState<FinancialData | null>(null);
+  const [financialData, setFinancialData] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,58 +25,52 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
       setError(null);
       
       try {
-        // Use existing reporting or payment services
-        // This is a placeholder - replace with actual API call when available
-        const payments = await api.payment.getPayments({
-          property_id: propertyId,
-          sort_by: 'due_date',
-          sort_order: 'desc',
-          limit: 100
-        });
-        
-        // Process the payments to create financial summary
-        // This is a simplified example - in a real implementation, you would use a dedicated endpoint
-        const revenue = payments.items.reduce((sum, payment) => 
-          payment.status === 'paid' ? sum + payment.amount : sum, 0);
-        
-        // Fetch expenses if you have an expenses API
-        // For now, we'll use dummy data
-        const expenses = revenue * 0.3; // Dummy calculation - 30% of revenue goes to expenses
-        
-        // Create dummy payment history for the chart
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-        const paymentHistory = months.map(month => ({
-          month,
-          revenue: Math.round(Math.random() * 5000) + 1000,
-          expenses: Math.round(Math.random() * 2000) + 500,
-          net_income: Math.round(Math.random() * 3000) + 500
-        }));
-        
-        // Create dummy expense breakdown
-        const expenseBreakdown = [
-          { category: 'Maintenance', amount: expenses * 0.4 },
-          { category: 'Utilities', amount: expenses * 0.25 },
-          { category: 'Insurance', amount: expenses * 0.15 },
-          { category: 'Property Tax', amount: expenses * 0.1 },
-          { category: 'Other', amount: expenses * 0.1 }
-        ];
-        
-        setFinancialData({
-          total_revenue: revenue,
-          total_expenses: expenses,
-          net_income: revenue - expenses,
-          occupancy_rate: 85, // Dummy value
-          rent_collection_rate: 92, // Dummy value
-          payment_history: paymentHistory,
-          expense_breakdown: expenseBreakdown
-        });
+        // Use the new financial service API
+        const data = await api.financial.getFinancialSummary(propertyId, period);
+        setFinancialData(data);
       } catch (err) {
         console.error("Error fetching financial data:", err);
         setError(err instanceof Error ? err.message : 'Failed to load financial data');
         setFinancialData(null);
+        
+        // Fallback to placeholder data for now (until backend is implemented)
+        generatePlaceholderData();
       } finally {
         setLoading(false);
       }
+    };
+    
+    // Temporary function to generate placeholder data until backend is ready
+    const generatePlaceholderData = () => {
+      // Placeholder data generation logic - this will be removed once backend is done
+      const revenue = Math.round(Math.random() * 15000) + 5000;
+      const expenses = Math.round(revenue * 0.3);
+      
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+      const paymentHistory = months.map(month => ({
+        month,
+        revenue: Math.round(Math.random() * 5000) + 1000,
+        expenses: Math.round(Math.random() * 2000) + 500,
+        net_income: Math.round(Math.random() * 3000) + 500
+      }));
+      
+      const expenseBreakdown = [
+        { category: 'Maintenance', amount: expenses * 0.4 },
+        { category: 'Utilities', amount: expenses * 0.25 },
+        { category: 'Insurance', amount: expenses * 0.15 },
+        { category: 'Property Tax', amount: expenses * 0.1 },
+        { category: 'Other', amount: expenses * 0.1 }
+      ];
+      
+      setFinancialData({
+        total_revenue: revenue,
+        total_expenses: expenses,
+        net_income: revenue - expenses,
+        occupancy_rate: 85,
+        rent_collection_rate: 92,
+        payment_history: paymentHistory,
+        expense_breakdown: expenseBreakdown
+      });
     };
     
     fetchFinancialData();
@@ -140,7 +117,7 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
     <Card>
       <CardHeader>
         <CardTitle>Financial Summary</CardTitle>
-        <Tabs value={period} onValueChange={(value) => setPeriod(value as any)}>
+        <Tabs value={period} onValueChange={(value) => setPeriod(value as 'month' | 'quarter' | 'year')}>
           <TabsList>
             <TabsTrigger value="month">Monthly</TabsTrigger>
             <TabsTrigger value="quarter">Quarterly</TabsTrigger>
@@ -164,7 +141,7 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Collection Rate</p>
-            <p className="text-2xl font-bold">{financialData.rent_collection_rate}%</p>
+            <p className="text-2xl font-bold">{financialData.rent_collection_rate.toFixed(0)}%</p>
           </div>
         </div>
         
@@ -208,7 +185,12 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => [`$${value.toFixed(2)}`, '']} />
+                  <Tooltip formatter={(value) => {
+                    if (typeof value === 'number') {
+                      return [`$${value.toFixed(2)}`, ''];
+                    }
+                    return [`$${value}`, ''];
+                  }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

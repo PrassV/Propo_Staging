@@ -361,3 +361,401 @@ async def create_unit(db_client: Client, unit_data: Dict[str, Any]) -> Optional[
     except Exception as e:
         logger.error(f"[db.create_unit] Exception inserting unit: {str(e)}", exc_info=True)
         return None 
+
+# Property Tax Functions
+async def get_property_taxes(property_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get tax records for a property.
+    
+    Args:
+        property_id: The property ID
+        
+    Returns:
+        List of tax records
+    """
+    try:
+        query = """
+            SELECT * FROM property_taxes
+            WHERE property_id = :property_id
+            ORDER BY due_date DESC
+        """
+        response = await db.execute(query, {"property_id": str(property_id)})
+        tax_records = await response.fetchall()
+        return [dict(record) for record in tax_records]
+    except Exception as e:
+        logger.error(f"Error getting taxes for property {property_id}: {str(e)}")
+        return []
+
+async def get_property_tax(tax_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific tax record.
+    
+    Args:
+        tax_id: The tax record ID
+        
+    Returns:
+        Tax record or None if not found
+    """
+    try:
+        query = """
+            SELECT * FROM property_taxes
+            WHERE id = :tax_id
+        """
+        response = await db.execute(query, {"tax_id": str(tax_id)})
+        tax_record = await response.fetchone()
+        return dict(tax_record) if tax_record else None
+    except Exception as e:
+        logger.error(f"Error getting tax record {tax_id}: {str(e)}")
+        return None
+
+async def create_property_tax(tax_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Create a new tax record.
+    
+    Args:
+        tax_data: Tax record data
+        
+    Returns:
+        Created tax record
+    """
+    try:
+        columns = ", ".join(tax_data.keys())
+        placeholders = ", ".join([f":{k}" for k in tax_data.keys()])
+        
+        query = f"""
+            INSERT INTO property_taxes ({columns})
+            VALUES ({placeholders})
+            RETURNING *
+        """
+        
+        # Convert UUIDs to strings
+        params = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in tax_data.items()}
+        
+        response = await db.execute(query, params)
+        created_tax = await response.fetchone()
+        return dict(created_tax)
+    except Exception as e:
+        logger.error(f"Error creating tax record: {str(e)}")
+        raise
+
+async def update_property_tax(tax_id: uuid.UUID, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Update a tax record.
+    
+    Args:
+        tax_id: The tax record ID
+        tax_data: The updated tax record data
+        
+    Returns:
+        Updated tax record or None if not found
+    """
+    try:
+        # Prepare SET clause
+        set_clause = ", ".join([f"{k} = :{k}" for k in tax_data.keys()])
+        
+        query = f"""
+            UPDATE property_taxes
+            SET {set_clause}
+            WHERE id = :tax_id
+            RETURNING *
+        """
+        
+        # Convert UUIDs to strings
+        params = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in tax_data.items()}
+        params["tax_id"] = str(tax_id)
+        
+        response = await db.execute(query, params)
+        updated_tax = await response.fetchone()
+        return dict(updated_tax) if updated_tax else None
+    except Exception as e:
+        logger.error(f"Error updating tax record {tax_id}: {str(e)}")
+        raise
+
+async def delete_property_tax(tax_id: uuid.UUID) -> bool:
+    """
+    Delete a tax record.
+    
+    Args:
+        tax_id: The tax record ID
+        
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        query = """
+            DELETE FROM property_taxes
+            WHERE id = :tax_id
+        """
+        
+        result = await db.execute(query, {"tax_id": str(tax_id)})
+        return result.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error deleting tax record {tax_id}: {str(e)}")
+        raise
+
+# Unit Images Functions
+async def get_unit_images(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get images for a unit.
+    
+    Args:
+        unit_id: The unit ID
+        
+    Returns:
+        List of image records
+    """
+    try:
+        query = """
+            SELECT * FROM unit_images
+            WHERE unit_id = :unit_id
+            ORDER BY created_at DESC
+        """
+        response = await db.execute(query, {"unit_id": str(unit_id)})
+        images = await response.fetchall()
+        return [dict(image) for image in images]
+    except Exception as e:
+        logger.error(f"Error getting images for unit {unit_id}: {str(e)}")
+        return []
+
+async def add_unit_image(image_data: Dict[str, Any]) -> bool:
+    """
+    Add an image to a unit.
+    
+    Args:
+        image_data: Image record data
+        
+    Returns:
+        True if added, False otherwise
+    """
+    try:
+        columns = ", ".join(image_data.keys())
+        placeholders = ", ".join([f":{k}" for k in image_data.keys()])
+        
+        query = f"""
+            INSERT INTO unit_images ({columns})
+            VALUES ({placeholders})
+        """
+        
+        # Convert UUIDs to strings
+        params = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in image_data.items()}
+        
+        result = await db.execute(query, params)
+        return result.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error adding image to unit {image_data.get('unit_id')}: {str(e)}")
+        raise
+
+async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
+    """
+    Delete an image from a unit.
+    
+    Args:
+        unit_id: The unit ID
+        image_url: The image URL to delete
+        
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        query = """
+            DELETE FROM unit_images
+            WHERE unit_id = :unit_id AND url = :image_url
+        """
+        
+        result = await db.execute(query, {"unit_id": str(unit_id), "image_url": image_url})
+        return result.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}")
+        raise
+
+# Financial Summary Functions
+async def get_property_income(property_id: uuid.UUID, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+    """
+    Get income data for a property within a date range.
+    
+    Args:
+        property_id: The property ID
+        start_date: Start date of the range
+        end_date: End date of the range
+        
+    Returns:
+        List of income records
+    """
+    try:
+        query = """
+            SELECT p.id, p.amount, p.payment_date, p.category, p.description
+            FROM payments p
+            WHERE p.property_id = :property_id
+            AND p.payment_date BETWEEN :start_date AND :end_date
+            AND p.status = 'completed'
+            AND p.type = 'income'
+            ORDER BY p.payment_date DESC
+        """
+        
+        response = await db.execute(query, {
+            "property_id": str(property_id),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+        
+        income_data = await response.fetchall()
+        return [dict(record) for record in income_data]
+    except Exception as e:
+        logger.error(f"Error getting income for property {property_id}: {str(e)}")
+        return []
+
+async def get_property_expenses(property_id: uuid.UUID, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+    """
+    Get expense data for a property within a date range.
+    
+    Args:
+        property_id: The property ID
+        start_date: Start date of the range
+        end_date: End date of the range
+        
+    Returns:
+        List of expense records
+    """
+    try:
+        query = """
+            SELECT p.id, p.amount, p.payment_date, p.category, p.description
+            FROM payments p
+            WHERE p.property_id = :property_id
+            AND p.payment_date BETWEEN :start_date AND :end_date
+            AND p.status = 'completed'
+            AND p.type = 'expense'
+            ORDER BY p.payment_date DESC
+        """
+        
+        response = await db.execute(query, {
+            "property_id": str(property_id),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+        
+        expense_data = await response.fetchall()
+        return [dict(record) for record in expense_data]
+    except Exception as e:
+        logger.error(f"Error getting expenses for property {property_id}: {str(e)}")
+        return []
+
+async def get_property_income_total(property_id: uuid.UUID, start_date: datetime, end_date: datetime) -> float:
+    """
+    Get total income for a property within a date range.
+    
+    Args:
+        property_id: The property ID
+        start_date: Start date of the range
+        end_date: End date of the range
+        
+    Returns:
+        Total income amount
+    """
+    try:
+        query = """
+            SELECT COALESCE(SUM(p.amount), 0) as total
+            FROM payments p
+            WHERE p.property_id = :property_id
+            AND p.payment_date BETWEEN :start_date AND :end_date
+            AND p.status = 'completed'
+            AND p.type = 'income'
+        """
+        
+        response = await db.execute(query, {
+            "property_id": str(property_id),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+        
+        result = await response.fetchone()
+        return float(result['total']) if result and 'total' in result else 0.0
+    except Exception as e:
+        logger.error(f"Error getting income total for property {property_id}: {str(e)}")
+        return 0.0
+
+async def get_property_expenses_total(property_id: uuid.UUID, start_date: datetime, end_date: datetime) -> float:
+    """
+    Get total expenses for a property within a date range.
+    
+    Args:
+        property_id: The property ID
+        start_date: Start date of the range
+        end_date: End date of the range
+        
+    Returns:
+        Total expense amount
+    """
+    try:
+        query = """
+            SELECT COALESCE(SUM(p.amount), 0) as total
+            FROM payments p
+            WHERE p.property_id = :property_id
+            AND p.payment_date BETWEEN :start_date AND :end_date
+            AND p.status = 'completed'
+            AND p.type = 'expense'
+        """
+        
+        response = await db.execute(query, {
+            "property_id": str(property_id),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+        
+        result = await response.fetchone()
+        return float(result['total']) if result and 'total' in result else 0.0
+    except Exception as e:
+        logger.error(f"Error getting expense total for property {property_id}: {str(e)}")
+        return 0.0
+
+async def get_property_occupancy_rate(property_id: uuid.UUID, start_date: datetime, end_date: datetime) -> float:
+    """
+    Calculate occupancy rate for a property within a date range.
+    
+    Args:
+        property_id: The property ID
+        start_date: Start date of the range
+        end_date: End date of the range
+        
+    Returns:
+        Occupancy rate percentage (0-100)
+    """
+    try:
+        # Get total units for property
+        total_units_query = """
+            SELECT COUNT(*) as total
+            FROM units
+            WHERE property_id = :property_id
+        """
+        
+        total_units_response = await db.execute(total_units_query, {"property_id": str(property_id)})
+        total_units_result = await total_units_response.fetchone()
+        total_units = int(total_units_result['total']) if total_units_result and 'total' in total_units_result else 0
+        
+        if total_units == 0:
+            return 0.0  # No units, so occupancy rate is 0%
+        
+        # Get occupied units in the date range
+        occupied_units_query = """
+            SELECT COUNT(DISTINCT unit_id) as occupied
+            FROM property_tenant_link
+            WHERE property_id = :property_id
+            AND (
+                (start_date <= :end_date AND (end_date IS NULL OR end_date >= :start_date))
+            )
+        """
+        
+        occupied_units_response = await db.execute(occupied_units_query, {
+            "property_id": str(property_id),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat()
+        })
+        
+        occupied_units_result = await occupied_units_response.fetchone()
+        occupied_units = int(occupied_units_result['occupied']) if occupied_units_result and 'occupied' in occupied_units_result else 0
+        
+        # Calculate occupancy rate
+        occupancy_rate = (occupied_units / total_units) * 100
+        return round(occupancy_rate, 2)
+    except Exception as e:
+        logger.error(f"Error calculating occupancy rate for property {property_id}: {str(e)}")
+        return 0.0

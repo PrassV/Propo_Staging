@@ -457,42 +457,44 @@ export interface Document {
   owner_id: string;
   property_id?: string;
   tenant_id?: string;
-  maintenance_request_id?: string; // Added missing from first def
-  payment_id?: string; // Added missing from first def
+  unit_id?: string;
+  maintenance_request_id?: string;
+  payment_id?: string;
   file_url: string;
-  file_name: string; // Renamed from document_name for consistency?
-  file_type: string; // Changed from mime_type? Check backend
-  file_path?: string; // Added
-  file_extension?: string; // Added
+  file_name: string;
+  file_type: string;
+  file_path?: string;
+  file_extension?: string;
   file_size?: number;
-  document_type?: DocumentType; // Use specific type
-  access_level: DocumentAccess; // Use specific type, make non-optional?
-  status?: DocumentStatus; // Use specific type, optional
+  document_type?: DocumentType;
+  access_level: DocumentAccess;
+  status?: DocumentStatus;
   tags?: string[];
-  version?: number; // Added
+  version?: number;
   created_at: string; 
-  updated_at?: string; // Make optional
+  updated_at?: string;
 }
 
 // --- Document Create Payload Type --- 
 // Aligned with DB schema + necessary frontend fields
 export interface DocumentCreate {
-  document_name: string; // Required by DB (use original filename)
-  file_url: string; // Required by DB
+  document_name: string;
+  file_url: string;
   property_id?: string; 
-  tenant_id?: string;   
+  tenant_id?: string;
+  unit_id?: string;
   maintenance_request_id?: string;
   payment_id?: string;
   document_type?: DocumentType;
-  mime_type?: string; // Use mime_type (from fileInfo.fileType)
+  mime_type?: string;
   file_extension?: string;
   file_size?: number;
   description?: string;
-  title?: string; // Optional: Keep for potential display differentiation
-  file_name?: string; // Optional: Keep original filename if different from document_name
-  file_path?: string; // Optional: Keep path if needed by frontend/backend logic
-  access_level?: DocumentAccess; // Keep, assuming DB will be updated
-  tags?: string[]; // Keep, assuming DB will be updated
+  title?: string;
+  file_name?: string;
+  file_path?: string;
+  access_level?: DocumentAccess;
+  tags?: string[];
 }
 
 export interface DocumentUpdate {
@@ -799,4 +801,48 @@ export interface AgreementGenerationResponse {
     agreement: string; // The generated agreement text
     success?: boolean; // Optional success flag
     // Add other potential response fields from the API
+}
+
+// Financial Summary types
+export interface FinancialSummary {
+  total_revenue: number;
+  total_expenses: number;
+  net_income: number;
+  occupancy_rate: number;
+  rent_collection_rate: number;
+  payment_history: {
+    month: string;
+    revenue: number;
+    expenses: number;
+    net_income: number;
+  }[];
+  expense_breakdown: {
+    category: string;
+    amount: number;
+  }[];
+}
+
+// Property Tax types
+export interface PropertyTax {
+  id: string;
+  property_id: string;
+  tax_year: number;
+  amount: number;
+  due_date: string;
+  payment_date?: string;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  document_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PropertyTaxCreate {
+  tax_year: number;
+  amount: number;
+  due_date: string;
+  payment_date?: string;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  document_id?: string;
+  notes?: string;
 } 

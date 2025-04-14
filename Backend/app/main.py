@@ -31,6 +31,7 @@ from .api import (
     uploads,
     lease
 )
+from .api.property import units_router
 
 # Setup logging
 logging.basicConfig(
@@ -100,6 +101,7 @@ async def protected_route(current_user: Dict = Depends(get_current_user)):
 app.include_router(auth, prefix="/auth", tags=["Auth"])
 app.include_router(user)
 app.include_router(property)
+app.include_router(units_router)
 app.include_router(tenant)
 app.include_router(lease)
 app.include_router(dashboard)

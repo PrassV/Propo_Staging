@@ -1,6 +1,5 @@
 import apiClient from '../client';
 import { 
-  DocumentCreate, 
   DocumentUpdate, 
   DocumentResponse, 
   DocumentsResponse
@@ -13,6 +12,7 @@ import {
 export const getDocuments = async (params: {
   property_id?: string;
   tenant_id?: string;
+  unit_id?: string;
   maintenance_request_id?: string;
   payment_id?: string;
   document_type?: string;
@@ -62,7 +62,25 @@ export const getDocumentById = async (id: string): Promise<DocumentResponse> => 
  * Create a new document record.
  * Calls POST /documents/
  */
-export const createDocument = async (documentData: DocumentCreate): Promise<DocumentResponse> => {
+export const createDocument = async (documentData: {
+  document_name: string;
+  file_url: string;
+  property_id?: string;
+  tenant_id?: string;
+  unit_id?: string;
+  maintenance_request_id?: string;
+  payment_id?: string;
+  document_type?: string;
+  mime_type?: string;
+  file_extension?: string;
+  file_size?: number;
+  description?: string;
+  title?: string;
+  file_name?: string;
+  file_path?: string;
+  access_level?: string;
+  tags?: string[];
+}): Promise<DocumentResponse> => {
   try {
     const response = await apiClient.post<DocumentResponse>('/documents/', documentData);
     return response.data;

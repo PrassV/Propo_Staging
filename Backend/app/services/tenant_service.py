@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import logging
 from datetime import datetime, timedelta
 import uuid
@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from ..models.tenant import (
     TenantCreate, TenantUpdate, Tenant,
     PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
-    TenantInvitationCreate, TenantInvitation
+    TenantInvitationCreate, TenantInvitation, InvitationStatus
 )
 from ..db import tenants as tenants_db
 from ..db import properties as properties_db
@@ -45,7 +45,7 @@ async def get_tenants(
     sort_by: str = 'created_at',
     sort_order: str = 'desc'
     # Add more filters as needed (e.g., name, email, status)
-) -> tuple[List[Dict[str, Any]], int]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """
     Get tenants associated with properties owned by the requesting user.
     Optionally filter by a specific property ID.

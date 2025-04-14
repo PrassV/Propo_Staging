@@ -20,6 +20,7 @@ async def get_documents(
     owner_id: str = None,
     property_id: str = None,
     tenant_id: str = None,
+    unit_id: str = None,
     document_type: str = None,
     status: str = None
 ) -> List[Dict[str, Any]]:
@@ -30,13 +31,14 @@ async def get_documents(
         owner_id: Optional owner ID to filter by
         property_id: Optional property ID to filter by
         tenant_id: Optional tenant ID to filter by
+        unit_id: Optional unit ID to filter by
         document_type: Optional document type to filter by
         status: Optional status to filter by
         
     Returns:
         List of documents
     """
-    return await documents_db.get_documents(owner_id, property_id, tenant_id, document_type, status)
+    return await documents_db.get_documents(owner_id, property_id, tenant_id, unit_id, document_type, status)
 
 async def get_document(document_id: str) -> Optional[Dict[str, Any]]:
     """

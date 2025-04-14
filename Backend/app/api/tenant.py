@@ -110,7 +110,12 @@ async def get_tenant(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
 
-        # TODO: Add authorization check
+        # Check if user has permission to access this tenant
+        has_access = await tenant_service._can_access_tenant(tenant_id, requesting_user_id)
+        if not has_access and current_user.get("role") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                               detail="You don't have permission to access this tenant")
+                               
         return TenantResponse(tenant=tenant)
     except HTTPException as http_exc:
         raise http_exc
@@ -126,7 +131,16 @@ async def update_tenant(
 ):
     """Update a tenant's details."""
     try:
-        # TODO: Add authorization check
+        requesting_user_id = current_user.get("id")
+        if not requesting_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+        
+        # Check if user has permission to update this tenant
+        has_access = await tenant_service._can_access_tenant(tenant_id, requesting_user_id)
+        if not has_access and current_user.get("role") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                              detail="You don't have permission to update this tenant")
+        
         updated_tenant = await tenant_service.update_tenant(tenant_id, tenant_data)
         if not updated_tenant:
             raise HTTPException(status_code=404, detail="Tenant not found or update failed")
@@ -144,7 +158,16 @@ async def delete_tenant(
 ):
     """Delete a tenant."""
     try:
-        # TODO: Add authorization check
+        requesting_user_id = current_user.get("id")
+        if not requesting_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+        
+        # Check if user has permission to delete this tenant (must own at least one linked property)
+        has_access = await tenant_service._can_access_tenant(tenant_id, requesting_user_id)
+        if not has_access and current_user.get("role") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                              detail="You don't have permission to delete this tenant")
+        
         deleted = await tenant_service.delete_tenant(tenant_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Tenant not found or deletion failed")

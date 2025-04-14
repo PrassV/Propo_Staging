@@ -56,6 +56,7 @@ class DocumentCategoriesResponse(BaseModel):
 async def get_documents(
     property_id: Optional[str] = Query(None, description="Filter by property ID"),
     tenant_id: Optional[str] = Query(None, description="Filter by tenant ID"),
+    unit_id: Optional[str] = Query(None, description="Filter by unit ID"),
     document_type: Optional[str] = Query(None, description="Filter by document type"),
     status: Optional[str] = Query(None, description="Filter by status"),
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -66,6 +67,7 @@ async def get_documents(
     Args:
         property_id: Optional filter by property ID
         tenant_id: Optional filter by tenant ID
+        unit_id: Optional filter by unit ID
         document_type: Optional filter by document type
         status: Optional filter by status
         current_user: The current authenticated user
@@ -77,6 +79,7 @@ async def get_documents(
         owner_id=current_user["id"],
         property_id=property_id,
         tenant_id=tenant_id,
+        unit_id=unit_id,
         document_type=document_type,
         status=status
     )
@@ -202,7 +205,7 @@ async def delete_document(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Delete a document.
+    Delete a document by ID.
     
     Args:
         document_id: The document ID
@@ -234,9 +237,7 @@ async def delete_document(
             detail="Failed to delete document"
         )
     
-    return {
-        "message": "Document deleted successfully"
-    }
+    return {"message": "Document deleted successfully"}
 
 @router.put("/{document_id}/archive", response_model=DocumentResponse)
 async def archive_document(

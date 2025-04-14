@@ -11,26 +11,45 @@ async def get_documents(
     owner_id: Optional[str] = None,
     property_id: Optional[str] = None,
     tenant_id: Optional[str] = None,
+    unit_id: Optional[str] = None,
     document_type: Optional[str] = None,
     status: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """Fetch documents with optional filters."""
+    """
+    Get documents, optionally filtered.
+    
+    Args:
+        owner_id: Optional owner ID to filter by
+        property_id: Optional property ID to filter by
+        tenant_id: Optional tenant ID to filter by
+        unit_id: Optional unit ID to filter by
+        document_type: Optional document type to filter by
+        status: Optional status to filter by
+        
+    Returns:
+        List of documents
+    """
     try:
         supabase = supabase_client
         query = supabase.table(TABLE).select("*")
-
+        
         if owner_id:
             query = query.eq("owner_id", owner_id)
         if property_id:
             query = query.eq("property_id", property_id)
         if tenant_id:
             query = query.eq("tenant_id", tenant_id)
+        if unit_id:
+            query = query.eq("unit_id", unit_id)
         if document_type:
             query = query.eq("document_type", document_type)
         if status:
             query = query.eq("status", status)
+        else:
+            # By default, only return active documents
+            query = query.eq("status", "ACTIVE")
 
-        # Execute the query synchronously
+        # Execute the query
         response = query.order("created_at", desc=True).execute()
 
         if hasattr(response, 'error') and response.error:
@@ -40,7 +59,7 @@ async def get_documents(
         logger.debug(f"Supabase get_documents response: {response}")
         return response.data if response.data else []
     except Exception as e:
-        logger.error(f"Error fetching documents from DB: {e}", exc_info=True)
+        logger.error(f"Error getting documents: {str(e)}")
         return []
 
 async def get_document_by_id(document_id: str) -> Optional[Dict[str, Any]]:

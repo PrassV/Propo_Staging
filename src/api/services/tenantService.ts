@@ -7,7 +7,6 @@ import {
     TenantResponse, 
     TenantsListResponse, 
     Tenant, // Assuming Tenant type is defined and exported from ../types
-    TenantInvitationCreate,
     TenantInvitationResponse,
     TenantInvitationVerify
 } from '../types';
@@ -152,19 +151,20 @@ export const uploadTenantDocument = async (
 */
 
 /**
- * Invite a tenant to register
- * Calls POST /tenants/invite
+ * Invite a tenant to a property via email
+ * Calls POST /tenants/invitations
  */
-export const inviteTenant = async (data: TenantInvitationCreate): Promise<TenantInvitationResponse> => {
+export const inviteTenant = async (propertyId: string, email: string): Promise<{ message: string }> => {
   try {
-    const response = await apiClient.post<TenantInvitationResponse>('/tenants/invite', data);
+    const response = await apiClient.post<{ message: string }>('/tenants/invitations', {
+      property_id: propertyId,
+      email: email
+    });
     return response.data;
   } catch (error: unknown) {
-    console.error("Error inviting tenant:", error);
+    console.error(`Error inviting tenant to property ${propertyId}:`, error);
     let errorMessage = 'Failed to send tenant invitation';
-    if (error && typeof error === 'object' && 'formattedMessage' in error) {
-      errorMessage = (error as { formattedMessage: string }).formattedMessage;
-    } else if (error instanceof Error) {
+    if (error instanceof Error) {
       errorMessage = error.message;
     }
     throw new Error(errorMessage);

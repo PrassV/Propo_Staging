@@ -1,8 +1,9 @@
 from typing import List, Dict, Any, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from supabase import Client # Import Client type
+from dateutil.relativedelta import relativedelta
 
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails # Import new model
 from ..db import properties as property_db
@@ -305,3 +306,319 @@ async def create_unit(db_client: Client, property_id: str, unit_data: UnitCreate
     except Exception as e:
         logger.error(f"Error in property_service.create_unit: {str(e)}", exc_info=True)
         return None 
+
+# Financial Summary Functions
+async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -> Dict[str, Any]:
+    """
+    Get financial summary for a property for the specified period.
+    
+    Args:
+        property_id: The property ID to get summary for
+        period: The time period (month, quarter, year)
+        
+    Returns:
+        Financial summary data including income, expenses, net, and various breakdowns
+    """
+    try:
+        if period not in ["month", "quarter", "year"]:
+            period = "month"  # Default to month if invalid period
+        
+        # Get the current date and determine date range based on period
+        now = datetime.now()
+        if period == "month":
+            start_date = datetime(now.year, now.month, 1)
+            # Calculate end of month
+            if now.month == 12:
+                end_date = datetime(now.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = datetime(now.year, now.month + 1, 1) - timedelta(days=1)
+        elif period == "quarter":
+            # Determine current quarter
+            quarter = (now.month - 1) // 3 + 1
+            start_date = datetime(now.year, (quarter - 1) * 3 + 1, 1)
+            if quarter == 4:
+                end_date = datetime(now.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = datetime(now.year, quarter * 3 + 1, 1) - timedelta(days=1)
+        else:  # year
+            start_date = datetime(now.year, 1, 1)
+            end_date = datetime(now.year, 12, 31)
+        
+        # Query database for financial data
+        # For income, query rent payments, other income sources
+        income_data = await property_db.get_property_income(property_id, start_date, end_date)
+        
+        # For expenses, query maintenance costs, property taxes, insurance, etc.
+        expense_data = await property_db.get_property_expenses(property_id, start_date, end_date)
+        
+        # Process data to create summary
+        total_income = sum(item["amount"] for item in income_data)
+        total_expenses = sum(item["amount"] for item in expense_data)
+        net_income = total_income - total_expenses
+        
+        # Create income breakdown by category
+        income_breakdown = []
+        income_categories = {}
+        for item in income_data:
+            category = item.get("category", "Other")
+            if category not in income_categories:
+                income_categories[category] = 0
+            income_categories[category] += item["amount"]
+        
+        for category, amount in income_categories.items():
+            income_breakdown.append({
+                "name": category,
+                "value": amount,
+                "percentage": round((amount / total_income) * 100, 2) if total_income > 0 else 0
+            })
+        
+        # Create expense breakdown by category
+        expense_breakdown = []
+        expense_categories = {}
+        for item in expense_data:
+            category = item.get("category", "Other")
+            if category not in expense_categories:
+                expense_categories[category] = 0
+            expense_categories[category] += item["amount"]
+        
+        for category, amount in expense_categories.items():
+            expense_breakdown.append({
+                "name": category,
+                "value": amount,
+                "percentage": round((amount / total_expenses) * 100, 2) if total_expenses > 0 else 0
+            })
+        
+        # Get monthly trend data for the past 12 months
+        trend_data = []
+        for i in range(12, 0, -1):
+            month_date = now - relativedelta(months=i)
+            month_start = datetime(month_date.year, month_date.month, 1)
+            if month_date.month == 12:
+                month_end = datetime(month_date.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                month_end = datetime(month_date.year, month_date.month + 1, 1) - timedelta(days=1)
+            
+            month_income = await property_db.get_property_income_total(property_id, month_start, month_end)
+            month_expenses = await property_db.get_property_expenses_total(property_id, month_start, month_end)
+            
+            trend_data.append({
+                "month": month_date.strftime("%b %Y"),
+                "income": month_income,
+                "expenses": month_expenses,
+                "net": month_income - month_expenses
+            })
+        
+        # Calculate financial indicators
+        occupancy_rate = await property_db.get_property_occupancy_rate(property_id, start_date, end_date)
+        
+        # Return complete financial summary
+        return {
+            "period": period,
+            "date_range": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            },
+            "summary": {
+                "total_income": total_income,
+                "total_expenses": total_expenses,
+                "net_income": net_income,
+                "profit_margin": round((net_income / total_income) * 100, 2) if total_income > 0 else 0
+            },
+            "occupancy_rate": occupancy_rate,
+            "income_breakdown": income_breakdown,
+            "expense_breakdown": expense_breakdown,
+            "trend_data": trend_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting financial summary for property {property_id}: {str(e)}")
+        raise
+
+# Property Tax Functions
+async def get_property_taxes(property_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get tax records for a property.
+    
+    Args:
+        property_id: The property ID
+        
+    Returns:
+        List of tax records
+    """
+    try:
+        # Query the property_taxes table
+        taxes = await property_db.get_property_taxes(property_id)
+        return taxes
+    except Exception as e:
+        logger.error(f"Error getting taxes for property {property_id}: {str(e)}")
+        raise
+
+async def create_property_tax(property_id: uuid.UUID, tax_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Create a new tax record for a property.
+    
+    Args:
+        property_id: The property ID
+        tax_data: The tax record data
+        
+    Returns:
+        Created tax record
+    """
+    try:
+        # Add required fields to tax data
+        tax_record = {
+            "id": uuid.uuid4(),
+            "property_id": property_id,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+            **tax_data
+        }
+        
+        # Insert into property_taxes table
+        created_tax = await property_db.create_property_tax(tax_record)
+        return created_tax
+    except Exception as e:
+        logger.error(f"Error creating tax record for property {property_id}: {str(e)}")
+        raise
+
+async def update_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Update a tax record.
+    
+    Args:
+        property_id: The property ID
+        tax_id: The tax record ID
+        tax_data: The updated tax record data
+        
+    Returns:
+        Updated tax record or None if not found
+    """
+    try:
+        # Check if tax record exists and belongs to the property
+        tax_record = await property_db.get_property_tax(tax_id)
+        if not tax_record or str(tax_record["property_id"]) != str(property_id):
+            return None
+        
+        # Update tax record
+        update_data = {
+            "updated_at": datetime.utcnow().isoformat(),
+            **tax_data
+        }
+        
+        updated_tax = await property_db.update_property_tax(tax_id, update_data)
+        return updated_tax
+    except Exception as e:
+        logger.error(f"Error updating tax record {tax_id} for property {property_id}: {str(e)}")
+        raise
+
+async def delete_property_tax(property_id: uuid.UUID, tax_id: uuid.UUID) -> bool:
+    """
+    Delete a tax record.
+    
+    Args:
+        property_id: The property ID
+        tax_id: The tax record ID
+        
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        # Check if tax record exists and belongs to the property
+        tax_record = await property_db.get_property_tax(tax_id)
+        if not tax_record or str(tax_record["property_id"]) != str(property_id):
+            return False
+        
+        # Delete tax record
+        success = await property_db.delete_property_tax(tax_id)
+        return success
+    except Exception as e:
+        logger.error(f"Error deleting tax record {tax_id} for property {property_id}: {str(e)}")
+        raise
+
+# Unit Images Functions
+async def get_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:
+    """
+    Get the property ID that a unit belongs to.
+    
+    Args:
+        unit_id: The unit ID
+        
+    Returns:
+        Property ID or None if unit not found
+    """
+    try:
+        unit = await property_db.get_unit(unit_id)
+        if not unit:
+            return None
+        return unit.get("property_id")
+    except Exception as e:
+        logger.error(f"Error getting property ID for unit {unit_id}: {str(e)}")
+        raise
+
+async def get_unit_images(unit_id: uuid.UUID) -> List[str]:
+    """
+    Get images for a unit.
+    
+    Args:
+        unit_id: The unit ID
+        
+    Returns:
+        List of image URLs
+    """
+    try:
+        # Query the unit_images table
+        images = await property_db.get_unit_images(unit_id)
+        return [image["url"] for image in images]
+    except Exception as e:
+        logger.error(f"Error getting images for unit {unit_id}: {str(e)}")
+        raise
+
+async def add_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
+    """
+    Add an image to a unit.
+    
+    Args:
+        unit_id: The unit ID
+        image_url: The image URL
+        
+    Returns:
+        True if added, False otherwise
+    """
+    try:
+        # Check if unit exists
+        unit = await property_db.get_unit(unit_id)
+        if not unit:
+            return False
+        
+        # Create image record
+        image_record = {
+            "id": uuid.uuid4(),
+            "unit_id": unit_id,
+            "url": image_url,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        # Insert into unit_images table
+        success = await property_db.add_unit_image(image_record)
+        return success
+    except Exception as e:
+        logger.error(f"Error adding image to unit {unit_id}: {str(e)}")
+        raise
+
+async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
+    """
+    Delete an image from a unit.
+    
+    Args:
+        unit_id: The unit ID
+        image_url: The image URL to delete
+        
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        # Delete from unit_images table
+        success = await property_db.delete_unit_image(unit_id, image_url)
+        return success
+    except Exception as e:
+        logger.error(f"Error deleting image from unit {unit_id}: {str(e)}")
+        raise 

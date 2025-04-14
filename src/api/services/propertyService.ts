@@ -1,6 +1,6 @@
 import apiClient from '../client';
 // Import PropertiesListResponse and remove ApiResponse if no longer needed elsewhere
-import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse } from '../types';
+import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse, PropertyTax, PropertyTaxCreate } from '../types';
 import axios from 'axios';
 
 // Define Unit type (adjust based on actual API response)
@@ -283,4 +283,95 @@ export const getUnits = async (): Promise<UnitDetails[]> => {
         }
         throw new Error(errorMessage);
     }
+};
+
+/**
+ * Get tax payment records for a property
+ * Calls GET /properties/{propertyId}/taxes
+ */
+export const getPropertyTaxes = async (propertyId: string): Promise<PropertyTax[]> => {
+  try {
+    const response = await apiClient.get<PropertyTax[]>(`/properties/${propertyId}/taxes`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching taxes for property ${propertyId}:`, error);
+    let errorMessage = 'Failed to fetch property taxes';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Create a new tax payment record for a property
+ * Calls POST /properties/{propertyId}/taxes
+ */
+export const createPropertyTax = async (propertyId: string, taxData: PropertyTaxCreate): Promise<PropertyTax> => {
+  try {
+    const response = await apiClient.post<PropertyTax>(`/properties/${propertyId}/taxes`, taxData);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error creating tax record for property ${propertyId}:`, error);
+    let errorMessage = 'Failed to create tax record';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get images for a specific unit
+ * Calls GET /properties/units/{unitId}/images
+ */
+export const getUnitImages = async (unitId: string): Promise<string[]> => {
+  try {
+    const response = await apiClient.get<string[]>(`/properties/units/${unitId}/images`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching images for unit ${unitId}:`, error);
+    let errorMessage = 'Failed to fetch unit images';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Add an image to a unit
+ * Calls POST /properties/units/{unitId}/images
+ */
+export const addUnitImage = async (unitId: string, imageUrl: string): Promise<string[]> => {
+  try {
+    const response = await apiClient.post<string[]>(`/properties/units/${unitId}/images`, { image_url: imageUrl });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error adding image to unit ${unitId}:`, error);
+    let errorMessage = 'Failed to add unit image';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Delete an image from a unit
+ * Calls DELETE /properties/units/{unitId}/images
+ */
+export const deleteUnitImage = async (unitId: string, imageUrl: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/properties/units/${unitId}/images`, { 
+      data: { image_url: imageUrl }
+    });
+  } catch (error: unknown) {
+    console.error(`Error deleting image from unit ${unitId}:`, error);
+    let errorMessage = 'Failed to delete unit image';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
 };

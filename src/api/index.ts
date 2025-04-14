@@ -1,5 +1,6 @@
 import apiClient from './client';
 import * as services from './services';
+import * as financial from './services/financialService';
 
 // Re-export everything
 export { apiClient, services };
@@ -20,6 +21,7 @@ const api = {
   agreement: services.agreementService,
   vendor: services.vendorService,
   user: services.userService,
+  financial,
 };
 
 export default api; 
