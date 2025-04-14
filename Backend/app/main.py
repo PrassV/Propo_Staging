@@ -44,6 +44,8 @@ app = FastAPI(
     title="Property Management API",
     description="API for managing properties, tenants, maintenance, payments, and agreements",
     version="1.0.0",
+    # Configure to trust proxy headers
+    root_path="",
 )
 
 # Configure CORS - make sure this is before any other middleware
@@ -55,6 +57,24 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+# HTTPS redirect middleware
+@app.middleware("http")
+async def https_redirect_middleware(request: Request, call_next):
+    # Check if the request is coming through a proxy that terminated SSL
+    forwarded_proto = request.headers.get("X-Forwarded-Proto")
+    if forwarded_proto == "http":
+        # If the original request was HTTP, redirect to HTTPS
+        https_url = str(request.url).replace("http://", "https://", 1)
+        return RedirectResponse(https_url, status_code=301)  # Permanent redirect
+
+    # Check for insecure URLs in the request
+    if "http://" in str(request.url):
+        # Replace any http:// with https://
+        secure_url = str(request.url).replace("http://", "https://")
+        return RedirectResponse(secure_url, status_code=301)  # Permanent redirect
+
+    return await call_next(request)
 
 # Request logging middleware
 @app.middleware("http")
