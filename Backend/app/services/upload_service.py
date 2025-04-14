@@ -3,7 +3,7 @@ import uuid
 from fastapi import UploadFile, HTTPException, status
 from supabase import create_client, Client
 from typing import List
-from supabase.exceptions import APIError
+from postgrest import APIError
 
 # Assuming settings are correctly configured with necessary Supabase details
 from app.config.settings import settings
