@@ -175,23 +175,6 @@ def test_profile_endpoints(session):
             print_result("GET /auth/me", "FAIL", f"Status code: {response.status_code} - {response.text}")
     except Exception as e:
         print_result("GET /auth/me", "FAIL", str(e))
-    
-    # Test PUT /auth/profile endpoint
-    try:
-        update_data = {
-            "first_name": f"Auth_Updated_{datetime.now().strftime('%H%M%S')}",
-            "last_name": "Via Auth API",
-            "phone": "5555555555"
-        }
-        response = session.put(f"{BASE_URL}/auth/profile", json=update_data)
-        if response.status_code in [200, 201]:
-            print_result("PUT /auth/profile", "PASS")
-        elif response.status_code == 404:
-            print_result("PUT /auth/profile", "FAIL", "Endpoint not implemented (404)")
-        else:
-            print_result("PUT /auth/profile", "FAIL", f"Status code: {response.status_code} - {response.text}")
-    except Exception as e:
-        print_result("PUT /auth/profile", "FAIL", str(e))
 
 def main():
     print_header("API ENDPOINT VALIDATION")

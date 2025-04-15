@@ -44,57 +44,43 @@ export const getCurrentUser = async (): Promise<UserProfile> => {
 // Update user profile
 export const updateUserProfile = async (profileData: Partial<UserProfile>): Promise<UserProfile> => {
   try {
-    // First try the /users/me endpoint (our primary endpoint)
+    // Call the primary /users/me endpoint
     const response = await apiClient.put<ApiResponse<UserProfile> | UserProfile>('/users/me', profileData);
-    
-    // Handle different response formats
-    if (response.data && 'data' in response.data) {
-      // It's wrapped in an ApiResponse
+
+    // Handle different response formats from /users/me
+    if (response.data && 'data' in response.data && response.data.data) {
+      // It's wrapped in an ApiResponse like { data: UserProfile, message: string }
       return response.data.data;
+    } else if (response.data && ('id' in response.data || 'email' in response.data)) {
+      // It's directly the profile object (UserProfile)
+      return response.data as UserProfile; // Type assertion needed
     } else {
-      // It's directly the profile object
-      return response.data;
+      // Handle unexpected response structure
+      console.error("Unexpected response structure from /users/me:", response.data);
+      throw new Error("Failed to update profile due to unexpected response.");
     }
   } catch (error) {
-    console.error("Error updating profile with /users/me, trying fallback endpoint", error);
-    
-    // If first attempt fails, try the /auth/profile endpoint as fallback
-    try {
-      const fallbackResponse = await apiClient.put<ApiResponse<UserProfile> | UserProfile>('/auth/profile', profileData);
-      
-      // Handle different response formats
-      if (fallbackResponse.data && 'data' in fallbackResponse.data) {
-        // It's wrapped in an ApiResponse
-        return fallbackResponse.data.data;
-      } else {
-        // It's directly the profile object
-        return fallbackResponse.data;
-      }
-    } catch (fallbackError) {
-      console.error("Both profile update endpoints failed", fallbackError);
-      
-      // Create a better error message for debugging
-      let errorMessage = 'Failed to update profile';
-      if (fallbackError && typeof fallbackError === 'object') {
-        if ('response' in fallbackError && fallbackError.response) {
-          // Use unknown and type guarding instead of any
-          const response = fallbackError.response as { data?: unknown; status?: number }; 
-          if (response.data && 
-              typeof response.data === 'object' && 
-              response.data !== null && 
-              'detail' in response.data && 
-              typeof (response.data as { detail: unknown }).detail === 'string') { 
-            errorMessage = `Server error: ${(response.data as { detail: string }).detail}`;
-          } else {
-            errorMessage = `Server error (${response.status || 'unknown'})`;
-          }
-        } else if ('message' in fallbackError) {
-          errorMessage = `Network error: ${(fallbackError as Error).message}`;
+    console.error("Error updating profile with /users/me:", error);
+
+    // Construct a user-friendly error message
+    let errorMessage = 'Failed to update profile';
+    if (error && typeof error === 'object') {
+      if ('response' in error && error.response) {
+        const response = error.response as { data?: unknown; status?: number };
+        if (response.data &&
+            typeof response.data === 'object' &&
+            response.data !== null &&
+            'detail' in response.data &&
+            typeof (response.data as { detail: string }).detail === 'string') {
+          errorMessage = `Server error: ${(response.data as { detail: string }).detail}`;
+        } else {
+          errorMessage = `Server error (${response.status || 'unknown'})`;
         }
+      } else if ('message' in error) {
+        errorMessage = `Network error: ${(error as Error).message}`;
       }
-      
-      throw new Error(errorMessage);
     }
+    throw new Error(errorMessage);
   }
 };
 

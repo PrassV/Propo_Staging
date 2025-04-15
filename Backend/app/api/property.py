@@ -199,42 +199,60 @@ async def delete_property(
 
 # --- New Endpoints for Related Data ---
 
-@router.get("/{property_id}/units", response_model=List[str])
+@router.get("/{property_id}/units", response_model=List[UnitDetails])
 async def get_property_units(
     property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
-    """Get a list of distinct unit numbers associated with this property."""
+    """Get a list of distinct unit details associated with this property."""
     try:
+        # Corrected user_id access
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+            
         units = await property_service.get_units_for_property(
             db_client=db_client,
             property_id=str(property_id),
-            owner_id=current_user.id
+            owner_id=user_id # Pass corrected user_id
         )
         # Service layer handles ownership check and returns empty list if not authorized/found
         return units
+    except HTTPException as http_exc:
+        logger.warning(f"HTTP exception fetching units for {property_id}: {http_exc.detail}")
+        raise http_exc # Re-raise specific HTTP exceptions
     except Exception as e:
-        logging.error(f"Error getting units for {property_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving units: {str(e)}")
+        logger.error(f"Error getting units for {property_id}: {e}", exc_info=True)
+        # Ensure a generic message for unexpected errors
+        raise HTTPException(status_code=500, detail="Error retrieving units") # Removed str(e)
 
 @router.get("/{property_id}/documents", response_model=List[PropertyDocument])
 async def get_property_documents(
     property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """Get documents associated with this property."""
     try:
+        # Corrected user_id access
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+            
         documents = await property_service.get_documents_for_property(
             db_client=db_client,
             property_id=str(property_id),
-            owner_id=current_user.id
+            owner_id=user_id # Pass corrected user_id
         )
         return documents
+    except HTTPException as http_exc:
+        logger.warning(f"HTTP exception fetching documents for {property_id}: {http_exc.detail}")
+        raise http_exc # Re-raise specific HTTP exceptions
     except Exception as e:
-        logging.error(f"Error getting documents for {property_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving documents: {str(e)}")
+        logger.error(f"Error getting documents for {property_id}: {e}", exc_info=True)
+        # Ensure a generic message for unexpected errors
+        raise HTTPException(status_code=500, detail="Error retrieving documents") # Removed str(e)
 
 @router.post("/{property_id}/documents", response_model=PropertyDocument, status_code=status.HTTP_201_CREATED)
 async def add_property_document(
@@ -670,22 +688,38 @@ async def create_property_unit(
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """Create a new unit for a specific property."""
-    user_id = current_user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
-
     try:
-        created_unit = await property_service.create_unit(
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+
+        # Call the service function to create the unit
+        new_unit = await property_service.create_unit_for_property(
             db_client=db_client,
             property_id=str(property_id),
             unit_data=unit_data,
             owner_id=user_id
         )
-        if not created_unit:
-            # Service function returns None if unauthorized or property not found
-            raise HTTPException(status_code=404, detail="Property not found or not authorized to add unit")
+
+        # Check the return value from the service
+        if new_unit is None:
+            # If service returns None, it implies property not found or user not authorized
+            # We should determine which error to raise. Let's assume 404 for now,
+            # but the service could be enhanced to return specific error codes/reasons.
+            logger.warning(f"Unit creation failed for property {property_id} by user {user_id}. Property not found or unauthorized.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                                detail="Property not found or not authorized to add unit")
         
-        return created_unit
+        # If successful, return the created unit data
+        return new_unit
+
+    except HTTPException as http_exc: 
+        # Re-raise known HTTP exceptions (like 401, 404, 403 from checks above or service)
+        logger.warning(f"HTTP exception creating unit for {property_id}: {http_exc.detail}")
+        raise http_exc
     except Exception as e:
-        logger.error(f"Error creating unit for property {property_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error creating unit: {str(e)}") 
+        # Catch unexpected errors during the process
+        logger.error(f"Unexpected error creating unit for property {property_id}: {e}", exc_info=True)
+        # Return a generic 500 error
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                            detail="An unexpected error occurred while creating the unit.") 

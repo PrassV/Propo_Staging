@@ -4,6 +4,8 @@ from app.config.auth import get_current_user
 from app.models.user import UserUpdate, User
 from app.services import user_service
 import logging
+from app.config.database import get_supabase_client_authenticated
+from app.config.database import Client
 
 logger = logging.getLogger(__name__)
 
@@ -133,22 +135,28 @@ async def update_current_user_profile(update_data: Dict[str, Any] = Body(...), c
 @router.get("/{user_id}")
 async def get_user_info(
     user_id: str = Path(..., description="The user ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """Get information for a specific user (for admin use)"""
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
 
+    # Safe extraction of user_type and current_user_id
     user_type = current_user.get("user_type") if isinstance(current_user, dict) else getattr(current_user, "user_type", None)
     current_user_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     
     if current_user_id != user_id and user_type != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this user's information")
     
-    if current_user_id == user_id or user_type == "admin":
-        requested_user = user_service.get_user_profile(user_id)
+    # Call service with db_client
+    try:
+        requested_user = user_service.get_user_profile(db_client, user_id)
         if not requested_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested user profile not found")
         return requested_user
-
-    return {"id": user_id, "email": f"user{user_id}@example.com", "name": f"User {user_id}"} 
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Unexpected error fetching profile for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while fetching user profile.") 
