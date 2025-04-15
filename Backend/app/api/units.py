@@ -9,17 +9,17 @@ from pydantic import BaseModel
 # Assuming models are in app.models.property for now
 from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload # Import new payload model
 # Import Maintenance models
-from app.models.maintenance import MaintenanceRequest, MaintenanceRequestCreate # Placeholder path
+from app.models.maintenance import MaintenanceRequest, MaintenanceRequestCreate
 # Import Tenant models
-from app.models.tenant import Tenant, TenantCreate # Placeholder path
+from app.models.tenant import Tenant, TenantCreate
 # Import Payment model
-from app.models.payment import Payment # Placeholder path
+from app.models.payment import Payment
 
 # Import services (adjust paths as needed)
 # Using property_service for now, might refactor later
 from app.services import property_service
 # Import Maintenance service
-from app.services import maintenance_service # Placeholder path
+from app.services import maintenance_service
 
 # Import dependencies (adjust paths as needed)
 from app.config.auth import get_current_user
