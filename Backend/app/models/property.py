@@ -144,3 +144,9 @@ class PropertyDetails(Property): # New/Updated PropertyDetails model
 
     class Config:
         from_attributes = True 
+
+# Model for creating a new unit via POST /units
+class UnitCreatePayload(UnitCreate):
+    property_id: uuid.UUID # Add property_id needed for creation via this route
+
+# Define response model for list operations, potentially with pagination metadata 

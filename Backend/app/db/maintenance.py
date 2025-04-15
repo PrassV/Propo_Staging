@@ -2,8 +2,64 @@ from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
 from ..config.database import supabase_client
+from supabase import create_client
 
 logger = logging.getLogger(__name__)
+
+# --- DB Functions for Maintenance Requests --- #
+
+async def create_request_db(db_client: create_client, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Insert a new maintenance request record."""
+    try:
+        response = db_client.table('maintenance_requests').insert(request_data).execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"[db.create_request_db] DB error: {response.error.message}")
+            # Consider raising for specific codes like foreign key violations if needed
+            return None
+
+        if response.data:
+            logger.info(f"[db.create_request_db] Inserted maintenance request: {response.data[0].get('id')}")
+            return response.data[0]
+        else:
+            logger.error(f"[db.create_request_db] Insert returned no data.")
+            return None
+    except Exception as e:
+        logger.error(f"[db.create_request_db] Exception: {e}", exc_info=True)
+        return None
+
+async def get_requests_for_unit_db(
+    db_client: create_client, 
+    unit_id: str, 
+    skip: int = 0, 
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """Get maintenance requests filtered by unit_id."""
+    try:
+        query = db_client.table('maintenance_requests')\
+                       .select('*, vendor:vendors(*)')\
+                       .eq('unit_id', unit_id)\
+                       .order('created_at', desc=True)\
+                       .range(skip, skip + limit - 1)
+                       
+        response = query.execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"[db.get_requests_for_unit_db] DB error: {response.error.message}")
+            return []
+        
+        requests = response.data or []
+        # Process vendor details if needed (copied from get_maintenance_requests)
+        for request in requests:
+            if request.get('vendor'):
+                request['vendor_details'] = request.pop('vendor')
+        return requests
+
+    except Exception as e:
+        logger.error(f"[db.get_requests_for_unit_db] Exception: {e}", exc_info=True)
+        return []
+
+# --- Existing Functions below --- #
 
 async def get_maintenance_requests(
     property_id: str = None, 

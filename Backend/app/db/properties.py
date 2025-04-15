@@ -769,3 +769,133 @@ async def get_property_occupancy_rate(db_client: Client, property_id: uuid.UUID,
     except Exception as e:
         logger.error(f"Error calculating occupancy rate for property {property_id}: {str(e)}")
         return 0.0
+
+# --- DB Functions for Unit Listing --- #
+
+async def get_filtered_units_db(
+    db_client: Client,
+    owner_id: str,
+    property_id: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """Fetch units from DB, joining with properties to filter by owner_id."""
+    try:
+        # Start query on units table, select all unit columns
+        query = db_client.table('units').select('*, properties!inner(owner_id)')
+        
+        # Filter by property owner by joining properties table
+        query = query.eq('properties.owner_id', owner_id)
+        
+        # Apply optional filters
+        if property_id:
+            query = query.eq('property_id', property_id)
+        if status:
+            query = query.eq('status', status)
+            
+        # Apply pagination
+        query = query.range(skip, skip + limit - 1)
+        
+        response = query.execute()
+        
+        if response.data:
+            # The join adds the nested properties structure, remove it for clean unit data
+            for unit in response.data:
+                unit.pop('properties', None) 
+            return response.data
+        else:
+            logger.info(f"[db.get_filtered_units_db] No units found matching criteria for owner {owner_id}")
+            return []
+    except Exception as e:
+        logger.error(f"[db.get_filtered_units_db] Failed: {e}", exc_info=True)
+        return []
+
+async def get_filtered_units_count_db(
+    db_client: Client,
+    owner_id: str,
+    property_id: Optional[str] = None,
+    status: Optional[str] = None
+) -> int:
+    """Count units matching filters and owner_id."""
+    try:
+        # Select with count, joining properties for owner filter
+        query = db_client.table('units')\
+                       .select('id', count='exact', head=True)\
+                       .join('properties', 'properties.id=units.property_id', join_type='inner') # Use explicit join
+                       
+        # Filter by property owner
+        query = query.eq('properties.owner_id', owner_id)
+
+        # Apply optional filters
+        if property_id:
+            query = query.eq('property_id', property_id)
+        if status:
+            query = query.eq('status', status)
+            
+        response = query.execute()
+        
+        # Check response structure - count is usually directly on response for head=True
+        if hasattr(response, 'count') and response.count is not None:
+            return response.count
+        elif hasattr(response, 'error') and response.error:
+            logger.error(f"[db.get_filtered_units_count_db] Error counting: {response.error.message}")
+            return 0
+        else:
+            logger.warning(f"[db.get_filtered_units_count_db] Count not found in response for owner {owner_id}. Response: {response}")
+            return 0 # Should ideally not happen if query is correct
+    except Exception as e:
+        logger.error(f"[db.get_filtered_units_count_db] Failed: {e}", exc_info=True)
+        return 0
+
+# --- DB Functions for Specific Unit --- #
+
+async def get_unit_by_id_db(
+    db_client: Client,
+    unit_id: str
+) -> Optional[Dict[str, Any]]:
+    """Fetch a single unit by its ID."""
+    try:
+        response = db_client.table('units')\
+                          .select('*')\
+                          .eq('id', unit_id)\
+                          .maybe_single()\
+                          .execute()
+                          
+        if response.data:
+            return response.data
+        elif hasattr(response, 'error') and response.error:
+            logger.error(f"[db.get_unit_by_id_db] Error fetching unit {unit_id}: {response.error.message}")
+            return None
+        else:
+            logger.warning(f"[db.get_unit_by_id_db] Unit {unit_id} not found.")
+            return None
+    except Exception as e:
+        logger.error(f"[db.get_unit_by_id_db] Failed: {e}", exc_info=True)
+        return None
+
+async def delete_unit_db(
+    db_client: Client,
+    unit_id: str
+) -> bool:
+    """Delete a specific unit by its ID. Returns True if successful."""
+    try:
+        response = db_client.table('units')\
+                          .delete()\
+                          .eq('id', unit_id)\
+                          .execute()
+                          
+        # Check if delete was successful (usually response.data is empty but no error)
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"[db.delete_unit_db] Error deleting unit {unit_id}: {response.error.message}")
+            return False
+        elif response.data is not None: # Should typically be empty list on successful delete
+             logger.info(f"[db.delete_unit_db] Unit {unit_id} deleted successfully.")
+             return True
+        else:
+             logger.warning(f"[db.delete_unit_db] Delete for unit {unit_id} returned no data and no error. Might not have existed or RLS prevented.")
+             # Consider if this should be True or False depending on desired behaviour for deleting non-existent ID
+             return False # Treat as failure if unit wasn't confirmed deleted
+    except Exception as e:
+        logger.error(f"[db.delete_unit_db] Failed: {e}", exc_info=True)
+        return False

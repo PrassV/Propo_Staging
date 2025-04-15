@@ -248,7 +248,7 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     except Exception as e:
         # Catch potential exceptions during client call or processing
         logger.exception(f"Failed to get tenant by user_id {user_id}: {str(e)}")
-        return None
+        return None # Explicitly return None if exception
 
 async def get_tenant_by_property_id(property_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     """
@@ -848,3 +848,97 @@ async def get_tenant_payment_tracking(
     except Exception as e:
         logger.error(f"Failed to get payment tracking for tenant {tenant_id}: {str(e)}")
         return []
+
+async def db_get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get the tenant currently associated with a specific unit via an active lease.
+
+    An active lease is defined as one where the current date is between
+    the lease's start_date and end_date (inclusive).
+
+    Args:
+        unit_id: The ID of the unit.
+
+    Returns:
+        Tenant data if an active lease exists for the unit, otherwise None.
+    """
+    try:
+        today = date.today()
+        # Find the currently active lease link for the given unit
+        # Assumes 'property_tenants' table links tenants to units and has start/end dates
+        lease_response = supabase_client.table('property_tenants') \
+            .select('tenant_id') \
+            .eq('unit_id', str(unit_id)) \
+            .lte('start_date', today.isoformat()) \
+            .gte('end_date', today.isoformat()) \
+            .order('created_at', desc=True) \
+            .limit(1) \
+            .maybe_single() \
+            .execute()
+
+        # Handle potential errors during lease fetch
+        if hasattr(lease_response, 'error') and lease_response.error:
+            logger.error(f"Error fetching current lease for unit {unit_id}: {lease_response.error.message}")
+            return None
+
+        if not lease_response.data:
+            logger.info(f"No active lease found for unit {unit_id} as of {today}")
+            return None # No active lease found for today
+
+        tenant_id_str = lease_response.data.get('tenant_id')
+        if not tenant_id_str:
+             logger.error(f"Found active lease for unit {unit_id} but tenant_id is missing.")
+             return None
+
+        # Fetch the tenant details using the tenant_id from the lease
+        # Convert tenant_id string back to UUID
+        tenant_response = await get_tenant_by_id(uuid.UUID(tenant_id_str))
+
+        return tenant_response # Returns tenant data or None if get_tenant_by_id fails
+
+    except Exception as e:
+        logger.exception(f"Exception occurred while fetching tenant for unit {unit_id}: {str(e)}")
+        return None
+
+# --- Property-Tenant Link (Lease) Functions ---
+# (Currently lease logic is primarily in lease.py and tenant_service.py,
+# but we might add more specific DB functions here later if needed)
+
+# Example: Function to get all leases for a tenant (could be added)
+# async def get_leases_for_tenant(tenant_id: uuid.UUID): ...
+
+# Example: Function to get all leases for a property (could be added)
+# async def get_leases_for_property(property_id: uuid.UUID): ...
+
+# --- Helper/Utility Functions ---
+
+async def check_tenant_exists(tenant_id: uuid.UUID) -> bool:
+    """
+    Check if a tenant with the given ID exists in the database.
+
+    Args:
+        tenant_id: The UUID of the tenant to check.
+
+    Returns:
+        True if the tenant exists, False otherwise.
+    """
+    try:
+        response = supabase_client.table('tenants') \
+            .select('id', count='exact') \
+            .eq('id', str(tenant_id)) \
+            .limit(1) \
+            .execute()
+
+        # Check if the count is greater than 0
+        if response.count is not None and response.count > 0:
+            return True
+        elif response.error:
+            logger.error(f"Error checking tenant existence for {tenant_id}: {response.error.message}")
+            return False
+        else:
+            # No error, but count is 0 or None
+            return False
+
+    except Exception as e:
+        logger.exception(f"Exception checking tenant existence for {tenant_id}: {str(e)}")
+        return False

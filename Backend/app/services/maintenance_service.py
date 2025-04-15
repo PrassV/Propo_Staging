@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
 import uuid
+from fastapi import HTTPException, status
 
 from ..db import maintenance as maintenance_db
 from ..db import vendor as vendor_db
@@ -11,7 +12,8 @@ from ..models.maintenance import (
     MaintenanceCreate, 
     MaintenanceUpdate, 
     MaintenanceComment,
-    MaintenanceStatus
+    MaintenanceStatus,
+    MaintenanceRequestCreate
 )
 from ..services import notification_service
 
@@ -461,4 +463,91 @@ async def count_maintenance_requests(
             return len(results)
     except Exception as e:
         logger.error(f"Error counting maintenance requests: {str(e)}")
-        return 0 
+        return 0
+
+# --- New Service Functions for Unit-Level Requests --- #
+
+async def check_unit_access(db_client: Client, unit_id: str, user_id: str) -> bool:
+    """Helper function to check if user owns parent property OR is current tenant."""
+    # 1. Get unit details to find parent property and current tenant_id
+    unit_data = await property_db.get_unit_by_id_db(db_client, unit_id)
+    if not unit_data:
+        return False # Unit doesn't exist
+    
+    parent_property_id = unit_data.get('property_id')
+    current_tenant_id = unit_data.get('current_tenant_id') # Assumes units table has this
+    
+    if not parent_property_id:
+        logger.error(f"[check_unit_access] Unit {unit_id} missing property_id.")
+        return False # Data integrity issue
+        
+    # 2. Check if user owns the parent property
+    try:
+        parent_property = await property_db.get_property_by_id(db_client, parent_property_id)
+        if parent_property and parent_property.get("owner_id") == user_id:
+            logger.info(f"[check_unit_access] Access granted: User {user_id} owns parent property {parent_property_id}.")
+            return True
+    except Exception as e:
+        logger.error(f"[check_unit_access] Error checking property ownership for {parent_property_id}: {e}")
+        # Continue to check tenant status
+        
+    # 3. Check if user is the current tenant of the unit
+    # This requires the units table to accurately store the current_tenant_id
+    if current_tenant_id and current_tenant_id == user_id:
+         logger.info(f"[check_unit_access] Access granted: User {user_id} is current tenant of unit {unit_id}.")
+         return True
+         
+    logger.warning(f"[check_unit_access] Access denied for user {user_id} to unit {unit_id}.")
+    return False
+
+async def create_request_for_unit(
+    db_client: Client, 
+    unit_id: str, 
+    user_id: str, 
+    request_data: MaintenanceRequestCreate
+) -> Optional[Dict[str, Any]]:
+    """Create maintenance request for a unit after authorization check."""
+    logger.info(f"Service: Creating maintenance request for unit {unit_id} by user {user_id}")
+    # 1. Authorization Check
+    has_access = await check_unit_access(db_client, unit_id, user_id)
+    if not has_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized to create maintenance requests for this unit.")
+        
+    # 2. Prepare data
+    insert_data = request_data.model_dump()
+    insert_data['id'] = str(uuid.uuid4())
+    insert_data['unit_id'] = unit_id
+    insert_data['created_by'] = user_id # Track who created it
+    # Get property_id from unit if needed by table schema
+    unit_info = await property_db.get_unit_by_id_db(db_client, unit_id)
+    if unit_info and unit_info.get('property_id'):
+        insert_data['property_id'] = unit_info.get('property_id')
+    else:
+        logger.error(f"Could not get property_id for unit {unit_id} during maint request creation.")
+        # Decide if this is critical
+
+    # 3. Call DB function
+    created_request = await maintenance_db.create_request_db(db_client, insert_data)
+    if not created_request:
+        # DB function handles logging errors
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create maintenance request in database.")
+        
+    return created_request
+
+async def get_requests_for_unit(
+    db_client: Client, 
+    unit_id: str, 
+    user_id: str, 
+    skip: int, 
+    limit: int
+) -> List[Dict[str, Any]]:
+    """Get maintenance requests for a unit after authorization check."""
+    logger.info(f"Service: Getting maintenance requests for unit {unit_id} by user {user_id}")
+    # 1. Authorization Check
+    has_access = await check_unit_access(db_client, unit_id, user_id)
+    if not has_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized to view maintenance requests for this unit.")
+        
+    # 2. Call DB function
+    requests = await maintenance_db.get_requests_for_unit_db(db_client, unit_id, skip, limit)
+    return requests 

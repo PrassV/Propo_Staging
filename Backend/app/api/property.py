@@ -197,35 +197,17 @@ async def delete_property(
         logging.error(f"Error deleting property {property_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error deleting property: {str(e)}")
 
-# --- New Endpoints for Related Data ---
+# --- REMOVED OLD UNIT ENDPOINTS - Now handled by /units router --- #
 
-@router.get("/{property_id}/units", response_model=List[UnitDetails])
-async def get_property_units(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """Get a list of distinct unit details associated with this property."""
-    try:
-        # Corrected user_id access
-        user_id = current_user.get("id")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-            
-        units = await property_service.get_units_for_property(
-            db_client=db_client,
-            property_id=str(property_id),
-            owner_id=user_id # Pass corrected user_id
-        )
-        # Service layer handles ownership check and returns empty list if not authorized/found
-        return units
-    except HTTPException as http_exc:
-        logger.warning(f"HTTP exception fetching units for {property_id}: {http_exc.detail}")
-        raise http_exc # Re-raise specific HTTP exceptions
-    except Exception as e:
-        logger.error(f"Error getting units for {property_id}: {e}", exc_info=True)
-        # Ensure a generic message for unexpected errors
-        raise HTTPException(status_code=500, detail="Error retrieving units") # Removed str(e)
+# @router.get("/{property_id}/units", ...)
+# async def get_property_units(...):
+#     ...
+
+# @router.post("/{property_id}/units", ...)
+# async def create_property_unit(...):
+#    ...
+
+# --- Property Documents Endpoints --- #
 
 @router.get("/{property_id}/documents", response_model=List[PropertyDocument])
 async def get_property_documents(
@@ -274,86 +256,20 @@ async def add_property_document(
              raise HTTPException(status_code=404, detail="Property not found or not authorized to add document")
         return new_document
     except Exception as e:
-        logging.error(f"Error adding document for {property_id}: {e}", exc_info=True)
+        logger.error(f"Error adding document for {property_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error adding document: {str(e)}")
 
-@router.get("/{property_id}/tenants", response_model=List[Tenant]) # Use actual Tenant model
-async def get_property_tenants(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user), # Corrected type hint
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """Get tenants associated with this property."""
-    try:
-        # Corrected user_id access
-        user_id = current_user.get("id")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-            
-        tenants = await property_service.get_tenants_for_property(
-            db_client=db_client,
-            property_id=str(property_id),
-            owner_id=user_id # Pass corrected user_id
-        )
-        return tenants
-    except HTTPException as http_exc:
-        logger.warning(f"HTTP exception fetching tenants for {property_id}: {http_exc.detail}")
-        raise http_exc # Re-raise specific HTTP exceptions
-    except Exception as e:
-        logger.error(f"Error getting tenants for {property_id}: {e}", exc_info=True)
-        # Ensure a generic message for unexpected errors
-        raise HTTPException(status_code=500, detail="Error retrieving tenants") # Removed str(e)
+# --- REMOVED OLD TENANTS ENDPOINT --- #
+# @router.get("/{property_id}/tenants", ...)
+# async def get_property_tenants(...):
+#    ...
 
-# Example placeholder endpoint (replace with actual implementation)
-@router.get("/{property_id}/maintenance", response_model=List[MaintenanceRequest]) # Use actual MaintenanceRequest model
-async def get_property_maintenance(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: Dict[str, Any] = Depends(get_current_user), # Corrected type hint
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """Get maintenance requests associated with this property."""
-    try:
-        # Corrected user_id access
-        user_id = current_user.get("id")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-            
-        requests = await property_service.get_maintenance_requests_for_property(
-            db_client=db_client,
-            property_id=str(property_id),
-            owner_id=user_id # Pass corrected user_id
-        )
-        return requests
-    except HTTPException as http_exc:
-        logger.warning(f"HTTP exception fetching maintenance requests for {property_id}: {http_exc.detail}")
-        raise http_exc # Re-raise specific HTTP exceptions
-    except Exception as e:
-        logger.error(f"Error getting maintenance requests for {property_id}: {e}", exc_info=True)
-        # Ensure a generic message for unexpected errors
-        raise HTTPException(status_code=500, detail="Error retrieving maintenance requests") # Removed str(e)
+# --- REMOVED OLD MAINTENANCE ENDPOINT --- #
+# @router.get("/{property_id}/maintenance", ...)
+# async def get_property_maintenance(...):
+# ... rest of file ...
 
-# Example placeholder endpoint (replace with actual implementation)
-@router.get("/{property_id}/payments", response_model=List[Payment]) # Use actual Payment model
-async def get_property_payments(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """(Placeholder) Get payment history for this property."""
-    try:
-        # Replace with call to actual service function
-        payments = await property_service.get_payments_for_property(
-            db_client=db_client,
-            property_id=str(property_id),
-            owner_id=current_user.id
-        )
-        return payments
-    except Exception as e:
-        logging.error(f"Error getting payments for {property_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving payments: {str(e)}")
-
-# Placeholder for revenue - requires definition of what revenue means
-# Could be sum of payments, calculation based on leases, etc.
+# --- Property Revenue Endpoint (Placeholder) --- #
 @router.get("/{property_id}/revenue", response_model=Dict[str, Any]) # Define a proper response model
 async def get_property_revenue(
     property_id: uuid.UUID = Path(..., description="The property ID"),
@@ -693,48 +609,3 @@ async def delete_unit_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while deleting the image"
         )
-
-
-@router.post("/{property_id}/units", response_model=UnitDetails, status_code=status.HTTP_201_CREATED)
-async def create_property_unit(
-    property_id: uuid.UUID = Path(..., description="The property ID"),
-    unit_data: UnitCreate = Body(...),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
-):
-    """Create a new unit for a specific property."""
-    try:
-        user_id = current_user.get("id")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-
-        # Call the service function to create the unit (Corrected function name)
-        new_unit = await property_service.create_unit(
-            db_client=db_client,
-            property_id=str(property_id),
-            unit_data=unit_data,
-            owner_id=user_id
-        )
-
-        # Check the return value from the service
-        if new_unit is None:
-            # If service returns None, it implies property not found or user not authorized
-            # We should determine which error to raise. Let's assume 404 for now,
-            # but the service could be enhanced to return specific error codes/reasons.
-            logger.warning(f"Unit creation failed for property {property_id} by user {user_id}. Property not found or unauthorized.")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
-                                detail="Property not found or not authorized to add unit")
-        
-        # If successful, return the created unit data
-        return new_unit
-
-    except HTTPException as http_exc: 
-        # Re-raise known HTTP exceptions (like 401, 404, 403 from checks above or service)
-        logger.warning(f"HTTP exception creating unit for {property_id}: {http_exc.detail}")
-        raise http_exc
-    except Exception as e:
-        # Catch unexpected errors during the process
-        logger.error(f"Unexpected error creating unit for property {property_id}: {e}", exc_info=True)
-        # Return a generic 500 error
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                            detail="An unexpected error occurred while creating the unit.") 

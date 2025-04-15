@@ -7,7 +7,7 @@ from dateutil.relativedelta import relativedelta
 from postgrest.exceptions import APIError # Import APIError
 from fastapi import HTTPException, status
 
-from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails # Import new model
+from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails, UnitUpdate # Import new model
 from ..db import properties as property_db
 from ..config.settings import settings # Import settings for bucket name
 # Import other necessary services if needed for cross-service calls
@@ -687,3 +687,182 @@ async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
     except Exception as e:
         logger.error(f"Error deleting image from unit {unit_id}: {str(e)}", exc_info=True)
         return False 
+
+# --- Unit Specific Service Functions ---
+
+async def get_filtered_units(
+    db_client: Client,
+    user_id: str,
+    property_id: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """Fetch a list of units, filtered and authorized for the user."""
+    logger.info(f"Service: Fetching units for user {user_id}, property_filter={property_id}, status_filter={status}, skip={skip}, limit={limit}")
+    # Authorization is handled within the DB query by joining with properties table
+    try:
+        units = await property_db.get_filtered_units_db(
+            db_client=db_client,
+            owner_id=user_id, # Pass owner_id for filtering
+            property_id=property_id,
+            status=status,
+            skip=skip,
+            limit=limit
+        )
+        return units
+    except Exception as e:
+        logger.error(f"Service error fetching filtered units: {e}", exc_info=True)
+        return [] # Return empty list on error
+
+async def get_filtered_units_count(
+    db_client: Client,
+    user_id: str,
+    property_id: Optional[str] = None,
+    status: Optional[str] = None
+) -> int:
+    """Get the count of units matching filters and user authorization."""
+    logger.info(f"Service: Counting units for user {user_id}, property_filter={property_id}, status_filter={status}")
+    try:
+        count = await property_db.get_filtered_units_count_db(
+            db_client=db_client,
+            owner_id=user_id,
+            property_id=property_id,
+            status=status
+        )
+        return count
+    except Exception as e:
+        logger.error(f"Service error counting filtered units: {e}", exc_info=True)
+        return 0 # Return 0 on error
+
+# Placeholder function - will be called by GET /units/{unit_id}
+async def get_unit_details(
+    db_client: Client, 
+    unit_id: str, 
+    user_id: str
+) -> Optional[Dict[str, Any]]:
+    """Fetches details for a specific unit, ensuring user owns parent property."""
+    logger.info(f"Service: Fetching details for unit {unit_id} by user {user_id}")
+    try:
+        # Fetch the unit data first
+        unit_data = await property_db.get_unit_by_id_db(db_client, unit_id)
+        if not unit_data:
+            logger.warning(f"Service: Unit {unit_id} not found in DB.")
+            return None # Unit itself not found
+            
+        # Get the parent property ID from the unit data
+        parent_property_id = unit_data.get('property_id')
+        if not parent_property_id:
+            logger.error(f"Service: Unit {unit_id} is missing parent property_id.")
+            # This indicates a data integrity issue, treat as internal error maybe?
+            return None # Or raise 500?
+            
+        # Check if the user owns the parent property
+        # Assuming check_property_access exists and works correctly
+        has_access = await check_property_access(uuid.UUID(parent_property_id), user_id)
+        if not has_access:
+            logger.warning(f"Service: User {user_id} does not have access to property {parent_property_id} (parent of unit {unit_id}).")
+            return None # Authorization failed
+            
+        # User is authorized, return the unit data
+        logger.info(f"Service: Access granted for unit {unit_id}. Returning details.")
+        return unit_data
+        
+    except Exception as e:
+        logger.error(f"Service error getting unit details for {unit_id}: {e}", exc_info=True)
+        return None # Return None on unexpected service error 
+
+async def update_unit_details(
+    db_client: Client, 
+    unit_id: str, 
+    user_id: str,
+    update_data: UnitUpdate # Use the Pydantic model for input validation
+) -> Optional[Dict[str, Any]]:
+    """Updates details for a specific unit, ensuring user owns parent property."""
+    logger.info(f"Service: Updating unit {unit_id} by user {user_id}")
+    try:
+        # 1. Fetch unit first to get parent property_id for auth check
+        unit_data_db = await property_db.get_unit_by_id_db(db_client, unit_id)
+        if not unit_data_db:
+            logger.warning(f"Service: Unit {unit_id} not found for update.")
+            return None # Unit not found
+            
+        parent_property_id = unit_data_db.get('property_id')
+        if not parent_property_id:
+            logger.error(f"Service: Unit {unit_id} is missing parent property_id for auth check.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unit data integrity issue.")
+            
+        # 2. Check ownership of parent property
+        has_access = await check_property_access(uuid.UUID(parent_property_id), user_id)
+        if not has_access:
+            logger.warning(f"Service: User {user_id} does not have access to property {parent_property_id} to update unit {unit_id}.")
+            return None # Authorization failed
+            
+        # 3. Prepare update data (exclude unset fields)
+        update_dict = update_data.model_dump(exclude_unset=True)
+        if not update_dict:
+            logger.info("Service: No fields provided to update.")
+            return unit_data_db # Return existing data if nothing to update
+            
+        # 4. Call DB update function
+        updated_unit = await property_db.update_unit_db(db_client, unit_id, update_dict)
+        
+        if updated_unit is None:
+             # DB function returns None if update failed (e.g., RLS, not found again)
+             logger.error(f"Service: DB update failed for unit {unit_id}.")
+             # Raise 500 as auth passed, failure is unexpected
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update unit in database.")
+             
+        logger.info(f"Service: Successfully updated unit {unit_id}.")
+        return updated_unit
+        
+    except HTTPException as http_exc:
+         raise http_exc # Re-raise specific errors like 500
+    except Exception as e:
+        logger.error(f"Service error updating unit {unit_id}: {e}", exc_info=True)
+        # Raise 500 for other unexpected errors
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while updating the unit.") 
+
+async def delete_unit(
+    db_client: Client, 
+    unit_id: str, 
+    user_id: str
+) -> bool:
+    """Deletes a specific unit, ensuring user owns parent property."""
+    logger.info(f"Service: Deleting unit {unit_id} by user {user_id}")
+    try:
+        # 1. Fetch unit first to get parent property_id for auth check
+        unit_data_db = await property_db.get_unit_by_id_db(db_client, unit_id)
+        if not unit_data_db:
+            logger.warning(f"Service: Unit {unit_id} not found for deletion.")
+            return False # Unit not found, treat as non-failure? Or raise 404?
+            
+        parent_property_id = unit_data_db.get('property_id')
+        if not parent_property_id:
+            logger.error(f"Service: Unit {unit_id} is missing parent property_id for auth check.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unit data integrity issue.")
+            
+        # 2. Check ownership of parent property
+        has_access = await check_property_access(uuid.UUID(parent_property_id), user_id)
+        if not has_access:
+            logger.warning(f"Service: User {user_id} does not have access to property {parent_property_id} to delete unit {unit_id}.")
+            return False # Authorization failed
+            
+        # 3. Call DB delete function
+        deleted = await property_db.delete_unit_db(db_client, unit_id)
+        
+        if not deleted:
+             # DB function returns False if delete failed
+             logger.error(f"Service: DB delete failed for unit {unit_id}.")
+             # Raise 500 as auth passed, failure is unexpected
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete unit from database.")
+             
+        logger.info(f"Service: Successfully deleted unit {unit_id}.")
+        return True
+        
+    except HTTPException as http_exc:
+         raise http_exc # Re-raise specific errors
+    except Exception as e:
+        logger.error(f"Service error deleting unit {unit_id}: {e}", exc_info=True)
+        # Raise 500 for other unexpected errors
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while deleting the unit.") 
