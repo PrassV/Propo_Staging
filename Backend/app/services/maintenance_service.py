@@ -13,7 +13,6 @@ from ..models.maintenance import (
     MaintenanceUpdate, 
     MaintenanceComment,
     MaintenanceStatus,
-    MaintenanceRequestCreate
 )
 from ..services import notification_service
 
@@ -504,7 +503,7 @@ async def create_request_for_unit(
     db_client: Client, 
     unit_id: str, 
     user_id: str, 
-    request_data: MaintenanceRequestCreate
+    request_data: MaintenanceCreate
 ) -> Optional[Dict[str, Any]]:
     """Create maintenance request for a unit after authorization check."""
     logger.info(f"Service: Creating maintenance request for unit {unit_id} by user {user_id}")

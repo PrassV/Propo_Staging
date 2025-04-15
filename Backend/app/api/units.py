@@ -9,7 +9,7 @@ from pydantic import BaseModel
 # Assuming models are in app.models.property for now
 from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate # Import new payload model
 # Import Maintenance models
-from app.models.maintenance import MaintenanceRequest, MaintenanceRequestCreate
+from app.models.maintenance import MaintenanceRequest, MaintenanceCreate # Changed from MaintenanceRequestCreate
 # Import Tenant models
 from app.models.tenant import Tenant, TenantCreate
 # Import Payment model
@@ -247,7 +247,7 @@ async def delete_unit_endpoint(
 @router.post("/{unit_id}/maintenance_requests", response_model=MaintenanceRequest, status_code=status.HTTP_201_CREATED, summary="Create Maintenance Request for Unit")
 async def create_unit_maintenance_request(
     unit_id: uuid.UUID = Path(..., description="The ID of the unit requiring maintenance"),
-    request_data: MaintenanceRequestCreate = Body(...),
+    request_data: MaintenanceCreate = Body(...), # Changed type hint
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
