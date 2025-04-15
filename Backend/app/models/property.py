@@ -133,6 +133,76 @@ class UnitDetails(UnitBase):
     class Config:
         from_attributes = True
 
+class UnitUpdate(UnitBase):
+    # All fields optional for update
+    unit_number: Optional[str] = None
+    status: Optional[str] = None
+    bedrooms: Optional[int] = Field(None, ge=0)
+    bathrooms: Optional[float] = Field(None, ge=0)
+    area_sqft: Optional[int] = Field(None, ge=0)
+    rent: Optional[float] = Field(None, ge=0)
+    deposit: Optional[float] = Field(None, ge=0)
+
+# --- Amenity Models --- #
+
+class AmenityBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class AmenityCreate(AmenityBase):
+    # unit_id will be supplied by the path parameter
+    pass
+
+class AmenityUpdate(BaseModel):
+    # All fields optional for update
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class Amenity(AmenityBase):
+    id: uuid.UUID
+    unit_id: uuid.UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# --- End Amenity Models --- #
+
+# --- Unit Tax Models --- #
+
+class UnitTaxBase(BaseModel):
+    tax_type: str = Field(..., description="Type of tax (e.g., local, municipal)")
+    amount: float = Field(..., gt=0, description="Amount of the tax")
+    year: int = Field(..., description="The year the tax applies to")
+    payment_date: Optional[date] = None
+    status: str = Field("due", description="Status of the tax payment (e.g., due, paid, overdue)")
+    description: Optional[str] = None
+
+class UnitTaxCreate(UnitTaxBase):
+    # unit_id will be supplied by the path parameter
+    pass
+
+class UnitTaxUpdate(BaseModel):
+    # All fields optional for update
+    tax_type: Optional[str] = None
+    amount: Optional[float] = Field(None, gt=0)
+    year: Optional[int] = None
+    payment_date: Optional[date] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+
+class UnitTax(UnitTaxBase):
+    id: uuid.UUID
+    unit_id: uuid.UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# --- End Unit Tax Models --- #
+
 # --- Update PropertyDetails ---
 
 class PropertyDetails(Property): # New/Updated PropertyDetails model

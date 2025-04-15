@@ -7,7 +7,13 @@ from dateutil.relativedelta import relativedelta
 from postgrest.exceptions import APIError # Import APIError
 from fastapi import HTTPException, status
 
-from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails, UnitUpdate # Import new model
+from ..models.property import (
+    PropertyCreate, PropertyUpdate, Property, 
+    PropertyDocument, PropertyDocumentCreate, 
+    UnitCreate, UnitDetails, UnitUpdate,
+    Amenity, AmenityCreate, AmenityUpdate, # Added Amenity models
+    UnitTax, UnitTaxCreate, UnitTaxUpdate # Added UnitTax models
+)
 from ..db import properties as property_db
 from ..config.settings import settings # Import settings for bucket name
 # Import other necessary services if needed for cross-service calls
@@ -866,3 +872,168 @@ async def delete_unit(
         logger.error(f"Service error deleting unit {unit_id}: {e}", exc_info=True)
         # Raise 500 for other unexpected errors
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while deleting the unit.") 
+
+# --- Unit Amenity Service Functions --- #
+
+async def _check_unit_amenity_authorization(db_client: Client, unit_id: uuid.UUID, user_id: str) -> bool:
+    """Helper to check if user owns the parent property of the unit."""
+    parent_property_id = await property_db.get_parent_property_id_for_unit(db_client, unit_id)
+    if not parent_property_id:
+        # Unit not found implicitly denies access
+        logger.warning(f"Auth check failed: Unit {unit_id} not found.")
+        return False
+    property_owner = await property_db.get_property_owner(db_client, str(parent_property_id))
+    if not property_owner or property_owner != user_id:
+        logger.warning(f"Auth check failed: User {user_id} does not own property {parent_property_id} for unit {unit_id}.")
+        return False
+    return True
+
+async def get_unit_amenities(db_client: Client, unit_id: uuid.UUID, user_id: str) -> List[Amenity]:
+    """Get all amenities for a specific unit after checking authorization."""
+    if not await _check_unit_amenity_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view amenities for this unit.")
+    
+    amenity_dicts = await property_db.db_get_amenities_for_unit(db_client, unit_id)
+    return [Amenity(**data) for data in amenity_dicts]
+
+async def create_unit_amenity(db_client: Client, unit_id: uuid.UUID, user_id: str, amenity_data: AmenityCreate) -> Amenity:
+    """Create an amenity for a specific unit after checking authorization."""
+    if not await _check_unit_amenity_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add amenities to this unit.")
+
+    insert_data = amenity_data.model_dump()
+    insert_data['id'] = uuid.uuid4()
+    insert_data['unit_id'] = unit_id
+    insert_data['created_at'] = datetime.utcnow()
+    insert_data['updated_at'] = datetime.utcnow()
+
+    created_amenity_dict = await property_db.db_create_amenity_for_unit(db_client, insert_data)
+    if not created_amenity_dict:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create amenity in database.")
+    
+    return Amenity(**created_amenity_dict)
+
+async def update_unit_amenity(db_client: Client, unit_id: uuid.UUID, amenity_id: uuid.UUID, user_id: str, amenity_data: AmenityUpdate) -> Amenity:
+    """Update a specific amenity for a unit after checking authorization."""
+    if not await _check_unit_amenity_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update amenities for this unit.")
+    
+    # Verify amenity exists and belongs to the unit (optional, but good practice)
+    existing_amenity = await property_db.db_get_amenity_by_id(db_client, amenity_id)
+    if not existing_amenity or existing_amenity.get('unit_id') != str(unit_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Amenity not found for this unit.")
+
+    update_payload = amenity_data.model_dump(exclude_unset=True)
+    if not update_payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+        
+    update_payload['updated_at'] = datetime.utcnow()
+
+    updated_amenity_dict = await property_db.db_update_amenity(db_client, amenity_id, update_payload)
+    if not updated_amenity_dict:
+        # DB function logs errors
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update amenity.")
+
+    return Amenity(**updated_amenity_dict)
+
+async def delete_unit_amenity(db_client: Client, unit_id: uuid.UUID, amenity_id: uuid.UUID, user_id: str) -> None:
+    """Delete a specific amenity for a unit after checking authorization."""
+    if not await _check_unit_amenity_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete amenities for this unit.")
+
+    # Verify amenity exists and belongs to the unit before attempting delete
+    existing_amenity = await property_db.db_get_amenity_by_id(db_client, amenity_id)
+    if not existing_amenity or existing_amenity.get('unit_id') != str(unit_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Amenity not found for this unit.")
+
+    deleted = await property_db.db_delete_amenity(db_client, amenity_id)
+    if not deleted:
+        # DB function logs errors
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete amenity.")
+    
+    # No content to return on success
+    return None
+
+# --- End Unit Amenity Service Functions --- #
+
+# --- Unit Tax Service Functions --- #
+
+async def _check_unit_tax_authorization(db_client: Client, unit_id: uuid.UUID, user_id: str) -> bool:
+    """Helper to check if user owns the parent property of the unit."""
+    # Reusing the same logic as amenities authorization
+    return await _check_unit_amenity_authorization(db_client, unit_id, user_id)
+
+async def get_unit_taxes(db_client: Client, unit_id: uuid.UUID, user_id: str) -> List[UnitTax]:
+    """Get all tax records for a specific unit after checking authorization."""
+    if not await _check_unit_tax_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view taxes for this unit.")
+    
+    tax_dicts = await property_db.db_get_taxes_for_unit(db_client, unit_id)
+    return [UnitTax(**data) for data in tax_dicts]
+
+async def create_unit_tax(db_client: Client, unit_id: uuid.UUID, user_id: str, tax_data: UnitTaxCreate) -> UnitTax:
+    """Create a tax record for a specific unit after checking authorization."""
+    if not await _check_unit_tax_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add taxes for this unit.")
+
+    insert_data = tax_data.model_dump()
+    insert_data['id'] = uuid.uuid4()
+    insert_data['unit_id'] = unit_id
+    insert_data['created_at'] = datetime.utcnow()
+    insert_data['updated_at'] = datetime.utcnow()
+    # Convert date if present
+    if insert_data.get('payment_date'):
+        insert_data['payment_date'] = insert_data['payment_date'].isoformat()
+
+    created_tax_dict = await property_db.db_create_unit_tax(db_client, insert_data)
+    if not created_tax_dict:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create unit tax record in database.")
+    
+    return UnitTax(**created_tax_dict)
+
+async def update_unit_tax(db_client: Client, unit_id: uuid.UUID, tax_id: uuid.UUID, user_id: str, tax_data: UnitTaxUpdate) -> UnitTax:
+    """
+    Update a specific unit tax record after checking authorization.
+    """
+    if not await _check_unit_tax_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update taxes for this unit.")
+    
+    # Verify tax record exists and belongs to the unit
+    existing_tax = await property_db.db_get_unit_tax_by_id(db_client, tax_id)
+    if not existing_tax or existing_tax.get('unit_id') != str(unit_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit tax record not found for this unit.")
+
+    update_payload = tax_data.model_dump(exclude_unset=True)
+    if not update_payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+        
+    update_payload['updated_at'] = datetime.utcnow()
+    # Convert date if present
+    if update_payload.get('payment_date'):
+        update_payload['payment_date'] = update_payload['payment_date'].isoformat()
+
+    updated_tax_dict = await property_db.db_update_unit_tax(db_client, tax_id, update_payload)
+    if not updated_tax_dict:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update unit tax record.")
+
+    return UnitTax(**updated_tax_dict)
+
+async def delete_unit_tax(db_client: Client, unit_id: uuid.UUID, tax_id: uuid.UUID, user_id: str) -> None:
+    """
+    Delete a specific unit tax record after checking authorization.
+    """
+    if not await _check_unit_tax_authorization(db_client, unit_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete taxes for this unit.")
+
+    # Verify tax record exists and belongs to the unit
+    existing_tax = await property_db.db_get_unit_tax_by_id(db_client, tax_id)
+    if not existing_tax or existing_tax.get('unit_id') != str(unit_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit tax record not found for this unit.")
+
+    deleted = await property_db.db_delete_unit_tax(db_client, tax_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete unit tax record.")
+    
+    return None # Success
+
+# --- End Unit Tax Service Functions --- # 

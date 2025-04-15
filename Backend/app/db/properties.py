@@ -899,3 +899,234 @@ async def delete_unit_db(
     except Exception as e:
         logger.error(f"[db.delete_unit_db] Failed: {e}", exc_info=True)
         return False
+
+async def get_parent_property_id_for_unit(db_client: Client, unit_id: uuid.UUID) -> Optional[uuid.UUID]:
+    """
+    Finds the parent property ID for a given unit ID.
+
+    Args:
+        db_client: Authenticated Supabase client.
+        unit_id: The UUID of the unit.
+
+    Returns:
+        The UUID of the parent property, or None if not found or error.
+    """
+    try:
+        response = await db_client.table('units')\
+            .select('property_id')\
+            .eq('id', str(unit_id))\
+            .maybe_single()\
+            .execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching parent property for unit {unit_id}: {response.error.message}")
+            return None
+
+        if not response.data or not response.data.get('property_id'):
+            logger.warning(f"Could not find parent property_id for unit {unit_id}.")
+            return None
+
+        return uuid.UUID(response.data['property_id'])
+    except Exception as e:
+        logger.exception(f"Exception getting parent property ID for unit {unit_id}: {e}")
+        return None
+
+# --- Unit Amenity DB Functions --- #
+
+async def db_get_amenities_for_unit(db_client: Client, unit_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get all amenities associated with a specific unit.
+    """
+    try:
+        response = await db_client.table('unit_amenities')\
+            .select('*')\
+            .eq('unit_id', str(unit_id))\
+            .order('created_at', desc=False)\
+            .execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error getting amenities for unit {unit_id}: {response.error.message}")
+            return []
+        
+        return response.data or []
+    except Exception as e:
+        logger.exception(f"Error getting amenities for unit {unit_id}: {e}")
+        return []
+
+async def db_create_amenity_for_unit(db_client: Client, amenity_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Create a new amenity record linked to a unit.
+    Assumes amenity_data contains 'unit_id', 'name', etc.
+    """
+    try:
+        response = await db_client.table('unit_amenities').insert(amenity_data).execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error creating amenity: {response.error.message}")
+            return None
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.exception(f"Error creating amenity: {e}")
+        return None
+
+async def db_get_amenity_by_id(db_client: Client, amenity_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific amenity by its ID.
+    """
+    try:
+        response = await db_client.table('unit_amenities')\
+            .select('*')\
+            .eq('id', str(amenity_id))\
+            .maybe_single()\
+            .execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching amenity {amenity_id}: {response.error.message}")
+            return None
+        
+        return response.data or None
+    except Exception as e:
+        logger.exception(f"Error fetching amenity {amenity_id}: {e}")
+        return None
+
+async def db_update_amenity(db_client: Client, amenity_id: uuid.UUID, amenity_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Update an existing amenity record.
+    """
+    try:
+        response = await db_client.table('unit_amenities')\
+            .update(amenity_data)\
+            .eq('id', str(amenity_id))\
+            .execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error updating amenity {amenity_id}: {response.error.message}")
+            return None
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.exception(f"Error updating amenity {amenity_id}: {e}")
+        return None
+
+async def db_delete_amenity(db_client: Client, amenity_id: uuid.UUID) -> bool:
+    """
+    Delete an amenity record.
+    """
+    try:
+        response = await db_client.table('unit_amenities')\
+            .delete()\
+            .eq('id', str(amenity_id))\
+            .execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error deleting amenity {amenity_id}: {response.error.message}")
+            return False
+        
+        # Delete returns empty list on success, check if data is present (means error/unexpected)
+        return not response.data
+    except Exception as e:
+        logger.exception(f"Error deleting amenity {amenity_id}: {e}")
+        return False
+
+# --- End Unit Amenity DB Functions --- #
+
+# --- Unit Tax DB Functions --- #
+
+async def db_get_taxes_for_unit(db_client: Client, unit_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get all tax records associated with a specific unit.
+    """
+    try:
+        response = await db_client.table('unit_taxes') \
+            .select('*') \
+            .eq('unit_id', str(unit_id)) \
+            .order('year', desc=True).order('created_at', desc=True) \
+            .execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error getting taxes for unit {unit_id}: {response.error.message}")
+            return []
+        
+        return response.data or []
+    except Exception as e:
+        logger.exception(f"Error getting taxes for unit {unit_id}: {e}")
+        return []
+
+async def db_create_unit_tax(db_client: Client, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Create a new tax record linked to a unit.
+    Assumes tax_data contains 'unit_id', 'tax_type', 'amount', 'year' etc.
+    """
+    try:
+        response = await db_client.table('unit_taxes').insert(tax_data).execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error creating unit tax: {response.error.message}")
+            return None
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.exception(f"Error creating unit tax: {e}")
+        return None
+
+async def db_get_unit_tax_by_id(db_client: Client, tax_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific unit tax record by its ID.
+    """
+    try:
+        response = await db_client.table('unit_taxes') \
+            .select('*') \
+            .eq('id', str(tax_id)) \
+            .maybe_single() \
+            .execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching unit tax {tax_id}: {response.error.message}")
+            return None
+        
+        return response.data or None
+    except Exception as e:
+        logger.exception(f"Error fetching unit tax {tax_id}: {e}")
+        return None
+
+async def db_update_unit_tax(db_client: Client, tax_id: uuid.UUID, tax_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Update an existing unit tax record.
+    """
+    try:
+        response = await db_client.table('unit_taxes') \
+            .update(tax_data) \
+            .eq('id', str(tax_id)) \
+            .execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error updating unit tax {tax_id}: {response.error.message}")
+            return None
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.exception(f"Error updating unit tax {tax_id}: {e}")
+        return None
+
+async def db_delete_unit_tax(db_client: Client, tax_id: uuid.UUID) -> bool:
+    """
+    Delete a unit tax record.
+    """
+    try:
+        response = await db_client.table('unit_taxes') \
+            .delete() \
+            .eq('id', str(tax_id)) \
+            .execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error deleting unit tax {tax_id}: {response.error.message}")
+            return False
+        
+        # Delete returns empty list on success
+        return not response.data
+    except Exception as e:
+        logger.exception(f"Error deleting unit tax {tax_id}: {e}")
+        return False
+
+# --- End Unit Tax DB Functions --- #

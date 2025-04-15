@@ -1,13 +1,14 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import logging
 from datetime import datetime, date
 import uuid
 import calendar
+from fastapi import HTTPException, status
 
 from ..db import payment as payment_db
 from ..db import properties as property_db
 from ..db import tenants as tenant_db
-from ..models.payment import PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType
+from ..models.payment import PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType, Payment
 from . import notification_service # Import notification service
 
 logger = logging.getLogger(__name__)
@@ -499,3 +500,78 @@ async def check_and_notify_overdue_payments():
 # This function should select payments WHERE status IN ('pending', 'partially_paid') AND due_date < today
 
 # TODO: Integrate call to check_and_notify_overdue_payments with a scheduler (APScheduler, Celery Beat, etc.)
+
+# --- New Service Function ---
+async def get_payments_for_unit(
+    db_client: Any, # Note: db_client is not explicitly used here, relying on globally configured one in db modules
+    unit_id: uuid.UUID,
+    requesting_user_id: uuid.UUID,
+    skip: int,
+    limit: int
+) -> Tuple[List[Payment], int]:
+    """
+    Get payments associated with a specific unit, performing authorization.
+    Payments are associated via the tenant linked to the unit.
+
+    Args:
+        db_client: Supabase client (passed from API layer, might not be needed if db layer uses global).
+        unit_id: The ID of the unit.
+        requesting_user_id: The ID of the user making the request.
+        skip: Pagination skip.
+        limit: Pagination limit.
+
+    Returns:
+        Tuple containing a list of Payment objects and the total count.
+
+    Raises:
+        HTTPException: 403 if user is not authorized, 404 if unit not found,
+                       500 for other errors.
+    """
+    logger.info(f"Service: Attempting to get payments for unit {unit_id} by user {requesting_user_id}")
+    try:
+        # 1. Authorization Check (Simplified: user owns parent property)
+        #    A more robust check might verify if the user is the tenant of the unit.
+        parent_property_id = await property_db.get_parent_property_id_for_unit(db_client, unit_id)
+        if not parent_property_id:
+            logger.warning(f"Unit {unit_id} not found during payment fetch.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
+
+        property_owner = await property_db.get_property_owner(db_client, parent_property_id)
+        # TODO: Add check if requesting_user is the tenant of the unit
+        if not property_owner or property_owner != requesting_user_id:
+            logger.warning(f"User {requesting_user_id} does not own parent property {parent_property_id} of unit {unit_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view payments for this unit")
+
+        # 2. Find tenants associated with the unit
+        tenants_in_unit = await tenant_db.db_get_tenants_for_unit(unit_id)
+        if not tenants_in_unit:
+            logger.info(f"No tenants found for unit {unit_id}, returning no payments.")
+            return [], 0
+
+        # For simplicity, we'll get payments for the *first* tenant found.
+        # A more complex scenario might aggregate payments if multiple tenants can be linked.
+        target_tenant_id = tenants_in_unit[0].get('id')
+        if not target_tenant_id:
+            logger.error(f"Tenant record found for unit {unit_id} but missing ID.")
+            return [], 0
+
+        logger.info(f"Fetching payments for tenant {target_tenant_id} linked to unit {unit_id}")
+
+        # 3. Fetch payments for the tenant using the existing DB function
+        payments_list, total_count = await payment_db.get_payments(
+            tenant_id=str(target_tenant_id), # Filter by tenant ID
+            skip=skip,
+            limit=limit
+            # Add other filters (status, date range) if needed from API layer
+        )
+
+        # 4. Convert to Pydantic models
+        payments = [Payment(**data) for data in payments_list]
+        return payments, total_count
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in get_payments_for_unit service for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred fetching payments")
+# --- End New Service Function ---

@@ -223,6 +223,51 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         logger.exception(f"Error in delete_tenant service: {str(e)}")
         return False
 
+# --- New Service Function ---
+async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID) -> List[Tenant]:
+    """
+    Get tenants associated with a specific unit, performing authorization.
+
+    Args:
+        unit_id: The ID of the unit.
+        requesting_user_id: The ID of the user making the request.
+
+    Returns:
+        List of Tenant objects.
+
+    Raises:
+        HTTPException: 403 if user is not authorized, 404 if unit not found,
+                       500 for other errors.
+    """
+    logger.info(f"Service: Attempting to get tenants for unit {unit_id} by user {requesting_user_id}")
+    try:
+        # 1. Authorization Check: Does the requesting user own the parent property?
+        parent_property_id = await properties_db.get_property_id_for_unit(unit_id)
+        if not parent_property_id:
+            logger.warning(f"Unit {unit_id} not found during tenant fetch.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
+
+        property_owner = await properties_db.get_property_owner(parent_property_id)
+        if not property_owner or property_owner != requesting_user_id:
+            logger.warning(f"User {requesting_user_id} does not own parent property {parent_property_id} of unit {unit_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view tenants for this unit")
+
+        # 2. Fetch tenants from DB layer
+        tenant_dicts = await tenants_db.db_get_tenants_for_unit(unit_id)
+
+        # 3. Convert to Pydantic models
+        tenants = [Tenant(**data) for data in tenant_dicts]
+        logger.info(f"Found {len(tenants)} tenants for unit {unit_id}")
+        return tenants
+
+    except HTTPException as http_exc:
+        # Re-raise specific HTTP exceptions from authorization or DB layer
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in get_tenants_for_unit service for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+# --- End New Service Function ---
+
 # --- Tenant Invitation ---
 
 async def create_tenant_invitation(

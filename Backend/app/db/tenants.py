@@ -900,9 +900,58 @@ async def db_get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[st
         logger.exception(f"Exception occurred while fetching tenant for unit {unit_id}: {str(e)}")
         return None
 
+# --- New Function ---
+async def db_get_tenants_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get tenants associated with a specific unit via the property_tenants link.
+
+    Args:
+        unit_id: The ID of the unit.
+
+    Returns:
+        A list of tenant data dictionaries associated with the unit.
+    """
+    tenants = []
+    try:
+        # Find links for the unit
+        lease_response = await supabase_client.table('property_tenants') \
+            .select('tenant_id') \
+            .eq('unit_id', str(unit_id)) \
+            .execute()
+
+        if hasattr(lease_response, 'error') and lease_response.error:
+            logger.error(f"Error fetching leases for unit {unit_id}: {lease_response.error.message}")
+            return []
+
+        if not lease_response.data:
+            logger.info(f"No leases/tenants found linked to unit {unit_id}")
+            return []
+
+        tenant_ids = {link.get('tenant_id') for link in lease_response.data if link.get('tenant_id')}
+        if not tenant_ids:
+             return []
+
+        # Fetch details for each unique tenant ID found
+        for tenant_id_str in tenant_ids:
+            try:
+                 tenant_id_uuid = uuid.UUID(tenant_id_str)
+                 tenant_details = await get_tenant_by_id(tenant_id_uuid) # Reuse existing function
+                 if tenant_details:
+                     tenants.append(tenant_details)
+                 else:
+                     logger.warning(f"Found link for tenant {tenant_id_str} in unit {unit_id}, but failed to fetch tenant details.")
+            except ValueError:
+                 logger.warning(f"Invalid UUID format '{tenant_id_str}' found in property_tenants for unit {unit_id}")
+            except Exception as inner_e:
+                logger.error(f"Error fetching details for tenant {tenant_id_str} linked to unit {unit_id}: {inner_e}")
+
+        return tenants
+
+    except Exception as e:
+        logger.exception(f"Exception occurred while fetching tenants for unit {unit_id}: {str(e)}")
+        return []
+
 # --- Property-Tenant Link (Lease) Functions ---
-# (Currently lease logic is primarily in lease.py and tenant_service.py,
-# but we might add more specific DB functions here later if needed)
 
 # Example: Function to get all leases for a tenant (could be added)
 # async def get_leases_for_tenant(tenant_id: uuid.UUID): ...

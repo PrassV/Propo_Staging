@@ -7,19 +7,24 @@ from pydantic import BaseModel
 
 # Import models (adjust paths as needed)
 # Assuming models are in app.models.property for now
-from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload # Import new payload model
+from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate # Import new payload model
 # Import Maintenance models
 from app.models.maintenance import MaintenanceRequest, MaintenanceRequestCreate
 # Import Tenant models
 from app.models.tenant import Tenant, TenantCreate
 # Import Payment model
 from app.models.payment import Payment
+# Import Amenity models
 
 # Import services (adjust paths as needed)
 # Using property_service for now, might refactor later
 from app.services import property_service
 # Import Maintenance service
 from app.services import maintenance_service
+# Import Tenant service
+from app.services import tenant_service
+# Import Payment service
+from app.services import payment_service
 
 # Import dependencies (adjust paths as needed)
 from app.config.auth import get_current_user
@@ -284,25 +289,26 @@ async def list_unit_maintenance_requests(
     Requires authentication and authorization (user must own parent property or be tenant of unit).
     """
     logger.info(f"Endpoint: Listing maintenance requests for unit {unit_id}")
-    user_id = current_user.get("id")
-    if not user_id:
+    user_id_str = current_user.get("id")
+    if not user_id_str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
 
     try:
+        # Note: Service function expects string IDs
         requests = await maintenance_service.get_requests_for_unit(
             db_client=db_client, 
             unit_id=str(unit_id), 
-            user_id=user_id, 
+            user_id=user_id_str, 
             skip=pagination.skip, 
             limit=pagination.limit
         )
-        # Service layer raises HTTPException on error
+        # Service layer raises HTTPException on error/auth failure
         return requests
     except HTTPException as http_exc:
         # Re-raise errors (403, 500) from service layer
         raise http_exc
     except Exception as e:
-        logger.error(f"Endpoint error listing maintenance requests for unit {unit_id}: {e}", exc_info=True)
+        logger.exception(f"Endpoint error listing maintenance requests for unit {unit_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="An unexpected error occurred.")
 
@@ -320,16 +326,27 @@ async def list_unit_tenants(
     Requires authentication and authorization (user must own parent property).
     """
     logger.info(f"Endpoint: Listing tenants for unit {unit_id}")
-    user_id = current_user.get("id")
-    if not user_id:
+    user_id_str = current_user.get("id")
+    if not user_id_str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-
-    # TODO: Implement Service Call: tenant_service.get_tenants_for_unit(
-    #          db_client, unit_id=str(unit_id), user_id=user_id)
-    # TODO: Service needs to perform authorization check (user owns parent property?).
-    # TODO: Service needs to query based on unit_id (likely via leases table).
     
-    raise HTTPException(status_code=501, detail="List Unit Tenants Not Implemented")
+    try:
+        user_id = uuid.UUID(user_id_str)
+        tenants = await tenant_service.get_tenants_for_unit(
+            unit_id=unit_id, 
+            requesting_user_id=user_id
+        )
+        # Service layer handles exceptions and authorization
+        return tenants
+    except HTTPException as http_exc:
+        # Re-raise exceptions from the service layer (403, 404, 500)
+        raise http_exc
+    except ValueError: # Catch UUID conversion error
+         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID format in token")
+    except Exception as e:
+        # Catch-all for unexpected errors
+        logger.exception(f"Unexpected error in list_unit_tenants endpoint for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
 
 @router.post("/{unit_id}/tenants", response_model=Tenant, status_code=status.HTTP_201_CREATED, summary="Assign Tenant to Unit")
 async def assign_tenant_to_unit(
@@ -371,16 +388,218 @@ async def list_unit_payments(
     Requires authentication and authorization (user must own parent property or be tenant of unit).
     """
     logger.info(f"Endpoint: Listing payments for unit {unit_id}")
-    user_id = current_user.get("id")
-    if not user_id:
+    user_id_str = current_user.get("id")
+    if not user_id_str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
 
-    # TODO: Implement Service Call: payment_service.get_payments_for_unit(
-    #          db_client, unit_id=str(unit_id), user_id=user_id, 
-    #          skip=pagination.skip, limit=pagination.limit)
-    # TODO: Service needs to perform authorization check (user owns parent property OR is tenant?).
-    # TODO: Service needs to query payments linked to the unit (e.g., via leases associated with the unit).
-    
-    raise HTTPException(status_code=501, detail="List Unit Payments Not Implemented")
+    try:
+        user_id = uuid.UUID(user_id_str)
+        # Note: Service function returns tuple (items, total_count), but endpoint model expects List[Payment]
+        payments_list, _ = await payment_service.get_payments_for_unit(
+            db_client=db_client, 
+            unit_id=unit_id, 
+            requesting_user_id=user_id,
+            skip=pagination.skip,
+            limit=pagination.limit
+        )
+        # Service layer handles exceptions and authorization
+        return payments_list # Return only the list part
+    except HTTPException as http_exc:
+        # Re-raise errors (403, 404, 500) from service layer
+        raise http_exc
+    except ValueError: # Catch UUID conversion error
+         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID format in token")
+    except Exception as e:
+        # Catch-all for unexpected errors
+        logger.exception(f"Unexpected error in list_unit_payments endpoint for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+# --- Unit Amenities Endpoints --- #
+
+@router.get("/{unit_id}/amenities", response_model=List[Amenity], summary="List Amenities for Unit")
+async def list_unit_amenities(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    List amenities associated with a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        amenities = await property_service.get_unit_amenities(db_client, unit_id, user_id_str)
+        return amenities
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error listing amenities for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.post("/{unit_id}/amenities", response_model=Amenity, status_code=status.HTTP_201_CREATED, summary="Add Amenity to Unit")
+async def add_unit_amenity(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    amenity_data: AmenityCreate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Add a new amenity to a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        created_amenity = await property_service.create_unit_amenity(db_client, unit_id, user_id_str, amenity_data)
+        return created_amenity
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error creating amenity for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.put("/{unit_id}/amenities/{amenity_id}", response_model=Amenity, summary="Update Amenity for Unit")
+async def update_unit_amenity_endpoint(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    amenity_id: uuid.UUID = Path(..., description="The ID of the amenity to update"),
+    amenity_data: AmenityUpdate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Update an existing amenity for a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        updated_amenity = await property_service.update_unit_amenity(db_client, unit_id, amenity_id, user_id_str, amenity_data)
+        return updated_amenity
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error updating amenity {amenity_id} for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.delete("/{unit_id}/amenities/{amenity_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Amenity from Unit")
+async def delete_unit_amenity_endpoint(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    amenity_id: uuid.UUID = Path(..., description="The ID of the amenity to delete"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Delete an amenity from a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        await property_service.delete_unit_amenity(db_client, unit_id, amenity_id, user_id_str)
+        return None # Return None for 204 No Content
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error deleting amenity {amenity_id} for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+# --- Unit Taxes Endpoints --- #
+
+@router.get("/{unit_id}/taxes", response_model=List[UnitTax], summary="List Taxes for Unit")
+async def list_unit_taxes(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    List tax records associated with a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        taxes = await property_service.get_unit_taxes(db_client, unit_id, user_id_str)
+        return taxes
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error listing taxes for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.post("/{unit_id}/taxes", response_model=UnitTax, status_code=status.HTTP_201_CREATED, summary="Add Tax Record to Unit")
+async def add_unit_tax(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    tax_data: UnitTaxCreate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Add a new tax record to a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        created_tax = await property_service.create_unit_tax(db_client, unit_id, user_id_str, tax_data)
+        return created_tax
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error creating tax record for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.put("/{unit_id}/taxes/{tax_id}", response_model=UnitTax, summary="Update Tax Record for Unit")
+async def update_unit_tax_endpoint(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    tax_id: uuid.UUID = Path(..., description="The ID of the tax record to update"),
+    tax_data: UnitTaxUpdate = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Update an existing tax record for a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        updated_tax = await property_service.update_unit_tax(db_client, unit_id, tax_id, user_id_str, tax_data)
+        return updated_tax
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error updating tax record {tax_id} for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.delete("/{unit_id}/taxes/{tax_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Tax Record from Unit")
+async def delete_unit_tax_endpoint(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    tax_id: uuid.UUID = Path(..., description="The ID of the tax record to delete"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Delete a tax record from a specific unit.
+    Requires authentication and authorization (user must own parent property).
+    """
+    user_id_str = current_user.get("id")
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    try:
+        await property_service.delete_unit_tax(db_client, unit_id, tax_id, user_id_str)
+        return None # Return None for 204 No Content
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Endpoint error deleting tax record {tax_id} for unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
 
 # Add other endpoints here following the plan...
