@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 import uuid
 from fastapi import HTTPException, status
+from supabase import Client
 
 from ..db import maintenance as maintenance_db
 from ..db import vendor as vendor_db
