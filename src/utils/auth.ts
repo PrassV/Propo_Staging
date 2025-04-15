@@ -1,7 +1,7 @@
 import api from '@/api'; // Use central API client
 import toast from 'react-hot-toast';
 // Import types from central location
-import { LoginRequest, LoginResponse } from '@/api/types'; 
+import { LoginRequest } from '@/api/types'; // Removed unused LoginResponse import
 
 // Removed redundant LoginData interface, use LoginRequest directly
 
@@ -12,7 +12,7 @@ interface SignupData {
   email: string;
   phone?: string;
   password: string;
-  // Revert back to user_type as expected by /auth/register endpoint
+  // user_type should align with what /auth/signup expects (often handled via profile)
   user_type: 'owner' | 'tenant'; 
 }
 
@@ -37,22 +37,16 @@ export const handleLogin = async ({ email, password }: LoginRequest) => {
 // Refactor handleSignup to properly update auth context
 export const handleSignup = async (signupData: SignupData) => {
   try {
-    // Call the register service function - this returns user and stores tokens
-    const response = await api.auth.register(signupData);
-    
-    // Create a valid login response object with the user and token
-    const loginResponse: LoginResponse = {
-      access_token: localStorage.getItem('token') || '', // Get the token that was stored by register
-      refresh_token: localStorage.getItem('refreshToken') || '',
-      token_type: 'bearer',
-      expires_in: 0, // Default value
-      user: response
-    };
-    
+    // Call the register service function - this now returns the full LoginResponse
+    const loginResponse = await api.auth.register(signupData); 
+
+    // No need to manually create LoginResponse, api.auth.register already returns it
+    // and handles token storage.
+
     toast.success('Successfully signed up!');
-    
-    // Return the complete data including tokens
-    return { success: true, data: loginResponse };
+
+    // Return the complete data including tokens and user profile
+    return { success: true, data: loginResponse }; // Return the response directly
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Signup failed due to an unexpected error';
     toast.error(message);

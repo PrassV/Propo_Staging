@@ -8,7 +8,9 @@ export const login = async (credentials: LoginRequest): Promise<LoginResponse> =
   
   // Store the tokens
   storeToken(response.data.access_token);
-  storeRefreshToken(response.data.refresh_token);
+  if (response.data.refresh_token) {
+    storeRefreshToken(response.data.refresh_token);
+  }
   
   return response.data;
 };
@@ -21,19 +23,16 @@ export const register = async (userData: {
   last_name: string;
   phone?: string;
   user_type: 'owner' | 'tenant';
-}): Promise<UserProfile> => {
-  // The actual response structure matches LoginResponse
-  const response = await apiClient.post<LoginResponse>('/auth/register', userData);
+}): Promise<LoginResponse> => {
+  const response = await apiClient.post<LoginResponse>('/auth/signup', userData);
   
   // Store tokens exactly like we do in the login function
-  if (response.data.access_token) {
-    storeToken(response.data.access_token);
-    if (response.data.refresh_token) {
-      storeRefreshToken(response.data.refresh_token);
-    }
+  storeToken(response.data.access_token);
+  if (response.data.refresh_token) {
+    storeRefreshToken(response.data.refresh_token);
   }
   
-  return response.data.user;
+  return response.data;
 };
 
 // Get current user profile
@@ -78,11 +77,16 @@ export const updateUserProfile = async (profileData: Partial<UserProfile>): Prom
       let errorMessage = 'Failed to update profile';
       if (fallbackError && typeof fallbackError === 'object') {
         if ('response' in fallbackError && fallbackError.response) {
-          const responseData = fallbackError.response as { data?: any; status?: number };
-          if (responseData.data && typeof responseData.data === 'object' && 'detail' in responseData.data) {
-            errorMessage = `Server error: ${responseData.data.detail}`;
+          // Use unknown and type guarding instead of any
+          const response = fallbackError.response as { data?: unknown; status?: number }; 
+          if (response.data && 
+              typeof response.data === 'object' && 
+              response.data !== null && 
+              'detail' in response.data && 
+              typeof (response.data as { detail: unknown }).detail === 'string') { 
+            errorMessage = `Server error: ${(response.data as { detail: string }).detail}`;
           } else {
-            errorMessage = `Server error (${responseData.status || 'unknown'})`;
+            errorMessage = `Server error (${response.status || 'unknown'})`;
           }
         } else if ('message' in fallbackError) {
           errorMessage = `Network error: ${(fallbackError as Error).message}`;

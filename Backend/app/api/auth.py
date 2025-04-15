@@ -213,24 +213,6 @@ async def signup(signup_data: UserSignup):
             detail=str(e)
         )
 
-# Add an alias for the register endpoint with the same implementation
-@router.post("/register", response_model=TokenResponse)
-async def register(signup_data: UserSignup):
-    """
-    Register endpoint (alias for signup) that uses Supabase authentication.
-    
-    Args:
-        signup_data: The signup data
-        
-    Returns:
-        JSON with access token and user info
-        
-    Raises:
-        HTTPException: If signup fails
-    """
-    # Reuse the signup implementation
-    return await signup(signup_data)
-
 @router.post("/logout")
 async def logout(current_user: Dict[str, Any] = Depends(get_current_user)):
     """

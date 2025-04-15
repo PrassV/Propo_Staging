@@ -82,7 +82,7 @@ def test_auth_endpoints():
     
     # Test registration
     try:
-        response = session.post(f"{BASE_URL}/auth/register", json=TEST_USER_DATA)
+        response = session.post(f"{BASE_URL}/auth/signup", json=TEST_USER_DATA)
         if response.status_code in [200, 201]:
             print_result("User registration", "PASS")
             auth_token = response.json().get("access_token")
