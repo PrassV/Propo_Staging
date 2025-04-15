@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import uuid
 from supabase import Client # Import Client type
 from dateutil.relativedelta import relativedelta
+from postgrest.exceptions import APIError # Import APIError
+from fastapi import HTTPException, status
 
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate, UnitDetails # Import new model
 from ..db import properties as property_db
@@ -279,33 +281,58 @@ async def get_revenue_for_property(db_client: Client, property_id: str, owner_id
     return {"calculated_revenue": 0.00} # Placeholder response 
 
 async def create_unit(db_client: Client, property_id: str, unit_data: UnitCreate, owner_id: str) -> Optional[UnitDetails]:
-    """Create a new unit for a property after verifying ownership."""
+    """Create a new unit for a property after verifying ownership.
+    Raises HTTPException(409) if unit number already exists.
+    Returns None if property not found or user not authorized.
+    """
     try:
-        # 1. Verify property ownership
+        # Verify property ownership first
         existing_property = await property_db.get_property_by_id(db_client, property_id)
         if not existing_property or existing_property.get("owner_id") != owner_id:
             logger.warning(f"User {owner_id} unauthorized or property {property_id} not found for creating unit.")
-            return None
+            return None # Indicate failure due to auth/not found
 
-        # 2. Prepare data for insertion
-        insert_data = unit_data.dict(exclude_unset=True)
+        # Prepare data for insertion
+        insert_data = unit_data.dict()
+        insert_data["id"] = str(uuid.uuid4())
         insert_data["property_id"] = property_id
-        # ID, created_at, updated_at are handled by DB defaults/triggers
+        # Ensure correct types if needed, e.g., insert_data['bedrooms'] = int(insert_data['bedrooms'])
 
-        # 3. Call DB function to insert
-        created_unit_dict = await property_db.create_unit(db_client, insert_data)
+        # Call the database function to insert the unit
+        try:
+            created_unit_data = await property_db.create_unit(db_client, insert_data)
+        except APIError as db_error:
+            # Check if it's a unique constraint violation (code 23505)
+            if db_error.code == '23505':
+                logger.warning(f"Duplicate unit number conflict for property {property_id}. Unit data: {insert_data}")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, 
+                                    detail="A unit with this number already exists for this property.")
+            else:
+                # Re-raise other database errors
+                logger.error(f"Database APIError creating unit for property {property_id}: {db_error}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                                    detail=f"Database error creating unit: {db_error.message}")
+        except Exception as db_exc: # Catch other potential DB layer errors
+            logger.error(f"Non-APIError in DB layer creating unit for property {property_id}: {db_exc}", exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                                    detail="An unexpected database error occurred while creating the unit.")
 
-        if not created_unit_dict:
-            logger.error(f"Failed to create unit in DB for property {property_id}")
-            return None
+        if created_unit_data:
+            return UnitDetails(**created_unit_data)
+        else:
+            # This case might indicate the DB function returned None without an exception
+            logger.error(f"DB layer returned None without exception for unit creation, property {property_id}.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                                detail="Unit creation failed unexpectedly after database operation.")
 
-        # 4. Return as Pydantic model (optional, but good practice)
-        # Assuming UnitDetails model exists and matches the structure
-        return UnitDetails(**created_unit_dict)
-
+    except HTTPException as http_exc: # Re-raise specific HTTP exceptions (like the 409)
+        raise http_exc 
     except Exception as e:
-        logger.error(f"Error in property_service.create_unit: {str(e)}", exc_info=True)
-        return None 
+        # Catch truly unexpected errors in the service logic itself
+        logger.error(f"Unexpected error in create_unit service for property {property_id}: {e}", exc_info=True)
+        # Raise a generic 500, as the endpoint handler will catch it.
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                            detail="An unexpected error occurred in the unit creation service.")
 
 # Check if a user has access to a property
 async def check_property_access(property_id: uuid.UUID, user_id: str) -> bool:
