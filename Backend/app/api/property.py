@@ -277,45 +277,60 @@ async def add_property_document(
         logging.error(f"Error adding document for {property_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error adding document: {str(e)}")
 
-# Example placeholder endpoint (replace with actual implementation)
 @router.get("/{property_id}/tenants", response_model=List[Tenant]) # Use actual Tenant model
 async def get_property_tenants(
     property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user), # Corrected type hint
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
-    """(Placeholder) Get tenants associated with this property."""
+    """Get tenants associated with this property."""
     try:
-        # Replace with call to actual service function
+        # Corrected user_id access
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+            
         tenants = await property_service.get_tenants_for_property(
             db_client=db_client,
             property_id=str(property_id),
-            owner_id=current_user.id
+            owner_id=user_id # Pass corrected user_id
         )
         return tenants
+    except HTTPException as http_exc:
+        logger.warning(f"HTTP exception fetching tenants for {property_id}: {http_exc.detail}")
+        raise http_exc # Re-raise specific HTTP exceptions
     except Exception as e:
-        logging.error(f"Error getting tenants for {property_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving tenants: {str(e)}")
+        logger.error(f"Error getting tenants for {property_id}: {e}", exc_info=True)
+        # Ensure a generic message for unexpected errors
+        raise HTTPException(status_code=500, detail="Error retrieving tenants") # Removed str(e)
 
 # Example placeholder endpoint (replace with actual implementation)
 @router.get("/{property_id}/maintenance", response_model=List[MaintenanceRequest]) # Use actual MaintenanceRequest model
 async def get_property_maintenance(
     property_id: uuid.UUID = Path(..., description="The property ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user), # Corrected type hint
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
-    """(Placeholder) Get maintenance requests for this property."""
+    """Get maintenance requests associated with this property."""
     try:
-        # Replace with call to actual service function
-        requests = await property_service.get_maintenance_for_property(
+        # Corrected user_id access
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+            
+        requests = await property_service.get_maintenance_requests_for_property(
             db_client=db_client,
             property_id=str(property_id),
-            owner_id=current_user.id
+            owner_id=user_id # Pass corrected user_id
         )
         return requests
+    except HTTPException as http_exc:
+        logger.warning(f"HTTP exception fetching maintenance requests for {property_id}: {http_exc.detail}")
+        raise http_exc # Re-raise specific HTTP exceptions
     except Exception as e:
-        logging.error(f"Error getting maintenance for {property_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving maintenance requests: {str(e)}")
+        logger.error(f"Error getting maintenance requests for {property_id}: {e}", exc_info=True)
+        # Ensure a generic message for unexpected errors
+        raise HTTPException(status_code=500, detail="Error retrieving maintenance requests") # Removed str(e)
 
 # Example placeholder endpoint (replace with actual implementation)
 @router.get("/{property_id}/payments", response_model=List[Payment]) # Use actual Payment model
