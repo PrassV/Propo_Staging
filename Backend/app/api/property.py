@@ -708,8 +708,8 @@ async def create_property_unit(
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
 
-        # Call the service function to create the unit
-        new_unit = await property_service.create_unit_for_property(
+        # Call the service function to create the unit (Corrected function name)
+        new_unit = await property_service.create_unit(
             db_client=db_client,
             property_id=str(property_id),
             unit_data=unit_data,
