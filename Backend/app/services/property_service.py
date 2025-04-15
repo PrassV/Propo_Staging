@@ -201,15 +201,16 @@ async def upload_property_image(property_id: str, image_url: str, is_primary: bo
 
 # --- New Service Functions ---
 
-async def get_units_for_property(db_client: Client, property_id: str, owner_id: str) -> List[str]: # Add client
-    """Get distinct unit numbers for a specific property after verifying ownership."""
+async def get_units_for_property(db_client: Client, property_id: str, owner_id: str) -> List[Dict[str, Any]]: # Changed return type hint
+    """Get unit details for a specific property after verifying ownership."""
     # Ownership check might be redundant if RLS SELECT policy is effective
     existing_property = await property_db.get_property_by_id(db_client, property_id)
     if not existing_property or existing_property.get("owner_id") != owner_id:
         logger.warning(f"User {owner_id} unauthorized or property {property_id} not found for units lookup.")
         return [] 
 
-    return await property_db.get_units_for_property(db_client, property_id) # Pass client
+    # DB function now returns List[Dict[str, Any]]
+    return await property_db.get_units_for_property(db_client, property_id)
 
 async def get_documents_for_property(db_client: Client, property_id: str, owner_id: str) -> List[Dict[str, Any]]: # Add client
     """Get documents for a specific property after verifying ownership."""

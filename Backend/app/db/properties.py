@@ -273,23 +273,20 @@ async def delete_property(db_client: Client, property_id: str) -> bool:
 
 # --- Update New Functions ---
 
-async def get_units_for_property(db_client: Client, property_id: str) -> List[str]:
-    """Get distinct unit numbers associated with a property from the property_tenants table."""
+async def get_units_for_property(db_client: Client, property_id: str) -> List[Dict[str, Any]]:
+    """Get a list of all units (full details) associated with this property."""
     try:
-        response = await db_client.table('property_tenants').select('unit_number').eq('property_id', property_id).execute()
-        
-        if hasattr(response, 'error') and response.error:
-            logger.error(f"Error fetching units for property {property_id}: {response.error.message}")
+        response = await db_client.table('units')\
+                                  .select('*')\
+                                  .eq('property_id', property_id)\
+                                  .execute()
+        if response.data:
+            return response.data # Returns list of dictionaries
+        else:
+            logger.warning(f"[db.get_units_for_property] No units found for property {property_id}")
             return []
-        
-        if not hasattr(response, 'data') or not response.data:
-            return []
-        
-        distinct_units = list(set(item['unit_number'] for item in response.data if item.get('unit_number')))
-        return distinct_units
-        
     except Exception as e:
-        logger.error(f"Failed to get units for property {property_id}: {str(e)}", exc_info=True)
+        logger.error(f"[db.get_units_for_property] Failed: {e}", exc_info=True)
         return []
 
 async def get_documents_for_property(db_client: Client, property_id: str) -> List[Dict[str, Any]]:
