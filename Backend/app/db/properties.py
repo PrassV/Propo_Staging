@@ -276,10 +276,11 @@ async def delete_property(db_client: Client, property_id: str) -> bool:
 async def get_units_for_property(db_client: Client, property_id: str) -> List[Dict[str, Any]]:
     """Get a list of all units (full details) associated with this property."""
     try:
-        response = await db_client.table('units')\
-                                  .select('*')\
-                                  .eq('property_id', property_id)\
-                                  .execute()
+        # Remove await from execute() based on TypeError
+        response = db_client.table('units')\
+                          .select('*')\
+                          .eq('property_id', property_id)\
+                          .execute()
         if response.data:
             return response.data # Returns list of dictionaries
         else:
