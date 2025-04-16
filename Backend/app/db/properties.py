@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 from supabase import Client
 import json
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate # Import UnitCreate
+from ..config.database import supabase_client # Import the global client
 
 logger = logging.getLogger(__name__)
 
@@ -900,19 +901,19 @@ async def delete_unit_db(
         logger.error(f"[db.delete_unit_db] Failed: {e}", exc_info=True)
         return False
 
-async def get_parent_property_id_for_unit(db_client: Client, unit_id: uuid.UUID) -> Optional[uuid.UUID]:
+async def get_parent_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:
     """
     Finds the parent property ID for a given unit ID.
 
     Args:
-        db_client: Authenticated Supabase client.
         unit_id: The UUID of the unit.
 
     Returns:
         The UUID of the parent property, or None if not found or error.
     """
     try:
-        response = await db_client.table('units')\
+        # Use the imported global client
+        response = await supabase_client.table('units')\
             .select('property_id')\
             .eq('id', str(unit_id))\
             .maybe_single()\
