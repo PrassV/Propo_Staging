@@ -242,7 +242,7 @@ async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID
     logger.info(f"Service: Attempting to get tenants for unit {unit_id} by user {requesting_user_id}")
     try:
         # 1. Authorization Check: Does the requesting user own the parent property?
-        parent_property_id = await properties_db.get_property_id_for_unit(unit_id)
+        parent_property_id = await properties_db.get_parent_property_id_for_unit(unit_id)
         if not parent_property_id:
             logger.warning(f"Unit {unit_id} not found during tenant fetch.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
