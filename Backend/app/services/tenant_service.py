@@ -29,7 +29,8 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
     # Option 2: Property owner/manager accessing a tenant linked to their property
     linked_properties = await tenants_db.get_property_links_for_tenant(tenant_id)
     for link in linked_properties:
-        property_owner = await properties_db.get_property_owner(link["property_id"])
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
         if property_owner == requesting_user_id:
             return True # User owns a property this tenant is linked to
 
@@ -88,7 +89,9 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
     """
     try:
         # 1. Check if property exists and creator owns it
-        property_owner = await properties_db.get_property_owner(tenant_data.property_id)
+        # Get db_client from the imported global client
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, tenant_data.property_id)
         if not property_owner:
             logger.error(f"Property not found: {tenant_data.property_id}")
             return None
@@ -195,7 +198,8 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         can_delete = False
         owned_property_links = []
         for link in linked_properties:
-            property_owner = await properties_db.get_property_owner(link["property_id"])
+            from ..config.database import supabase_client as db_client
+            property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
             if property_owner == requesting_user_id:
                 can_delete = True
                 owned_property_links.append(link["id"])
@@ -248,7 +252,8 @@ async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID
             logger.warning(f"Unit {unit_id} not found during tenant fetch.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
 
-        property_owner = await properties_db.get_property_owner(parent_property_id)
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, parent_property_id)
         if not property_owner or property_owner != requesting_user_id:
             logger.warning(f"User {requesting_user_id} does not own parent property {parent_property_id} of unit {unit_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view tenants for this unit")
@@ -367,7 +372,8 @@ async def create_tenant_invitation(
     """
     try:
         # 1. Check if owner actually owns the property
-        property_owner = await properties_db.get_property_owner(invitation_data.property_id)
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, invitation_data.property_id)
         if not property_owner or property_owner != owner_id:
             logger.error(f"User {owner_id} does not own property {invitation_data.property_id} for invitation.")
             return None
@@ -472,7 +478,8 @@ async def can_access_lease(lease_id: uuid.UUID, requesting_user_id: uuid.UUID) -
             return False
 
         # Get the property owner
-        property_owner = await properties_db.get_property_owner(lease.get('property_id'))
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, lease.get('property_id'))
         if property_owner == requesting_user_id:
             return True
 
@@ -546,7 +553,8 @@ async def delete_lease(lease_id: uuid.UUID) -> bool:
 async def get_property_owner(property_id: uuid.UUID) -> Optional[str]:
     """Get the owner ID of a property."""
     try:
-        owner_id = await properties_db.get_property_owner(property_id)
+        from ..config.database import supabase_client as db_client
+        owner_id = await properties_db.get_property_owner(db_client, property_id)
         return owner_id
     except Exception as e:
         logger.error(f"Error in get_property_owner service: {str(e)}")
