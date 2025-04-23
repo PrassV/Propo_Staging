@@ -328,7 +328,7 @@ async def add_document_to_property(db_client: Client, document_data: Dict[str, A
 async def get_property_owner(db_client: Client, property_id: str) -> Optional[str]:
     """Get the owner_id for a specific property."""
     try:
-        response = await db_client.table('properties').select('owner_id').eq('id', property_id).maybe_single().execute()
+        response = db_client.table('properties').select('owner_id').eq('id', property_id).maybe_single().execute()
         
         if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching owner for property {property_id}: {response.error.message}")
