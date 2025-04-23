@@ -243,7 +243,7 @@ async def update_property(db_client: Client, property_id: str, property_data: Di
         if not hasattr(response, 'data'):
              logger.error(f"Error updating property: No data attribute in response")
              return None
-            
+             
         return response.data[0] if response.data else None 
     except Exception as e:
         logger.error(f"Failed to update property {property_id}: {str(e)}", exc_info=True)
@@ -912,8 +912,8 @@ async def get_parent_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.U
         The UUID of the parent property, or None if not found or error.
     """
     try:
-        # Use the imported global client
-        response = await supabase_client.table('units')\
+        # Use the imported global client (synchronous execute)
+        response = supabase_client.table('units')\
             .select('property_id')\
             .eq('id', str(unit_id))\
             .maybe_single()\
@@ -923,7 +923,7 @@ async def get_parent_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.U
             logger.error(f"Error fetching parent property for unit {unit_id}: {response.error.message}")
             return None
 
-        if not response.data or not response.data.get('property_id'):
+        if not hasattr(response, 'data') or not response.data or not response.data.get('property_id'):
             logger.warning(f"Could not find parent property_id for unit {unit_id}.")
             return None
 
