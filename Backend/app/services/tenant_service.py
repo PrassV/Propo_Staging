@@ -1,9 +1,10 @@
 from typing import List, Dict, Any, Optional, Tuple
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import uuid
 import secrets # For invitation tokens
 from fastapi import HTTPException, status
+from supabase import Client  # Add missing import for Supabase Client
 
 from ..models.tenant import (
     TenantCreate, TenantUpdate, Tenant,
