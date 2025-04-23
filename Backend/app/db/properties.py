@@ -328,13 +328,25 @@ async def add_document_to_property(db_client: Client, document_data: Dict[str, A
 async def get_property_owner(db_client: Client, property_id: str) -> Optional[str]:
     """Get the owner_id for a specific property."""
     try:
+        # Ensure property_id is a string
+        if isinstance(property_id, uuid.UUID):
+            property_id = str(property_id)
+            
+        logger.debug(f"Fetching owner for property ID: {property_id}")
+        
         response = db_client.table('properties').select('owner_id').eq('id', property_id).maybe_single().execute()
         
+        # Guard against None response
+        if response is None:
+            logger.error(f"Null response when fetching owner for property {property_id}")
+            return None
+            
         if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching owner for property {property_id}: {response.error.message}")
             return None
         
-        if response.data:
+        if hasattr(response, 'data') and response.data:
+            logger.debug(f"Found owner {response.data.get('owner_id')} for property {property_id}")
             return response.data.get('owner_id')
         else:
             logger.warning(f"Property {property_id} not found when fetching owner.")
@@ -342,7 +354,7 @@ async def get_property_owner(db_client: Client, property_id: str) -> Optional[st
             
     except Exception as e:
         logger.error(f"Failed to get owner for property {property_id}: {str(e)}", exc_info=True)
-        return None 
+        return None
 
 async def create_unit(db_client: Client, unit_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Insert a new unit record into the public.units table."""
