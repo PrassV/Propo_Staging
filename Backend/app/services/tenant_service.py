@@ -266,7 +266,94 @@ async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID
     except Exception as e:
         logger.exception(f"Unexpected error in get_tenants_for_unit service for unit {unit_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
-# --- End New Service Function ---
+
+async def assign_tenant_to_unit(
+    db_client: Client,
+    unit_id: uuid.UUID,
+    user_id: uuid.UUID,
+    assignment_data: Dict[str, Any]
+) -> Optional[Tenant]:
+    """
+    Assign a tenant to a specific unit by creating a property_tenant_link record.
+    
+    Args:
+        db_client: The Supabase client
+        unit_id: The ID of the unit
+        user_id: The ID of the requesting user (must own the parent property)
+        assignment_data: Dict containing tenant_id, lease_start, lease_end, etc.
+        
+    Returns:
+        The tenant that was assigned, or None if assignment failed
+        
+    Raises:
+        HTTPException: For authorization or validation errors
+    """
+    logger.info(f"Service: Assigning tenant {assignment_data.get('tenant_id')} to unit {unit_id}")
+    
+    try:
+        # 1. Authorization Check: Does the requesting user own the parent property?
+        parent_property_id = await properties_db.get_parent_property_id_for_unit(unit_id)
+        if not parent_property_id:
+            logger.warning(f"Unit {unit_id} not found during tenant assignment.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
+
+        property_owner = await properties_db.get_property_owner(db_client, str(parent_property_id))
+        if not property_owner or property_owner != user_id:
+            logger.warning(f"User {user_id} not authorized to assign tenant to unit {unit_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                              detail="Not authorized to assign tenant to this unit")
+        
+        # 2. Validation: Check if tenant exists
+        tenant_id = assignment_data.get('tenant_id')
+        if not tenant_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, 
+                              detail="tenant_id is required")
+            
+        tenant = await get_tenant_by_id(tenant_id, user_id)
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                              detail="Tenant not found or not accessible")
+        
+        # 3. Create a property_tenant_link (lease) record
+        link_data = {
+            "id": uuid.uuid4(),
+            "property_id": str(parent_property_id),
+            "tenant_id": str(tenant_id),
+            "unit_id": str(unit_id),
+            "start_date": assignment_data.get('lease_start').isoformat() if isinstance(assignment_data.get('lease_start'), date) else assignment_data.get('lease_start'),
+            "end_date": assignment_data.get('lease_end').isoformat() if assignment_data.get('lease_end') and isinstance(assignment_data.get('lease_end'), date) else assignment_data.get('lease_end'),
+            "rent_amount": assignment_data.get('rent_amount'),
+            "deposit_amount": assignment_data.get('deposit_amount'),
+            "notes": assignment_data.get('notes'),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # 4. Insert the link record
+        lease_created = await tenants_db.create_property_tenant_link(link_data)
+        if not lease_created:
+            logger.error(f"Failed to create lease for tenant {tenant_id} on unit {unit_id}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                              detail="Failed to create tenant assignment")
+        
+        # 5. Update unit status to occupied (if needed)
+        unit_update = {
+            "status": "occupied",
+            "current_tenant_id": str(tenant_id),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
+        
+        # 6. Return the tenant details
+        return tenant
+        
+    except HTTPException as http_exc:
+        # Re-raise specific HTTP exceptions from validations
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Error assigning tenant to unit {unit_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                           detail="An unexpected error occurred while assigning tenant")
 
 # --- Tenant Invitation ---
 

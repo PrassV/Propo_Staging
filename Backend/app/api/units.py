@@ -11,7 +11,7 @@ from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreateP
 # Import Maintenance models
 from app.models.maintenance import MaintenanceRequest, MaintenanceCreate # Changed from MaintenanceRequestCreate
 # Import Tenant models
-from app.models.tenant import Tenant, TenantCreate
+from app.models.tenant import Tenant, TenantCreate, TenantAssignment
 # Import Payment model
 from app.models.payment import Payment
 # Import Amenity models
@@ -351,27 +351,40 @@ async def list_unit_tenants(
 @router.post("/{unit_id}/tenants", response_model=Tenant, status_code=status.HTTP_201_CREATED, summary="Assign Tenant to Unit")
 async def assign_tenant_to_unit(
     unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
-    tenant_assignment: Dict[str, Any] = Body(..., description="Data needed for assignment, e.g., {'tenant_id': '...', 'lease_start': '...', 'lease_end': '...'}"), # Define a proper Pydantic model for this
+    tenant_assignment: TenantAssignment = Body(..., description="Data needed for tenant assignment"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Assign a tenant to a specific unit, potentially creating a lease.
     Requires authentication and authorization (user must own parent property).
-    Requires tenant_id and potentially lease details in the request body.
+    Requires tenant_id and lease details in the request body.
     """
     logger.info(f"Endpoint: Assigning tenant to unit {unit_id}")
     user_id = current_user.get("id")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
 
-    # TODO: Define Pydantic model for tenant_assignment payload
-    # TODO: Implement Service Call: tenant_service.assign_tenant_to_unit(
-    #          db_client, unit_id=str(unit_id), user_id=user_id, assignment_data=tenant_assignment)
-    # TODO: Service needs to perform authorization check (user owns parent property?).
-    # TODO: Service needs to handle potential lease creation/update and unit status update.
-    
-    raise HTTPException(status_code=501, detail="Assign Unit Tenant Not Implemented")
+    try:
+        # Convert pydantic model to dict for service function
+        assignment_data = tenant_assignment.model_dump()
+        
+        # Call service function to handle assignment logic
+        assigned_tenant = await tenant_service.assign_tenant_to_unit(
+            db_client=db_client, 
+            unit_id=unit_id, 
+            user_id=user_id, 
+            assignment_data=assignment_data
+        )
+        
+        return assigned_tenant
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions from service layer
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Endpoint error assigning tenant to unit {unit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="An unexpected error occurred while assigning tenant to unit")
 
 # --- Unit Payments Endpoint (Placeholder) --- #
 

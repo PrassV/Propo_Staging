@@ -901,6 +901,33 @@ async def delete_unit_db(
         logger.error(f"[db.delete_unit_db] Failed: {e}", exc_info=True)
         return False
 
+async def update_unit_db(
+    db_client: Client,
+    unit_id: str,
+    unit_data: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Update a specific unit by its ID. Returns the updated unit data if successful."""
+    try:
+        logger.info(f"[db.update_unit_db] Updating unit {unit_id} with data: {unit_data}")
+        response = db_client.table('units')\
+                          .update(unit_data)\
+                          .eq('id', unit_id)\
+                          .execute()
+                          
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"[db.update_unit_db] Error updating unit {unit_id}: {response.error.message}")
+            return None
+        
+        if not hasattr(response, 'data') or not response.data:
+            logger.error(f"[db.update_unit_db] Update for unit {unit_id} returned no data.")
+            return None
+            
+        logger.info(f"[db.update_unit_db] Unit {unit_id} updated successfully")
+        return response.data[0]
+    except Exception as e:
+        logger.error(f"[db.update_unit_db] Failed: {e}", exc_info=True)
+        return None
+
 async def get_parent_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:
     """
     Finds the parent property ID for a given unit ID.
