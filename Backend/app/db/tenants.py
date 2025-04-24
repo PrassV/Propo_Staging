@@ -2,7 +2,7 @@ from typing import Dict, List, Any, Optional
 import logging
 import uuid
 from ..config.database import supabase_client
-from datetime import date
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 
