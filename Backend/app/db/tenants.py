@@ -253,6 +253,7 @@ async def delete_tenant(tenant_id: uuid.UUID) -> bool:
 async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     """
     Get a tenant by the linked user ID (auth ID).
+    If multiple tenants are linked to the same user ID, returns the first one found.
 
     Args:
         user_id: The user ID (UUID) linked to the tenant profile.
@@ -264,7 +265,7 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
         response = supabase_client.table('tenants')\
                         .select('*')\
                         .eq('user_id', str(user_id))\
-                        .maybe_single()\
+                        .limit(1)\
                         .execute()
 
         # Check for explicit error (Supabase client v1/v2 difference might exist)
@@ -272,16 +273,16 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
             logger.error(f"Error fetching tenant by user_id {user_id}: {response.error.message}")
             return None
 
-        # maybe_single() returns None in data field if no row found, or the dict if found.
-        # Check response.data directly
-        if response.data:
-            return response.data
+        # Return the first item in the response data if any exists
+        if response.data and len(response.data) > 0:
+            return response.data[0]
         else:
+            logger.info(f"No tenant found for user_id {user_id}")
             return None # Explicitly return None if no data
 
     except Exception as e:
         # Catch potential exceptions during client call or processing
-        logger.exception(f"Failed to get tenant by user_id {user_id}: {str(e)}")
+        logger.error(f"Failed to get tenant by user_id {user_id}: {str(e)}")
         return None # Explicitly return None if exception
 
 async def get_tenant_by_property_id(property_id: uuid.UUID) -> Optional[Dict[str, Any]]:
