@@ -118,6 +118,9 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
         else:
             # Create the core tenant record
             tenant_dict["id"] = tenant_id
+            # Set the user_id to satisfy the not-null constraint
+            # This will be updated later when the tenant creates an account
+            tenant_dict["user_id"] = str(creator_user_id)
             tenant_dict["created_at"] = datetime.utcnow()
             tenant_dict["updated_at"] = datetime.utcnow()
 

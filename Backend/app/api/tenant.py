@@ -63,7 +63,11 @@ async def create_tenant(
 ):
     """Create a new tenant (typically by property owner/admin)."""
     try:
-        tenant = await tenant_service.create_tenant(tenant_data)
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+            
+        tenant = await tenant_service.create_tenant(tenant_data, uuid.UUID(user_id))
         if not tenant:
             raise HTTPException(status_code=400, detail="Tenant creation failed")
         return TenantResponse(tenant=tenant, message="Tenant created successfully")
