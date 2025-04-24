@@ -112,7 +112,9 @@ async def get_tenant_by_email(email: str) -> Optional[Dict[str, Any]]:
     try:
         response = supabase_client.table('tenants').select('*').eq('email', email).limit(1).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        # Some versions have response.error, others don't
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching tenant by email: {response.error.message}")
             return None
 
@@ -134,7 +136,8 @@ async def get_tenant_by_id(tenant_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     try:
         response = supabase_client.table('tenants').select('*').eq('id', str(tenant_id)).single().execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching tenant: {response.error.message}")
             return None
 
@@ -154,16 +157,27 @@ async def create_tenant(tenant_data: Dict[str, Any]) -> Optional[Dict[str, Any]]
         Created tenant data or None if creation failed
     """
     try:
+        # Create a copy of the data to avoid modifying the original
+        tenant_data_copy = tenant_data.copy()
+        
         # Ensure ID is a string for Supabase
-        if 'id' in tenant_data and isinstance(tenant_data['id'], uuid.UUID):
-            tenant_data['id'] = str(tenant_data['id'])
+        if 'id' in tenant_data_copy and isinstance(tenant_data_copy['id'], uuid.UUID):
+            tenant_data_copy['id'] = str(tenant_data_copy['id'])
         # Same for user_id if present
-        if 'user_id' in tenant_data and isinstance(tenant_data['user_id'], uuid.UUID):
-            tenant_data['user_id'] = str(tenant_data['user_id'])
+        if 'user_id' in tenant_data_copy and isinstance(tenant_data_copy['user_id'], uuid.UUID):
+            tenant_data_copy['user_id'] = str(tenant_data_copy['user_id'])
+            
+        # Convert all datetime objects to ISO format strings
+        for key, value in tenant_data_copy.items():
+            if isinstance(value, datetime):
+                tenant_data_copy[key] = value.isoformat()
+            elif isinstance(value, date):
+                tenant_data_copy[key] = value.isoformat()
 
-        response = supabase_client.table('tenants').insert(tenant_data).execute()
+        response = supabase_client.table('tenants').insert(tenant_data_copy).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error creating tenant: {response.error.message}")
             return None
 
@@ -184,16 +198,27 @@ async def update_tenant(tenant_id: uuid.UUID, tenant_data: Dict[str, Any]) -> Op
         Updated tenant data or None if update failed
     """
     try:
+        # Create a copy of the data to avoid modifying the original
+        tenant_data_copy = tenant_data.copy()
+        
         # Ensure ID is a string for Supabase
-        if 'id' in tenant_data and isinstance(tenant_data['id'], uuid.UUID):
-            tenant_data['id'] = str(tenant_data['id'])
+        if 'id' in tenant_data_copy and isinstance(tenant_data_copy['id'], uuid.UUID):
+            tenant_data_copy['id'] = str(tenant_data_copy['id'])
         # Same for user_id if present
-        if 'user_id' in tenant_data and isinstance(tenant_data['user_id'], uuid.UUID):
-            tenant_data['user_id'] = str(tenant_data['user_id'])
+        if 'user_id' in tenant_data_copy and isinstance(tenant_data_copy['user_id'], uuid.UUID):
+            tenant_data_copy['user_id'] = str(tenant_data_copy['user_id'])
+            
+        # Convert all datetime objects to ISO format strings
+        for key, value in tenant_data_copy.items():
+            if isinstance(value, datetime):
+                tenant_data_copy[key] = value.isoformat()
+            elif isinstance(value, date):
+                tenant_data_copy[key] = value.isoformat()
 
-        response = supabase_client.table('tenants').update(tenant_data).eq('id', str(tenant_id)).execute()
+        response = supabase_client.table('tenants').update(tenant_data_copy).eq('id', str(tenant_id)).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error updating tenant: {response.error.message}")
             return None
 
@@ -215,7 +240,8 @@ async def delete_tenant(tenant_id: uuid.UUID) -> bool:
     try:
         response = supabase_client.table('tenants').delete().eq('id', str(tenant_id)).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error deleting tenant: {response.error.message}")
             return False
 
@@ -353,17 +379,28 @@ async def create_property_tenant_link(link_data: Dict[str, Any]) -> Optional[Dic
         Created link data or None if creation failed
     """
     try:
+        # Create a copy of the data to avoid modifying the original
+        link_data_copy = link_data.copy()
+        
         # Ensure IDs are strings for Supabase
-        if 'id' in link_data and isinstance(link_data['id'], uuid.UUID):
-            link_data['id'] = str(link_data['id'])
-        if 'property_id' in link_data and isinstance(link_data['property_id'], uuid.UUID):
-            link_data['property_id'] = str(link_data['property_id'])
-        if 'tenant_id' in link_data and isinstance(link_data['tenant_id'], uuid.UUID):
-            link_data['tenant_id'] = str(link_data['tenant_id'])
+        if 'id' in link_data_copy and isinstance(link_data_copy['id'], uuid.UUID):
+            link_data_copy['id'] = str(link_data_copy['id'])
+        if 'property_id' in link_data_copy and isinstance(link_data_copy['property_id'], uuid.UUID):
+            link_data_copy['property_id'] = str(link_data_copy['property_id'])
+        if 'tenant_id' in link_data_copy and isinstance(link_data_copy['tenant_id'], uuid.UUID):
+            link_data_copy['tenant_id'] = str(link_data_copy['tenant_id'])
+            
+        # Convert all datetime/date objects to ISO format strings
+        for key, value in link_data_copy.items():
+            if isinstance(value, datetime):
+                link_data_copy[key] = value.isoformat()
+            elif isinstance(value, date):
+                link_data_copy[key] = value.isoformat()
 
-        response = supabase_client.table('property_tenants').insert(link_data).execute()
+        response = supabase_client.table('property_tenants').insert(link_data_copy).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error creating property-tenant link: {response.error.message}")
             return None
 
@@ -385,7 +422,8 @@ async def get_property_links_for_tenant(tenant_id: uuid.UUID) -> List[Dict[str, 
     try:
         response = supabase_client.table('property_tenants').select('*').eq('tenant_id', str(tenant_id)).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching property links for tenant: {response.error.message}")
             return []
 
@@ -407,7 +445,8 @@ async def get_property_tenant_link_by_id(link_id: uuid.UUID) -> Optional[Dict[st
     try:
         response = supabase_client.table('property_tenants').select('*').eq('id', str(link_id)).single().execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error fetching property-tenant link: {response.error.message}")
             return None
 
@@ -428,17 +467,28 @@ async def update_property_tenant_link(link_id: uuid.UUID, link_data: Dict[str, A
         Updated link data or None if update failed
     """
     try:
+        # Create a copy of the data to avoid modifying the original
+        link_data_copy = link_data.copy()
+        
         # Ensure IDs are strings for Supabase
-        if 'id' in link_data and isinstance(link_data['id'], uuid.UUID):
-            link_data['id'] = str(link_data['id'])
-        if 'property_id' in link_data and isinstance(link_data['property_id'], uuid.UUID):
-            link_data['property_id'] = str(link_data['property_id'])
-        if 'tenant_id' in link_data and isinstance(link_data['tenant_id'], uuid.UUID):
-            link_data['tenant_id'] = str(link_data['tenant_id'])
+        if 'id' in link_data_copy and isinstance(link_data_copy['id'], uuid.UUID):
+            link_data_copy['id'] = str(link_data_copy['id'])
+        if 'property_id' in link_data_copy and isinstance(link_data_copy['property_id'], uuid.UUID):
+            link_data_copy['property_id'] = str(link_data_copy['property_id'])
+        if 'tenant_id' in link_data_copy and isinstance(link_data_copy['tenant_id'], uuid.UUID):
+            link_data_copy['tenant_id'] = str(link_data_copy['tenant_id'])
+            
+        # Convert all datetime/date objects to ISO format strings
+        for key, value in link_data_copy.items():
+            if isinstance(value, datetime):
+                link_data_copy[key] = value.isoformat()
+            elif isinstance(value, date):
+                link_data_copy[key] = value.isoformat()
 
-        response = supabase_client.table('property_tenants').update(link_data).eq('id', str(link_id)).execute()
+        response = supabase_client.table('property_tenants').update(link_data_copy).eq('id', str(link_id)).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error updating property-tenant link: {response.error.message}")
             return None
 
@@ -460,7 +510,8 @@ async def delete_property_tenant_link(link_id: uuid.UUID) -> bool:
     try:
         response = supabase_client.table('property_tenants').delete().eq('id', str(link_id)).execute()
 
-        if response.error:
+        # Handle different Supabase client versions
+        if hasattr(response, 'error') and response.error:
             logger.error(f"Error deleting property-tenant link: {response.error.message}")
             return False
 
