@@ -86,7 +86,6 @@ async def create_unit_endpoint(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="An unexpected error occurred while creating the unit.")
 
-# Placeholder for GET /units/{unit_id}
 @router.get("/{unit_id}", response_model=UnitDetails, summary="Get Unit Details")
 async def get_unit_details_endpoint(
     unit_id: uuid.UUID = Path(..., description="The ID of the unit to retrieve"),
@@ -94,34 +93,32 @@ async def get_unit_details_endpoint(
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
-    Retrieve the details for a specific unit by its ID.
-    Requires authentication and authorization (user must own the parent property).
+    Get details for a specific unit, including the current tenant information.
+    Requires authentication and authorization (user must own parent property).
     """
-    logger.info(f"Endpoint: Attempting to fetch unit {unit_id}")
+    logger.info(f"Endpoint: Getting unit details for {unit_id}")
     user_id = current_user.get("id")
+    
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-
+    
     try:
-        unit_details = await property_service.get_unit_details(
-            db_client=db_client, 
-            unit_id=str(unit_id), 
-            user_id=user_id
-        )
+        # Get unit basic details
+        unit_details = await property_service.get_unit_details(db_client, unit_id, user_id)
         
-        if unit_details is None:
-            # Service returns None if unit not found OR user not authorized
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
-                                detail="Unit not found or user not authorized to access it")
-                                
+        # Additionally, get current tenant information
+        tenant_info = await tenant_service.get_current_tenant_for_unit(unit_id)
+        if tenant_info:
+            unit_details["current_tenant"] = tenant_info
+        
         return unit_details
     except HTTPException as http_exc:
-        # Re-raise 404 or other specific http errors from service
+        # Re-raise HTTP exceptions from service layer
         raise http_exc
     except Exception as e:
-        logger.error(f"Endpoint error getting unit details for {unit_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="An unexpected error occurred while retrieving unit details.")
+        logger.error(f"Error retrieving unit details for {unit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail="Failed to retrieve unit details")
 
 # Add PUT /units/{unit_id} endpoint
 @router.put("/{unit_id}", response_model=UnitDetails, summary="Update Unit Details")
@@ -614,5 +611,50 @@ async def delete_unit_tax_endpoint(
     except Exception as e:
         logger.exception(f"Endpoint error deleting tax record {tax_id} for unit {unit_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred")
+
+@router.get("/{unit_id}/history", response_model=dict, summary="Get Unit History")
+async def get_unit_history(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Get the complete history of a unit, including previous tenants, leases, and payments.
+    Requires authentication and authorization (user must own parent property).
+    """
+    logger.info(f"Endpoint: Getting history for unit {unit_id}")
+    user_id = current_user.get("id")
+    
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    
+    try:
+        # Verify user has access to this unit
+        unit_details = await property_service.get_unit_details(db_client, unit_id, user_id)
+        if not unit_details:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found or access denied")
+        
+        # Get historical data
+        tenants = await tenant_service.get_tenants_for_unit(unit_id, user_id)
+        leases = await tenant_service.get_leases_for_unit(unit_id)
+        payments = await payment_service.get_payments_for_unit(db_client, unit_id, user_id)[0]  # Get just the list part
+        maintenance_requests = await maintenance_service.get_requests_for_unit(db_client, str(unit_id), user_id)
+        
+        return {
+            "unit_id": str(unit_id),
+            "unit_number": unit_details.get("unit_number"),
+            "property_id": unit_details.get("property_id"),
+            "tenants": tenants,
+            "leases": leases,
+            "payments": payments,
+            "maintenance_requests": maintenance_requests
+        }
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions from service layer
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error retrieving unit history for {unit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail="Failed to retrieve unit history")
 
 # Add other endpoints here following the plan...

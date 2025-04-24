@@ -5,7 +5,7 @@ import logging
 import uuid
 
 from app.models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType, PaymentMethod, RecordPaymentRequest
-from app.services import payment_service
+from app.services import payment_service, property_service
 from app.config.auth import get_current_user
 from app.utils.common import PaginationParams
 from pydantic import BaseModel
@@ -113,21 +113,54 @@ async def create_payment_request(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Create a new payment request (e.g., rent due) by owner.
+    Create a new payment request.
+    
+    Required fields: unit_id, lease_id, tenant_id, amount_due, due_date
+    Property_id is optional (will be derived from unit_id if not provided)
+    Only owners can create payment requests.
     """
     try:
-        owner_id = current_user.get("id")
-        if not owner_id:
+        user_id = current_user.get("id")
+        if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
-        
-        if current_user.get("user_type") != 'owner':
-             raise HTTPException(status_code=403, detail="Only property owners can create payment requests")
-
-        payment = await payment_service.create_payment_request(payment_data)
-        if not payment:
-            raise HTTPException(status_code=400, detail="Payment request creation failed")
             
-        return PaymentResponse(payment=payment, message="Payment request created successfully")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type != 'owner':
+             raise HTTPException(status_code=403, detail="Only property owners can create payment requests")
+             
+        # Validate required fields
+        if not payment_data.unit_id:
+            raise HTTPException(status_code=400, detail="unit_id is required")
+            
+        if not payment_data.lease_id:
+            raise HTTPException(status_code=400, detail="lease_id is required")
+            
+        # If property_id not provided, derive it from unit
+        if not payment_data.property_id:
+            unit_details = await property_service.get_unit_details_by_id(payment_data.unit_id)
+            if not unit_details:
+                raise HTTPException(status_code=404, detail="Unit not found")
+            payment_data_dict = payment_data.model_dump()
+            payment_data_dict["property_id"] = unit_details.get("property_id")
+        else:
+            payment_data_dict = payment_data.model_dump()
+            
+        # Check if user has access to this property
+        can_access = await payment_service.check_user_access_to_property(user_id, payment_data_dict["property_id"])
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to create payment for this property")
+
+        created_payment = await payment_service.create_payment(
+            payment_data=payment_data_dict,
+            owner_id=user_id
+        )
+        
+        if not created_payment:
+            raise HTTPException(status_code=500, detail="Failed to create payment request")
+            
+        return PaymentResponse(payment=created_payment, message="Payment request created successfully")
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
         logger.error(f"Error creating payment request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create payment request: {str(e)}")

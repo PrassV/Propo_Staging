@@ -332,13 +332,39 @@ async def get_property_owner(db_client: Client, property_id: str) -> Optional[st
         if isinstance(property_id, uuid.UUID):
             property_id = str(property_id)
             
-        logger.debug(f"Fetching owner for property ID: {property_id}")
+        logger.info(f"Fetching owner for property ID: {property_id}")
         
-        response = db_client.table('properties').select('owner_id').eq('id', property_id).maybe_single().execute()
+        # First run a diagnostic query to check if properties table is accessible
+        diag_response = db_client.table('properties').select('id').limit(5).execute()
+        if diag_response and hasattr(diag_response, 'data'):
+            logger.info(f"Diagnostic: Properties table is accessible, found {len(diag_response.data)} properties")
+            if diag_response.data:
+                property_ids = [p.get('id') for p in diag_response.data]
+                logger.info(f"Sample property IDs: {property_ids}")
+        else:
+            logger.warning("Diagnostic: Cannot access properties table")
+        
+        # Try a more direct query approach
+        response = db_client.table('properties').select('owner_id').filter('id', 'eq', property_id).execute()
         
         # Guard against None response
         if response is None:
-            logger.error(f"Null response when fetching owner for property {property_id}")
+            logger.warning(f"Null response when fetching owner for property {property_id}, trying raw SQL...")
+            # Try with raw SQL as fallback
+            sql_response = db_client.rpc(
+                'get_property_owner_by_id', 
+                {'property_id_param': property_id}
+            ).execute()
+            
+            if sql_response is None:
+                logger.error("SQL fallback also returned null response")
+                return None
+            
+            if hasattr(sql_response, 'data') and sql_response.data:
+                logger.info(f"Found owner via SQL: {sql_response.data}")
+                return sql_response.data
+            
+            logger.error("SQL fallback found no data")
             return None
             
         if hasattr(response, 'error') and response.error:
@@ -346,10 +372,14 @@ async def get_property_owner(db_client: Client, property_id: str) -> Optional[st
             return None
         
         if hasattr(response, 'data') and response.data:
-            logger.debug(f"Found owner {response.data.get('owner_id')} for property {property_id}")
-            return response.data.get('owner_id')
+            if len(response.data) > 0:
+                logger.info(f"Found owner {response.data[0].get('owner_id')} for property {property_id}")
+                return response.data[0].get('owner_id')
+            else:
+                logger.warning(f"Property {property_id} not found when fetching owner (empty data array).")
+                return None
         else:
-            logger.warning(f"Property {property_id} not found when fetching owner.")
+            logger.warning(f"Property {property_id} not found when fetching owner (no data attribute).")
             return None
             
     except Exception as e:

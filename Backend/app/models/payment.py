@@ -29,7 +29,9 @@ class PaymentType(str, Enum):
     OTHER = "other"
 
 class PaymentBase(BaseModel):
-    property_id: uuid.UUID
+    property_id: Optional[uuid.UUID] = None  # Make property_id optional (derived from unit if not provided)
+    unit_id: uuid.UUID  # Required unit_id field
+    lease_id: uuid.UUID  # Required lease_id field
     tenant_id: uuid.UUID
     amount_due: float = Field(..., gt=0)
     due_date: date

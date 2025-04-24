@@ -37,6 +37,12 @@ class InvitationStatus(str, Enum):
     DECLINED = "declined"
     EXPIRED = "expired"
 
+# New enum for tenant status
+class TenantStatus(str, Enum):
+    ACTIVE = "active"
+    UNASSIGNED = "unassigned"
+    INACTIVE = "inactive"
+
 # --- Tenant Model --- Based on tenants table
 class TenantBase(BaseModel):
     name: str
@@ -49,6 +55,7 @@ class TenantBase(BaseModel):
     id_type: Optional[IdType] = None
     id_number: Optional[str] = None
     id_proof_url: Optional[HttpUrl] = None
+    status: Optional[TenantStatus] = TenantStatus.UNASSIGNED
 
     # Default/Current Rental/Lease Info (consider moving to a Lease model later)
     rental_type: Optional[RentalType] = None
@@ -72,13 +79,8 @@ class TenantBase(BaseModel):
     university: Optional[str] = None # If applicable
 
 class TenantCreate(TenantBase):
-    # user_id (link to auth.users) might be set upon registration/invitation acceptance
-    # owner_id (who created this tenant record) will be set in service
-    # property_id and unit_number are needed to create the link in property_tenants
-    property_id: uuid.UUID
-    unit_number: str
-    tenancy_start_date: date
-    tenancy_end_date: Optional[date] = None
+    # Removed property_id and unit fields as per requirements
+    # Status defaults to "unassigned"
     email: EmailStr # Make email mandatory for creation/invitation
 
 class TenantUpdate(BaseModel):
@@ -93,6 +95,7 @@ class TenantUpdate(BaseModel):
     id_type: Optional[IdType] = None
     id_number: Optional[str] = None
     id_proof_url: Optional[HttpUrl] = None
+    status: Optional[TenantStatus] = None
     rental_type: Optional[RentalType] = None
     rental_frequency: Optional[RentalFrequency] = None
     rental_amount: Optional[float] = Field(None, ge=0)
@@ -129,7 +132,8 @@ class PropertyTenantLinkBase(BaseModel):
     end_date: Optional[date] = None
 
 class PropertyTenantLinkCreate(PropertyTenantLinkBase):
-    pass
+    # Make unit_id and tenant_id required as per requirements
+    unit_id: uuid.UUID  # Added unit_id field
 
 class PropertyTenantLinkUpdate(BaseModel):
     unit_number: Optional[str] = None
@@ -187,3 +191,7 @@ class TenantAssignment(BaseModel):
             }
         }
     }
+
+# New model for tenant reactivation
+class TenantReactivation(BaseModel):
+    pass  # Empty model as we just need the tenant_id from the URL

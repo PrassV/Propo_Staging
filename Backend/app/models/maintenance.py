@@ -41,7 +41,8 @@ class VendorDetails(BaseModel):
     category: MaintenanceCategory
 
 class MaintenanceBase(BaseModel):
-    property_id: str
+    property_id: Optional[str] = None
+    unit_id: str
     title: str
     description: str
     category: MaintenanceCategory

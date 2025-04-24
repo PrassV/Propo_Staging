@@ -15,6 +15,7 @@ from app.models.maintenance import (
 )
 from app.services import maintenance_service
 from app.config.auth import get_current_user
+from app.services import property_service
 
 router = APIRouter(
     prefix="/maintenance",
@@ -142,37 +143,61 @@ async def create_maintenance_request(
 ):
     """
     Create a new maintenance request.
-
-    Tenants can create requests for their rented properties.
-    Owners can create requests for any of their properties.
+    
+    Required fields: unit_id, title, description, category, priority
+    Property_id is optional (will be derived from unit_id if not provided)
     """
     try:
-        # Extract user ID
+        # Correctly extract user_id from the dictionary
         user_id = current_user.get("id")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        # Get user type/role
-        user_type = current_user.get("user_type") or current_user.get("role")
+        # Validate required fields
+        if not request_data.unit_id:
+            raise HTTPException(status_code=400, detail="unit_id is required")
+            
+        # If property_id not provided, derive it from unit
+        if not request_data.property_id:
+            unit_details = await property_service.get_unit_details_by_id(request_data.unit_id)
+            if not unit_details:
+                raise HTTPException(status_code=404, detail="Unit not found")
+            request_data_dict = request_data.model_dump()
+            request_data_dict["property_id"] = unit_details.get("property_id")
+        else:
+            request_data_dict = request_data.model_dump()
 
-        # Set tenant_id if user is a tenant
-        tenant_id = None
-        if user_type != "owner":
-            tenant_id = user_id
+        # Set the tenant_id if the user is a tenant
+        user_type = current_user.get("user_type") or "owner"  # Default to owner if not specified
+        if user_type == "tenant":
+            request_data_dict["tenant_id"] = user_id
 
-        # Create the maintenance request
+        # Check if user has access to this unit
+        can_access = False
+        if user_type == "tenant":
+            can_access = await property_service.tenant_has_access_to_unit(user_id, request_data.unit_id)
+        else:
+            can_access = await property_service.owner_has_access_to_unit(user_id, request_data.unit_id)
+            
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to create maintenance request for this unit")
+
+        # Create the request
         created_request = await maintenance_service.create_maintenance_request(
-            request_data=request_data,
-            tenant_id=tenant_id
+            request_data=request_data_dict,
+            user_id=user_id,
+            user_type=user_type
         )
 
         if not created_request:
-            raise HTTPException(status_code=400, detail="Maintenance request creation failed")
+            raise HTTPException(status_code=500, detail="Failed to create maintenance request")
 
         return MaintenanceRequestResponse(request=created_request, message="Maintenance request created successfully")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error creating maintenance request: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create request: {str(e)}")
+        logger.error(f"Error creating maintenance request: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create maintenance request")
 
 # Update a maintenance request
 @router.put("/{request_id}", response_model=MaintenanceRequestResponse)

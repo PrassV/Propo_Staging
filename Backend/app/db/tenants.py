@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 async def get_tenants_for_owner(
     owner_id: uuid.UUID,
     property_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     sort_by: str = 'created_at',
@@ -26,6 +27,7 @@ async def get_tenants_for_owner(
     Args:
         owner_id: The ID of the property owner
         property_id: Optional specific property to filter by
+        status: Optional tenant status to filter by (active, unassigned, inactive)
         skip: Number of records to skip (pagination)
         limit: Maximum number of records to return (pagination)
         sort_by: Field to sort by
@@ -73,7 +75,13 @@ async def get_tenants_for_owner(
         # Note: In production, consider using a stored procedure/RPC for better performance
         tenants = []
         for t_id in list(tenant_ids)[skip:skip+limit]:  # Apply simple pagination here
-            tenant_response = supabase_client.table('tenants').select('*').eq('id', t_id).execute()
+            query = supabase_client.table('tenants').select('*').eq('id', t_id)
+            
+            # Apply status filter if provided
+            if status:
+                query = query.eq('status', status)
+                
+            tenant_response = query.execute()
             if tenant_response.data:
                 tenants.append(tenant_response.data[0])
 
@@ -990,4 +998,34 @@ async def check_tenant_exists(tenant_id: uuid.UUID) -> bool:
 
     except Exception as e:
         logger.exception(f"Exception checking tenant existence for {tenant_id}: {str(e)}")
+        return False
+
+async def update_tenant_status(tenant_id: uuid.UUID, status: str) -> bool:
+    """
+    Update a tenant's status.
+
+    Args:
+        tenant_id: The tenant ID (UUID)
+        status: The new status ('active', 'unassigned', or 'inactive')
+
+    Returns:
+        True if update succeeded, False otherwise
+    """
+    try:
+        # Validate status value
+        valid_statuses = ['active', 'unassigned', 'inactive']
+        if status not in valid_statuses:
+            logger.error(f"Invalid tenant status: {status}. Must be one of {valid_statuses}")
+            return False
+
+        # Update tenant status
+        response = supabase_client.table('tenants').update({"status": status}).eq('id', str(tenant_id)).execute()
+
+        if response.error:
+            logger.error(f"Error updating tenant status: {response.error.message}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update tenant {tenant_id} status to {status}: {str(e)}")
         return False

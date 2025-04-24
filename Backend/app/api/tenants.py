@@ -107,12 +107,13 @@ async def get_current_user_tenant(
 async def get_tenants(
     pagination: PaginationParams = Depends(),
     property_id: Optional[UUID4] = Query(None, description="Filter tenants by property ID"),
+    status: Optional[str] = Query(None, description="Filter tenants by status (active, unassigned, inactive)"),
     sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
     sort_order: Optional[str] = Query("desc", description="Sort order ('asc' or 'desc')"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get all tenants for the current user, optionally filtered by property.
+    Get all tenants for the current user, optionally filtered by property and status.
     Includes pagination and sorting.
     """
     try:
@@ -123,6 +124,7 @@ async def get_tenants(
         tenants = await tenant_service.get_tenants(
             requesting_user_id=user_id,
             property_id=property_id_obj,
+            status=status,  # Pass status to filter
             skip=pagination.skip,
             limit=pagination.limit,
             sort_by=sort_by,
@@ -184,19 +186,23 @@ async def create_tenant(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Create a new tenant and link them to a property.
-    Requires the user to be the owner of the specified property.
+    Create a new tenant with default status "unassigned".
+    Property and unit association will be done separately via lease creation.
     """
     try:
         # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
+        
+        # Ensure status is set to unassigned for new tenants
+        tenant_data_dict = tenant_data.model_dump()
+        tenant_data_dict["status"] = "unassigned"
 
-        created_tenant = await tenant_service.create_tenant(tenant_data, user_id)
+        created_tenant = await tenant_service.create_tenant(tenant_data_dict, user_id)
 
         if not created_tenant:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to create tenant. Ensure the property exists and you are the owner."
+                detail="Failed to create tenant."
             )
 
         return {
@@ -601,3 +607,55 @@ async def get_tenant_payment_status(
 # Note: The tenant document upload endpoint (POST /{tenant_id}/documents) has been removed
 # ID documents are now handled directly as part of the tenant profile (id_proof_url field)
 # Other documents are managed through the property document endpoints: /api/properties/{property_id}/documents
+
+@router.put("/{tenant_id}/reactivate", response_model=TenantResponse)
+async def reactivate_tenant(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant to reactivate"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Reactivate an inactive tenant.
+    Changes tenant status from "inactive" to "unassigned".
+    """
+    try:
+        # Convert string UUID from auth to UUID object for service layer
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        # Get current tenant data
+        current_tenant = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
+        
+        if not current_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant not found or you don't have permission to access this tenant"
+            )
+            
+        # Verify tenant is inactive
+        if current_tenant.get("status") != "inactive":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only inactive tenants can be reactivated"
+            )
+            
+        # Update status to unassigned
+        update_data = {"status": "unassigned"}
+        updated_tenant = await tenant_service.update_tenant(tenant_id_obj, update_data, user_id)
+
+        if not updated_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to reactivate tenant"
+            )
+
+        return {
+            "tenant": updated_tenant,
+            "message": "Tenant successfully reactivated"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reactivating tenant: {str(e)}"
+        )

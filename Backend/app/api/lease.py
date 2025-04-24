@@ -93,6 +93,7 @@ async def create_lease(
 ):
     """
     Create a new lease (typically by property owner/admin).
+    Also updates tenant status to "active".
     """
     try:
         owner_id = current_user.get("id")
@@ -104,9 +105,15 @@ async def create_lease(
         if property_owner != owner_id:
             raise HTTPException(status_code=403, detail="Not authorized to create lease for this property")
 
+        # Create lease
         lease = await tenant_service.create_lease(lease_data)
         if not lease:
             raise HTTPException(status_code=400, detail="Lease creation failed")
+            
+        # Update tenant status to active
+        tenant_id = lease_data.tenant_id
+        await tenant_service.update_tenant_status(tenant_id, "active")
+        
         return LeaseResponse(lease=lease, message="Lease created successfully")
     except HTTPException as http_exc:
         raise http_exc
@@ -172,3 +179,55 @@ async def delete_lease(
     except Exception as e:
         logger.error(f"Error deleting lease {lease_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete lease: {str(e)}")
+
+# Add lease termination endpoint
+@router.put("/{lease_id}/terminate", response_model=LeaseResponse)
+async def terminate_lease(
+    lease_id: uuid.UUID,
+    termination: dict = Body(..., 
+                         example={
+                             "termination_date": "2023-12-31", 
+                             "reason": "Tenant requested early termination"
+                         }),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Terminate a lease early.
+    Also updates tenant status to "inactive".
+    """
+    try:
+        requesting_user_id = current_user.get("id")
+        if not requesting_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+        # Check authorization
+        can_access = await tenant_service.can_access_lease(lease_id, requesting_user_id)
+        if not can_access:
+            raise HTTPException(status_code=403, detail="Not authorized to terminate this lease")
+            
+        # Get current lease to extract tenant_id
+        current_lease = await tenant_service.get_lease_by_id(lease_id)
+        if not current_lease:
+            raise HTTPException(status_code=404, detail="Lease not found")
+            
+        # Update lease end date to termination date
+        update_data = {
+            "end_date": termination.get("termination_date"),
+            "status": "terminated"
+        }
+        
+        updated_lease = await tenant_service.update_lease(lease_id, update_data)
+        if not updated_lease:
+            raise HTTPException(status_code=404, detail="Lease not found or update failed")
+            
+        # Update tenant status to inactive
+        tenant_id = current_lease.get("tenant_id")
+        if tenant_id:
+            await tenant_service.update_tenant_status(tenant_id, "inactive")
+            
+        return LeaseResponse(lease=updated_lease, message="Lease terminated successfully")
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error terminating lease {lease_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to terminate lease: {str(e)}")
