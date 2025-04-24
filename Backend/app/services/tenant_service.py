@@ -755,17 +755,40 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
 
         if tenant_data:
             logger.info(f"Found tenant profile {tenant_data.get('id')} for user {user_id}")
-            # Assuming tenant_data is a dict-like object that can be parsed into the Tenant model
-            # Add error handling if parsing fails
-            return Tenant(**tenant_data)
+            
+            # Map database values to enum values before creating the Tenant model
+            # Fix for id_type field
+            if tenant_data.get('id_type') == 'pan_card':
+                tenant_data['id_type'] = 'other'  # Map 'pan_card' to 'other'
+                
+            # Fix for property_tax_responsibility field
+            if tenant_data.get('property_tax_responsibility') == 'landlord':
+                tenant_data['property_tax_responsibility'] = 'owner'  # Map 'landlord' to 'owner'
+                
+            # Fix for any other potential enum mismatches
+            # Ensure water_responsibility uses valid enum values
+            if tenant_data.get('water_responsibility') == 'landlord':
+                tenant_data['water_responsibility'] = 'owner'
+                
+            # Ensure electricity_responsibility uses valid enum values
+            if tenant_data.get('electricity_responsibility') == 'landlord':
+                tenant_data['electricity_responsibility'] = 'owner'
+            
+            try:
+                # Create the Tenant model with the fixed data
+                return Tenant(**tenant_data)
+            except Exception as validation_error:
+                logger.error(f"Validation error creating Tenant model: {validation_error}")
+                # Log detailed validation errors for debugging
+                logger.error(f"Problematic tenant data: {tenant_data}")
+                raise
         else:
             logger.info(f"No tenant profile found for user_id {user_id}")
             return None
     except Exception as e:
         logger.exception(f"Unexpected error retrieving tenant by user_id {user_id}: {e}")
-        # Propagate the error or handle it (e.g., return None, raise specific exception)
-        # For now, re-raising might be simplest if the API layer catches it.
-        raise # Or raise HTTPException(status.HTTP_500...) depending on desired handling
+        # Re-raise for API layer to handle
+        raise
 
 async def link_tenant_to_property(
     tenant_id: uuid.UUID, 
