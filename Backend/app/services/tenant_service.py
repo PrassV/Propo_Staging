@@ -99,7 +99,13 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
             tenant_data.status = TenantStatus.UNASSIGNED
 
         # Extract core tenant data, excluding any relationships that would be handled separately
-        tenant_dict = tenant_data.model_dump(exclude_unset=True)
+        # Handle both Pydantic v1 (dict) and v2 (model_dump)
+        if hasattr(tenant_data, "model_dump"):
+            tenant_dict = tenant_data.model_dump(exclude_unset=True)
+        else:
+            # Pydantic v1 compatibility
+            tenant_dict = tenant_data.dict(exclude_unset=True)
+        
         tenant_id = uuid.uuid4()
         
         # Check if tenant already exists by email
@@ -150,7 +156,13 @@ async def update_tenant(tenant_id: uuid.UUID, tenant_data: TenantUpdate, request
         if not await _can_access_tenant(tenant_id, requesting_user_id):
             return None # Access denied
 
-        update_dict = tenant_data.model_dump(exclude_unset=True)
+        # Handle both Pydantic v1 (dict) and v2 (model_dump)
+        if hasattr(tenant_data, "model_dump"):
+            update_dict = tenant_data.model_dump(exclude_unset=True)
+        else:
+            # Pydantic v1 compatibility
+            update_dict = tenant_data.dict(exclude_unset=True)
+            
         if not update_dict:
             logger.warning("Update tenant called with no data to update.")
             # Return current tenant data if no changes
@@ -510,8 +522,13 @@ async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate
         if not current_lease:
             return None
 
-        # Prepare data for update
-        update_data = lease_data.model_dump(exclude_unset=True)
+        # Prepare data for update - handle Pydantic v1 and v2 compatibility
+        if hasattr(lease_data, "model_dump"):
+            update_data = lease_data.model_dump(exclude_unset=True)
+        else:
+            # Pydantic v1 compatibility
+            update_data = lease_data.dict(exclude_unset=True)
+            
         update_data["updated_at"] = datetime.now(datetime.timezone.utc)
 
         # Convert date fields to ISO format
