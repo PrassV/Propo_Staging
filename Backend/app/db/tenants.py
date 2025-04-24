@@ -1,7 +1,7 @@
 from typing import Dict, List, Any, Optional
 import logging
 import uuid
-from ..config.database import supabase_client
+from ..config.database import supabase_client, supabase_service_role_client
 from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,8 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
         Tenant data or None if not found.
     """
     try:
-        response = supabase_client.table('tenants')\
+        # Use the service role client to bypass RLS policies
+        response = supabase_service_role_client.table('tenants')\
                         .select('*')\
                         .eq('user_id', str(user_id))\
                         .limit(1)\
