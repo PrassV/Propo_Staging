@@ -9,7 +9,7 @@ from supabase import Client  # Add missing import for Supabase Client
 from ..models.tenant import (
     TenantCreate, TenantUpdate, Tenant,
     PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
-    TenantInvitationCreate, TenantInvitation, InvitationStatus
+    TenantInvitationCreate, TenantInvitation, InvitationStatus, TenantStatus
 )
 from ..db import tenants as tenants_db
 from ..db import properties as properties_db
@@ -84,69 +84,56 @@ async def get_tenant_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) 
 
 async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -> Optional[Tenant]:
     """
-    Create a new tenant record AND link them to a specified property/unit.
-    Requires creator_user_id to own the target property.
+    Create a new tenant record.
     """
     try:
-        # 1. Check if property exists and creator owns it
-        # Get db_client from the imported global client
-        from ..config.database import supabase_client as db_client
-        property_owner = await properties_db.get_property_owner(db_client, tenant_data.property_id)
-        if not property_owner:
-            logger.error(f"Property not found: {tenant_data.property_id}")
-            return None
-        if property_owner != creator_user_id:
-            logger.error(f"User {creator_user_id} does not own property {tenant_data.property_id}")
-            return None
+        # Make sure we're working with a TenantCreate object, not a dict
+        if isinstance(tenant_data, dict):
+            # Convert dict to TenantCreate if someone passed a dict
+            tenant_data = TenantCreate(**tenant_data)
+        
+        # Ensure tenant has proper status
+        tenant_status = getattr(tenant_data, "status", None)
+        if not tenant_status:
+            # Set default status if not provided
+            tenant_data.status = TenantStatus.UNASSIGNED
 
-        # 2. Check if tenant already exists by email (optional - decide behavior)
-        existing_tenant = await tenants_db.get_tenant_by_email(tenant_data.email)
+        # Extract core tenant data, excluding any relationships that would be handled separately
+        tenant_dict = tenant_data.model_dump(exclude_unset=True)
         tenant_id = uuid.uuid4()
-
+        
+        # Check if tenant already exists by email
+        existing_tenant = await tenants_db.get_tenant_by_email(tenant_data.email)
+        
         if existing_tenant:
-            logger.warning(f"Tenant with email {tenant_data.email} already exists (ID: {existing_tenant['id']}). Linking existing tenant.")
+            logger.warning(f"Tenant with email {tenant_data.email} already exists (ID: {existing_tenant['id']})")
             tenant_id = existing_tenant['id']
-            # Optionally update existing tenant details here if needed
+            # We could update existing tenant details here if needed
         else:
-             # 3. Create Tenant Record if not existing
-            tenant_dict = tenant_data.model_dump(exclude={'property_id', 'unit_number', 'tenancy_start_date', 'tenancy_end_date'})
+            # Create the core tenant record
             tenant_dict["id"] = tenant_id
-            # tenant_dict["user_id"] = None # Should be linked upon registration/invite acceptance
             tenant_dict["created_at"] = datetime.utcnow()
             tenant_dict["updated_at"] = datetime.utcnow()
 
-            # Convert date/enums if necessary for DB layer
+            # Convert date/enums to appropriate formats for DB
             for key in ['dob', 'rental_start_date', 'rental_end_date', 'lease_start_date', 'lease_end_date']:
                 if key in tenant_dict and tenant_dict[key]:
                     tenant_dict[key] = tenant_dict[key].isoformat()
-            for key in ['gender', 'id_type', 'rental_type', 'rental_frequency', 'electricity_responsibility', 'water_responsibility', 'property_tax_responsibility']:
-                 if key in tenant_dict and tenant_dict[key]:
+                    
+            for key in ['gender', 'id_type', 'rental_type', 'rental_frequency', 'electricity_responsibility', 'water_responsibility', 'property_tax_responsibility', 'status']:
+                if key in tenant_dict and tenant_dict[key] and hasattr(tenant_dict[key], 'value'):
                     tenant_dict[key] = tenant_dict[key].value
 
+            # Create the tenant in the database
             created_tenant_dict = await tenants_db.create_tenant(tenant_dict)
             if not created_tenant_dict:
                 logger.error(f"Failed to create tenant record in DB for email {tenant_data.email}")
                 return None
+            
             tenant_id = created_tenant_dict['id']
-
-        # 4. Create PropertyTenantLink
-        link_data = {
-            "id": uuid.uuid4(),
-            "property_id": tenant_data.property_id,
-            "tenant_id": tenant_id,
-            "unit_number": tenant_data.unit_number,
-            "start_date": tenant_data.tenancy_start_date.isoformat(),
-            "end_date": tenant_data.tenancy_end_date.isoformat() if tenant_data.tenancy_end_date else None,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
-        }
-        link_created = await tenants_db.create_property_tenant_link(link_data)
-        if not link_created:
-            logger.error(f"Failed to link tenant {tenant_id} to property {tenant_data.property_id}")
-            # Consider rolling back tenant creation if link fails?
-            return None
-
-        # 5. Return the created/existing tenant profile
+            logger.info(f"Successfully created tenant with ID: {tenant_id}")
+            
+        # Return the created tenant
         final_tenant_dict = await tenants_db.get_tenant_by_id(tenant_id)
         return Tenant(**final_tenant_dict) if final_tenant_dict else None
 
@@ -740,3 +727,54 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
         # Propagate the error or handle it (e.g., return None, raise specific exception)
         # For now, re-raising might be simplest if the API layer catches it.
         raise # Or raise HTTPException(status.HTTP_500...) depending on desired handling
+
+async def link_tenant_to_property(
+    tenant_id: uuid.UUID, 
+    property_id: uuid.UUID,
+    unit_number: Optional[str],
+    start_date: date,
+    end_date: Optional[date],
+    creator_user_id: uuid.UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Links an existing tenant to a property.
+    Requires creator_user_id to own the target property.
+    """
+    try:
+        # 1. Check if property exists and creator owns it
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, property_id)
+        if not property_owner:
+            logger.error(f"Property not found: {property_id}")
+            return None
+        if property_owner != creator_user_id:
+            logger.error(f"User {creator_user_id} does not own property {property_id}")
+            return None
+            
+        # 2. Check if tenant exists
+        tenant = await tenants_db.get_tenant_by_id(tenant_id)
+        if not tenant:
+            logger.error(f"Tenant not found: {tenant_id}")
+            return None
+            
+        # 3. Create PropertyTenantLink
+        link_data = {
+            "id": uuid.uuid4(),
+            "property_id": property_id,
+            "tenant_id": tenant_id,
+            "unit_number": unit_number,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat() if end_date else None,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        link_created = await tenants_db.create_property_tenant_link(link_data)
+        if not link_created:
+            logger.error(f"Failed to link tenant {tenant_id} to property {property_id}")
+            return None
+            
+        return link_created
+    except Exception as e:
+        logger.exception(f"Error in link_tenant_to_property: {e}")
+        return None

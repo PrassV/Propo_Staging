@@ -194,10 +194,9 @@ async def create_tenant(
         user_id = uuid.UUID(current_user["id"])
         
         # Ensure status is set to unassigned for new tenants
-        tenant_data_dict = tenant_data.model_dump()
-        tenant_data_dict["status"] = "unassigned"
-
-        created_tenant = await tenant_service.create_tenant(tenant_data_dict, user_id)
+        # Instead of converting to dict, pass the TenantCreate object directly
+        # and let the service handle the conversion if needed
+        created_tenant = await tenant_service.create_tenant(tenant_data, user_id)
 
         if not created_tenant:
             raise HTTPException(
@@ -212,6 +211,7 @@ async def create_tenant(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
+        logger.error(f"Error creating tenant: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating tenant: {str(e)}"
@@ -658,4 +658,54 @@ async def reactivate_tenant(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error reactivating tenant: {str(e)}"
+        )
+
+@router.post("/{tenant_id}/properties", response_model=Dict[str, Any])
+async def link_tenant_to_property(
+    link_data: PropertyTenantLinkCreate,
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant to link"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Links a tenant to a property.
+    Requires the user to be the owner of the specified property.
+    """
+    try:
+        # Convert string UUID from auth to UUID object for service layer
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+        
+        # Extract data from the request
+        property_id = link_data.property_id
+        unit_number = getattr(link_data, "unit_number", None)
+        start_date = link_data.start_date 
+        end_date = getattr(link_data, "end_date", None)
+        
+        # Link the tenant to the property
+        link = await tenant_service.link_tenant_to_property(
+            tenant_id=tenant_id_obj,
+            property_id=property_id,
+            unit_number=unit_number,
+            start_date=start_date,
+            end_date=end_date,
+            creator_user_id=user_id
+        )
+        
+        if not link:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to link tenant to property. Ensure the property exists and you are the owner."
+            )
+            
+        return {
+            "link": link,
+            "message": "Tenant linked to property successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error linking tenant to property: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error linking tenant to property: {str(e)}"
         )
