@@ -115,6 +115,7 @@ class TenantUpdate(BaseModel):
 class Tenant(TenantBase):
     id: uuid.UUID
     user_id: Optional[uuid.UUID] = None # Link to Supabase auth.users
+    owner_id: uuid.UUID # ID of the owner who created this tenant
     created_at: datetime
     updated_at: Optional[datetime] = None
     # We might add fields from property_tenants here if needed for specific views

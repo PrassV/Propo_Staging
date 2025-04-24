@@ -1080,3 +1080,59 @@ async def update_tenant_status(tenant_id: uuid.UUID, status: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to update tenant {tenant_id} status to {status}: {str(e)}")
         return False
+
+async def get_tenants_by_owner_id(
+    owner_id: uuid.UUID,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = 'created_at',
+    sort_order: str = 'desc'
+) -> tuple[List[Dict[str, Any]], int]:
+    """
+    Get all tenants directly created by a specific owner using the owner_id field.
+    
+    Args:
+        owner_id: The ID of the owner who created the tenants
+        status: Optional tenant status to filter by (active, unassigned, inactive)
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return (pagination)
+        sort_by: Field to sort by
+        sort_order: Sort direction ('asc' or 'desc')
+        
+    Returns:
+        Tuple of (list of tenant dictionaries, total count)
+    """
+    try:
+        # Start building the query
+        query = supabase_client.table('tenants').select('*', count='exact').eq('owner_id', str(owner_id))
+        
+        # Apply status filter if provided
+        if status:
+            query = query.eq('status', status)
+            
+        # Apply sorting
+        if sort_order.lower() == 'asc':
+            query = query.order(sort_by, ascending=True)
+        else:
+            query = query.order(sort_by, ascending=False)
+            
+        # Apply pagination
+        query = query.range(skip, skip + limit - 1)
+        
+        # Execute the query
+        response = query.execute()
+        
+        # Handle error
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching tenants by owner_id: {response.error.message}")
+            return [], 0
+            
+        # Get count from response
+        total_count = response.count if hasattr(response, 'count') else len(response.data)
+        
+        return response.data, total_count
+        
+    except Exception as e:
+        logger.exception(f"Failed to get tenants by owner_id {owner_id}: {str(e)}")
+        return [], 0

@@ -26,7 +26,11 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
     if tenant_profile and tenant_profile.get("user_id") == requesting_user_id:
         return True
 
-    # Option 2: Property owner/manager accessing a tenant linked to their property
+    # Option 2: Is the requesting user the owner who created this tenant?
+    if tenant_profile and tenant_profile.get("owner_id") == requesting_user_id:
+        return True
+
+    # Option 3: Property owner/manager accessing a tenant linked to their property
     linked_properties = await tenants_db.get_property_links_for_tenant(tenant_id)
     for link in linked_properties:
         from ..config.database import supabase_client as db_client
@@ -42,6 +46,7 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
 async def get_tenants(
     owner_id: uuid.UUID,
     property_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     sort_by: str = 'created_at',
@@ -54,15 +59,27 @@ async def get_tenants(
     Includes pagination and sorting.
     """
     try:
-        # Fetch tenants based on ownership and optional property filter
-        tenant_dicts, total_count = await tenants_db.get_tenants_for_owner(
-            owner_id=owner_id,
-            property_id=property_id,
-            skip=skip,
-            limit=limit,
-            sort_by=sort_by,
-            sort_order=sort_order
-        )
+        if property_id:
+            # If filtering by property, use the existing function
+            tenant_dicts, total_count = await tenants_db.get_tenants_for_owner(
+                owner_id=owner_id,
+                property_id=property_id,
+                status=status,
+                skip=skip,
+                limit=limit,
+                sort_by=sort_by,
+                sort_order=sort_order
+            )
+        else:
+            # If getting all tenants for an owner, use the new direct lookup
+            tenant_dicts, total_count = await tenants_db.get_tenants_by_owner_id(
+                owner_id=owner_id,
+                status=status,
+                skip=skip,
+                limit=limit,
+                sort_by=sort_by,
+                sort_order=sort_order
+            )
         return tenant_dicts, total_count
     except Exception as e:
         logger.error(f"Error in get_tenants service: {str(e)}")
@@ -121,6 +138,8 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
             # Set the user_id to satisfy the not-null constraint
             # This will be updated later when the tenant creates an account
             tenant_dict["user_id"] = str(creator_user_id)
+            # Set the owner_id to permanently track which owner created this tenant
+            tenant_dict["owner_id"] = str(creator_user_id)
             tenant_dict["created_at"] = datetime.utcnow()
             tenant_dict["updated_at"] = datetime.utcnow()
 

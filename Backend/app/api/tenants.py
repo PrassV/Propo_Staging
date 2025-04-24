@@ -121,8 +121,8 @@ async def get_tenants(
         user_id = uuid.UUID(current_user["id"])
         property_id_obj = uuid.UUID(str(property_id)) if property_id else None
 
-        tenants = await tenant_service.get_tenants(
-            requesting_user_id=user_id,
+        tenants, total_count = await tenant_service.get_tenants(
+            owner_id=user_id,  # Pass the current user's ID as the owner_id
             property_id=property_id_obj,
             status=status,  # Pass status to filter
             skip=pagination.skip,
@@ -130,9 +130,6 @@ async def get_tenants(
             sort_by=sort_by,
             sort_order=sort_order
         )
-
-        # TODO: Add actual count query if needed for accurate pagination
-        total_count = len(tenants)
 
         return {
             "items": tenants,
