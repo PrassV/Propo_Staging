@@ -1115,9 +1115,9 @@ async def get_tenants_by_owner_id(
             
         # Apply sorting
         if sort_order.lower() == 'asc':
-            query = query.order(sort_by, ascending=True)
+            query = query.order(sort_by, desc=False)
         else:
-            query = query.order(sort_by, ascending=False)
+            query = query.order(sort_by, desc=True)
             
         # Apply pagination
         query = query.range(skip, skip + limit - 1)
