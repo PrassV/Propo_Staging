@@ -60,7 +60,7 @@ async def create_unit_endpoint(
     # Extract unit data and property_id from the payload
     property_id_str = str(unit_payload.property_id)
     # Create UnitCreate model from payload, excluding property_id for the service call
-    unit_data_dict = unit_payload.model_dump(exclude={'property_id'})
+    unit_data_dict = unit_payload.dict(exclude={'property_id'})
     unit_create_model = UnitCreate(**unit_data_dict)
 
     # Call the service function (assuming it's still named create_unit for now)

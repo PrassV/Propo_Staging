@@ -51,7 +51,7 @@ class PropertyBase(BaseModel):
     kitchens: Optional[int] = Field(None, ge=0)
     garages: Optional[int] = Field(None, ge=0)
     garage_size: Optional[int] = Field(None, ge=0)
-    year_built: Optional[int] = Field(None, ge=1800) # Reasonable lower bound
+    year_built: Optional[int] = Field(None, ge=1900) # Reasonable lower bound
     floors: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
     amenities: Optional[List[str]] = None
@@ -85,7 +85,7 @@ class PropertyUpdate(BaseModel):
     kitchens: Optional[int] = Field(None, ge=0)
     garages: Optional[int] = Field(None, ge=0)
     garage_size: Optional[int] = Field(None, ge=0)
-    year_built: Optional[int] = Field(None, ge=1800)
+    year_built: Optional[int] = Field(None, ge=1900)
     floors: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
     amenities: Optional[List[str]] = None
