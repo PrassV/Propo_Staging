@@ -103,10 +103,14 @@ async def get_unit_details_endpoint(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
     
     try:
-        # Get unit basic details
+        # Get unit basic details and ensure the unit exists and user is authorized
         unit_details = await property_service.get_unit_details(db_client, unit_id, user_id)
+        if unit_details is None:
+            # Unit not found or user not authorized
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Unit not found or not authorized to view details")
         
-        # Additionally, get current tenant information
+        # Additionally, attempt to get current tenant information
         tenant_info = await tenant_service.get_current_tenant_for_unit(unit_id)
         if tenant_info:
             unit_details["current_tenant"] = tenant_info
