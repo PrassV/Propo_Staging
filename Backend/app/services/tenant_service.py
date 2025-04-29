@@ -840,3 +840,27 @@ async def link_tenant_to_property(
     except Exception as e:
         logger.exception(f"Error in link_tenant_to_property: {e}")
         return None
+
+# --- New Service Function: Get Current Tenant for Unit ---
+async def get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get the tenant currently associated with a specific unit via an active lease.
+    Calls the DB-layer function and returns the result.
+    Args:
+        unit_id: The ID of the unit.
+    Returns:
+        Tenant data if an active lease exists for the unit, otherwise None.
+    """
+    from ..db import tenants as tenants_db
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        tenant_info = await tenants_db.db_get_current_tenant_for_unit(unit_id)
+        if tenant_info:
+            logger.info(f"Found current tenant for unit {unit_id}: {tenant_info.get('id')}")
+        else:
+            logger.info(f"No current tenant found for unit {unit_id}")
+        return tenant_info
+    except Exception as e:
+        logger.error(f"Error in get_current_tenant_for_unit service for unit {unit_id}: {e}")
+        return None
