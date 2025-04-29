@@ -6,12 +6,12 @@ from datetime import datetime
 # Configuration
 BASE_URL = "http://localhost:8000"  # Change to your actual API URL
 AUTH_ADMIN_CREDENTIALS = {
-    "email": "admin@example.com",
-    "password": "password123"
+    "email": "prassannavenkat@gmail.com",
+    "password": "pikachu"
 }
 AUTH_USER_CREDENTIALS = {
-    "email": "user@example.com",
-    "password": "password123"
+    "email": "prassannavenkat@gmail.com",
+    "password": "pikachu" 
 }
 
 # Test data

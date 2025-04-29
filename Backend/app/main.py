@@ -6,6 +6,7 @@ import logging
 import time
 import os
 import sys
+from fastapi.exceptions import RequestValidationError
 
 # Set ROOT_DIR for proper path resolution
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -119,6 +120,17 @@ app.include_router(document, prefix="/documents", tags=["Documents"])
 app.include_router(reporting, prefix="/reports", tags=["Reports"])
 app.include_router(notification, prefix="/notifications", tags=["Notifications"])
 app.include_router(uploads)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(
+        f"Validation error for request {request.method} {request.url.path}: {exc.errors()}",
+        exc_info=True
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()}
+    )
 
 if __name__ == "__main__":
     import uvicorn
