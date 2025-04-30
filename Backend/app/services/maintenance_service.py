@@ -514,7 +514,11 @@ async def create_request_for_unit(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not authorized to create maintenance requests for this unit.")
         
     # 2. Prepare data
-    insert_data = request_data.model_dump()
+    # Convert Pydantic model to dict for compatibility (v1 & v2)
+    if hasattr(request_data, "model_dump"):
+        insert_data = request_data.model_dump()
+    else:
+        insert_data = request_data.dict()
     insert_data['id'] = str(uuid.uuid4())
     insert_data['unit_id'] = unit_id
     insert_data['created_by'] = user_id # Track who created it
