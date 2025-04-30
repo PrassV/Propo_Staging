@@ -805,7 +805,7 @@ async def update_unit_details(
             return None # Authorization failed
             
         # 3. Prepare update data (exclude unset fields)
-        update_dict = update_data.model_dump(exclude_unset=True)
+        update_dict = update_data.dict(exclude_unset=True)
         if not update_dict:
             logger.info("Service: No fields provided to update.")
             return unit_data_db # Return existing data if nothing to update
@@ -901,7 +901,7 @@ async def create_unit_amenity(db_client: Client, unit_id: uuid.UUID, user_id: st
     if not await _check_unit_amenity_authorization(db_client, unit_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add amenities to this unit.")
 
-    insert_data = amenity_data.model_dump()
+    insert_data = amenity_data.dict()
     insert_data['id'] = uuid.uuid4()
     insert_data['unit_id'] = unit_id
     insert_data['created_at'] = datetime.utcnow()
@@ -923,7 +923,7 @@ async def update_unit_amenity(db_client: Client, unit_id: uuid.UUID, amenity_id:
     if not existing_amenity or existing_amenity.get('unit_id') != str(unit_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Amenity not found for this unit.")
 
-    update_payload = amenity_data.model_dump(exclude_unset=True)
+    update_payload = amenity_data.dict(exclude_unset=True)
     if not update_payload:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
         
@@ -976,7 +976,7 @@ async def create_unit_tax(db_client: Client, unit_id: uuid.UUID, user_id: str, t
     if not await _check_unit_tax_authorization(db_client, unit_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add taxes for this unit.")
 
-    insert_data = tax_data.model_dump()
+    insert_data = tax_data.dict()
     insert_data['id'] = uuid.uuid4()
     insert_data['unit_id'] = unit_id
     insert_data['created_at'] = datetime.utcnow()
@@ -1003,7 +1003,7 @@ async def update_unit_tax(db_client: Client, unit_id: uuid.UUID, tax_id: uuid.UU
     if not existing_tax or existing_tax.get('unit_id') != str(unit_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit tax record not found for this unit.")
 
-    update_payload = tax_data.model_dump(exclude_unset=True)
+    update_payload = tax_data.dict(exclude_unset=True)
     if not update_payload:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
         

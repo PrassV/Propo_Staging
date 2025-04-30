@@ -368,7 +368,8 @@ async def assign_tenant_to_unit(
 
     try:
         # Convert pydantic model to dict for service function
-        assignment_data = tenant_assignment.model_dump()
+        assignment_data = tenant_assignment.dict()
+        logger.debug(f"Assignment payload: {assignment_data}")
         
         # Call service function to handle assignment logic
         assigned_tenant = await tenant_service.assign_tenant_to_unit(
