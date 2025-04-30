@@ -4,6 +4,8 @@ from pydantic import BaseModel, UUID4, Field
 import uuid
 import logging
 from datetime import datetime
+from supabase import Client
+from app.config.database import get_supabase_client_authenticated
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +292,8 @@ async def delete_tenant(
 async def invite_tenant(
     invitation_data: TenantInvitationCreate,
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to invite (optional, can be None for new tenants)"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Create an invitation for a tenant to join the platform.
@@ -303,7 +306,7 @@ async def invite_tenant(
 
         # Could add tenant_id to the invitation data here if needed
 
-        created_invitation = await tenant_service.create_tenant_invitation(invitation_data, user_id)
+        created_invitation = await tenant_service.create_tenant_invitation(invitation_data, user_id, db_client)
 
         if not created_invitation:
             raise HTTPException(

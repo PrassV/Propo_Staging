@@ -386,14 +386,14 @@ async def assign_tenant_to_unit(
 
 async def create_tenant_invitation(
     invitation_data: TenantInvitationCreate,
-    owner_id: uuid.UUID
+    owner_id: uuid.UUID,
+    db_client: Client
 ) -> Optional[TenantInvitation]:
     """
     Create an invitation for a tenant to join the platform and link to a property.
     """
     try:
-        # 1. Check if owner actually owns the property
-        from ..config.database import supabase_service_role_client as db_client
+        # 1. Check if owner actually owns the property using injected authenticated client
         property_owner = await properties_db.get_property_owner(db_client, invitation_data.property_id)
         if not property_owner or property_owner != str(owner_id):
             logger.error(f"User {owner_id} does not own property {invitation_data.property_id} for invitation.")
