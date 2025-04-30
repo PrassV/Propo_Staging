@@ -325,7 +325,7 @@ async def assign_tenant_to_unit(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
 
         property_owner = await properties_db.get_property_owner(db_client, str(parent_property_id))
-        if not property_owner or property_owner != user_id:
+        if not property_owner or property_owner != str(user_id):
             logger.warning(f"User {user_id} not authorized to assign tenant to unit {unit_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
                               detail="Not authorized to assign tenant to this unit")
@@ -395,7 +395,7 @@ async def create_tenant_invitation(
         # 1. Check if owner actually owns the property
         from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, invitation_data.property_id)
-        if not property_owner or property_owner != owner_id:
+        if not property_owner or property_owner != str(owner_id):
             logger.error(f"User {owner_id} does not own property {invitation_data.property_id} for invitation.")
             return None
 
