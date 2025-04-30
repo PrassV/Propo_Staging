@@ -33,7 +33,7 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
     # Option 3: Property owner/manager accessing a tenant linked to their property
     linked_properties = await tenants_db.get_property_links_for_tenant(tenant_id)
     for link in linked_properties:
-        from ..config.database import supabase_service_role_client as db_client
+        from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
         if property_owner == requesting_user_id:
             return True # User owns a property this tenant is linked to
@@ -219,7 +219,7 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         can_delete = False
         owned_property_links = []
         for link in linked_properties:
-            from ..config.database import supabase_service_role_client as db_client
+            from ..config.database import supabase_client as db_client
             property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
             if property_owner == requesting_user_id:
                 can_delete = True
@@ -273,7 +273,7 @@ async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID
             logger.warning(f"Unit {unit_id} not found during tenant fetch.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
 
-        from ..config.database import supabase_service_role_client as db_client
+        from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, parent_property_id)
         if not property_owner or property_owner != requesting_user_id:
             logger.warning(f"User {requesting_user_id} does not own parent property {parent_property_id} of unit {unit_id}")
@@ -499,7 +499,7 @@ async def can_access_lease(lease_id: uuid.UUID, requesting_user_id: uuid.UUID) -
             return False
 
         # Get the property owner
-        from ..config.database import supabase_service_role_client as db_client
+        from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, lease.get('property_id'))
         if property_owner == requesting_user_id:
             return True
@@ -579,7 +579,7 @@ async def delete_lease(lease_id: uuid.UUID) -> bool:
 async def get_property_owner(property_id: uuid.UUID) -> Optional[str]:
     """Get the owner ID of a property."""
     try:
-        from ..config.database import supabase_service_role_client as db_client
+        from ..config.database import supabase_client as db_client
         owner_id = await properties_db.get_property_owner(db_client, property_id)
         return owner_id
     except Exception as e:
@@ -804,7 +804,7 @@ async def link_tenant_to_property(
     """
     try:
         # 1. Check if property exists and creator owns it
-        from ..config.database import supabase_service_role_client as db_client
+        from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, property_id)
         if not property_owner:
             logger.error(f"Property not found: {property_id}")
