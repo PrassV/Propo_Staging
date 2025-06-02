@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MaintenanceIssue } from '@/api/types';
+import { MaintenanceIssue, MaintenancePriority, MaintenanceCategory } from '@/api/types';
 import { getMaintenanceByUnitId, createMaintenanceRequest } from '@/api/services/maintenanceService';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Card } from "@/components/ui/card";
@@ -95,10 +95,10 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
             await createMaintenanceRequest({
                 title: formData.title,
                 description: formData.description,
-                priority: formData.priority,
-                category: formData.category,
-                property_id: '', // This will be filled by the backend based on the unit
-                unit_number: unitId
+                priority: formData.priority as MaintenancePriority,
+                category: formData.category as MaintenanceCategory,
+                property_id: '', // Will be derived from unit_id by the backend
+                unit_number: unitId // The backend expects unit_number, not unit_id
             });
 
             toast({

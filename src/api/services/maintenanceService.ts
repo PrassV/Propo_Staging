@@ -28,10 +28,21 @@ export interface MaintenanceComment {
  */
 export const getMaintenanceByUnitId = async (unitId: string): Promise<MaintenanceIssue[]> => {
   try {
-    const response = await apiClient.get<MaintenanceIssue[]>('/maintenance', {
+    const response = await apiClient.get<{ items: MaintenanceRequest[], total: number }>('/maintenance', {
       params: { unit_id: unitId }
     });
-    return response.data;
+    
+    // Transform MaintenanceRequest[] to MaintenanceIssue[]
+    const maintenanceIssues: MaintenanceIssue[] = (response.data.items || []).map((request: MaintenanceRequest) => ({
+      id: request.id,
+      title: request.description, // Using description as title since MaintenanceRequest might not have title
+      status: request.status,
+      priority: request.priority,
+      created_at: request.created_at || new Date().toISOString(),
+      property_name: '' // This would need to be fetched separately or included in the API response
+    }));
+    
+    return maintenanceIssues;
   } catch (error: unknown) {
     console.error(`Error fetching maintenance for unit ${unitId}:`, error);
     let errorMessage = 'Failed to fetch maintenance requests';

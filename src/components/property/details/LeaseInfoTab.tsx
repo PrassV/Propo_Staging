@@ -47,8 +47,8 @@ export default function LeaseInfoTab({ unitId }: LeaseInfoTabProps) {
             tenant_id: data.tenant_id,
             start_date: new Date(data.start_date),
             end_date: data.end_date ? new Date(data.end_date) : new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
-            rent_amount: data.rent_amount.toString(),
-            deposit_amount: data.deposit_amount.toString(),
+            rent_amount: data.rent_amount ? data.rent_amount.toString() : '',
+            deposit_amount: data.deposit_amount ? data.deposit_amount.toString() : '',
             rent_frequency: data.rent_frequency
           });
         }
@@ -197,8 +197,8 @@ export default function LeaseInfoTab({ unitId }: LeaseInfoTabProps) {
         <div className="space-y-2">
           <p><strong className="font-medium">Status:</strong> <span className="capitalize">{lease.status}</span></p>
           <p><strong className="font-medium">Term:</strong> {new Date(lease.start_date).toLocaleDateString()} - {new Date(lease.end_date).toLocaleDateString()}</p>
-          <p><strong className="font-medium">Rent:</strong> ${lease.rent_amount} / {lease.rent_frequency}</p>
-          <p><strong className="font-medium">Deposit:</strong> ${lease.deposit_amount}</p>
+          <p><strong className="font-medium">Rent:</strong> ${lease.rent_amount || 0} / {lease.rent_frequency}</p>
+          <p><strong className="font-medium">Deposit:</strong> ${lease.deposit_amount || 0}</p>
           {lease.document_url && (
             <Button variant="link" className="p-0 h-auto" asChild>
               <a href={lease.document_url} target="_blank" rel="noopener noreferrer">

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tenant, TenantAssignment } from '../../api/types';
-import { getTenants } from '../../api/services/tenantService';
+import { getTenants, createTenant } from '../../api/services/tenantService';
 import { assignTenantToUnit } from '../../api/services/propertyService';
 
 interface AssignTenantModalProps {
@@ -53,6 +53,7 @@ export default function AssignTenantModal({
   useEffect(() => {
     if (isOpen) {
       loadTenants();
+      resetFormData();
     }
   }, [isOpen]);
 
@@ -65,6 +66,25 @@ export default function AssignTenantModal({
       console.error('Error loading tenants:', error);
       toast.error('Failed to load tenants');
     }
+  };
+
+  const resetFormData = () => {
+    setSelectedTenantId('');
+    setLeaseData({
+      lease_start: '',
+      lease_end: '',
+      rent_amount: '',
+      deposit_amount: ''
+    });
+    setNewTenantData({
+      name: '',
+      email: '',
+      phone: '',
+      rental_type: 'rental',
+      rental_amount: '',
+      rental_frequency: 'monthly'
+    });
+    setActiveTab('existing');
   };
 
   const handleAssignExistingTenant = async () => {
@@ -100,8 +120,8 @@ export default function AssignTenantModal({
   };
 
   const handleCreateAndAssignTenant = async () => {
-    if (!newTenantData.name || !newTenantData.email || !newTenantData.rental_amount) {
-      toast.error('Please fill in all required fields');
+    if (!newTenantData.name || !newTenantData.email || !newTenantData.rental_amount || !leaseData.lease_start) {
+      toast.error('Please fill in all required fields (name, email, rental amount, and lease start date)');
       return;
     }
 
@@ -109,21 +129,33 @@ export default function AssignTenantModal({
     try {
       // First create the tenant
       const tenantCreateData = {
-        ...newTenantData,
+        name: newTenantData.name,
+        email: newTenantData.email,
+        phone: newTenantData.phone,
         property_id: propertyId,
         rental_start_date: leaseData.lease_start,
-        rental_end_date: leaseData.lease_end
+        rental_end_date: leaseData.lease_end,
+        rental_type: newTenantData.rental_type,
+        rental_amount: parseFloat(newTenantData.rental_amount),
+        rental_frequency: newTenantData.rental_frequency
       };
 
-      // Note: This would need to be implemented in your tenant service
-      // For now, show success message - you'll need to implement the create-and-assign flow
-      toast.success('Feature coming soon: Create and assign new tenant');
-      console.log('Would create tenant with data:', tenantCreateData);
-      
-      // onSuccess();
+      const createdTenantResponse = await createTenant(tenantCreateData);
+
+      const assignmentData: TenantAssignment = {
+        tenant_id: createdTenantResponse.tenant.id,
+        lease_start: leaseData.lease_start,
+        lease_end: leaseData.lease_end || null,
+        rent_amount: parseFloat(newTenantData.rental_amount),
+        deposit_amount: leaseData.deposit_amount ? parseFloat(leaseData.deposit_amount) : null
+      };
+
+      await assignTenantToUnit(unitId, assignmentData);
+      toast.success('Tenant created and assigned successfully!');
+      onSuccess();
     } catch (error) {
       console.error('Error creating and assigning tenant:', error);
-      toast.error('Failed to create and assign tenant');
+      toast.error(error instanceof Error ? error.message : 'Failed to create and assign tenant');
     } finally {
       setLoading(false);
     }
@@ -311,13 +343,51 @@ export default function AssignTenantModal({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="new-lease-start">Lease Start Date *</Label>
+                  <Input
+                    id="new-lease-start"
+                    type="date"
+                    value={leaseData.lease_start}
+                    onChange={(e) => setLeaseData({...leaseData, lease_start: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new-lease-end">Lease End Date</Label>
+                  <Input
+                    id="new-lease-end"
+                    type="date"
+                    value={leaseData.lease_end}
+                    onChange={(e) => setLeaseData({...leaseData, lease_end: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="new-deposit-amount">Security Deposit</Label>
+                  <Input
+                    id="new-deposit-amount"
+                    type="number"
+                    placeholder="0.00"
+                    value={leaseData.deposit_amount}
+                    onChange={(e) => setLeaseData({...leaseData, deposit_amount: e.target.value})}
+                  />
+                </div>
+                <div>
+                  {/* Placeholder for another field if needed */}
+                </div>
+              </div>
+
               <Button 
                 onClick={handleCreateAndAssignTenant}
                 disabled={loading}
                 className="w-full"
                 variant="outline"
               >
-                {loading ? 'Creating...' : 'Create & Assign Tenant (Coming Soon)'}
+                {loading ? 'Creating...' : 'Create & Assign Tenant'}
               </Button>
             </div>
           </TabsContent>
