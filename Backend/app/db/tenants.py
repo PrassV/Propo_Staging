@@ -174,11 +174,13 @@ async def create_tenant(tenant_data: Dict[str, Any]) -> Optional[Dict[str, Any]]
             elif isinstance(value, date):
                 tenant_data_copy[key] = value.isoformat()
 
-        response = supabase_client.table('tenants').insert(tenant_data_copy).execute()
+        # Use service role client to bypass RLS for tenant creation
+        # Property owners should be able to create tenants for their properties
+        response = supabase_service_role_client.table('tenants').insert(tenant_data_copy).execute()
 
         # Handle different Supabase client versions
         if hasattr(response, 'error') and response.error:
-            logger.error(f"Error creating tenant: {response.error.message}")
+            logger.error(f"Failed to create tenant: {response.error}")
             return None
 
         return response.data[0] if response.data else None
