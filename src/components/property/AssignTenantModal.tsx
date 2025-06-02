@@ -44,7 +44,7 @@ export default function AssignTenantModal({
     name: '',
     email: '',
     phone: '',
-    rental_type: 'rental' as 'rental' | 'lease',
+    rental_type: 'rent' as 'rent' | 'lease',
     rental_amount: '',
     rental_frequency: 'monthly' as 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
   });
@@ -80,7 +80,7 @@ export default function AssignTenantModal({
       name: '',
       email: '',
       phone: '',
-      rental_type: 'rental',
+      rental_type: 'rent',
       rental_amount: '',
       rental_frequency: 'monthly'
     });
@@ -299,13 +299,13 @@ export default function AssignTenantModal({
                   <Label htmlFor="rental-type">Rental Type</Label>
                   <Select 
                     value={newTenantData.rental_type} 
-                    onValueChange={(value) => setNewTenantData({...newTenantData, rental_type: value as 'rental' | 'lease'})}
+                    onValueChange={(value) => setNewTenantData({...newTenantData, rental_type: value as 'rent' | 'lease'})}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="rental">Rental</SelectItem>
+                      <SelectItem value="rent">Rental</SelectItem>
                       <SelectItem value="lease">Lease</SelectItem>
                     </SelectContent>
                   </Select>
