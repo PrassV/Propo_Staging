@@ -35,7 +35,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
-      const oauthUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/oauth/google/login`;
+      const oauthUrl = `${import.meta.env.VITE_API_URL || 'https://localhost:8000'}/auth/oauth/google/login`;
       window.location.href = oauthUrl;
     } catch (error) {
       console.error('Error initiating Google Sign-In:', error);
