@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from typing import Dict
 import logging
@@ -41,11 +42,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI application
+# Create FastAPI application with proxy settings for Railway
 app = FastAPI(
     title="Property Management API",
     description="API for managing properties, tenants, maintenance, payments, and agreements",
     version="1.0.0",
+    root_path=os.getenv("ROOT_PATH", ""),  # Support for Railway proxy
+)
+
+# Add TrustedHost middleware for Railway deployment
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=["*"]  # Railway handles host validation
 )
 
 # Configure CORS - make sure this is before any other middleware
@@ -62,6 +70,21 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+# Railway proxy headers middleware - CRITICAL FIX
+@app.middleware("http")
+async def railway_proxy_middleware(request: Request, call_next):
+    # Handle Railway's HTTPS termination proxy headers
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host") 
+    
+    if forwarded_proto:
+        request.scope["scheme"] = forwarded_proto
+    if forwarded_host:
+        request.scope["server"] = (forwarded_host, None)
+        
+    response = await call_next(request)
+    return response
 
 # Request logging middleware
 @app.middleware("http")
