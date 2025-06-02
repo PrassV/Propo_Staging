@@ -5,8 +5,6 @@ import RouteGuard from './RouteGuard';
 import LandingPage from '../pages/LandingPage';
 import OnboardingFlow from '../components/onboarding/OnboardingFlow';
 import LeaseManagement from '../components/LeaseManagement';
-import MaintenanceList from '../components/maintenance/MaintenanceList';
-import MaintenanceDetails from '../components/maintenance/MaintenanceDetails';
 import PaymentList from '../components/payment/PaymentList';
 
 // Dashboard pages
@@ -127,22 +125,6 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth requireProfile>
         <LeaseManagement />
-      </RouteGuard>
-    )
-  },
-  {
-    path: '/dashboard/maintenance',
-    element: (
-      <RouteGuard requireAuth requireProfile>
-        <MaintenanceList />
-      </RouteGuard>
-    )
-  },
-  {
-    path: '/dashboard/maintenance/:id',
-    element: (
-      <RouteGuard requireAuth requireProfile>
-        <MaintenanceDetails />
       </RouteGuard>
     )
   },

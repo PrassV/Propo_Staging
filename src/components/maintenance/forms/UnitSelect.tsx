@@ -1,19 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { FormControl, InputLabel, Select, MenuItem, CircularProgress, FormHelperText, SelectChangeEvent } from '@mui/material';
-import { getUnitsForProperty, PropertyUnit } from '@/api/services/propertyService';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
+
+// Import service and type
+import { getUnitsForProperty } from '@/api/services/propertyService';
+import { UnitDetails } from '@/api/types';
 
 interface UnitSelectProps {
-  propertyId: string | null | undefined;
   value: string;
-  onChange: (event: SelectChangeEvent<string>) => void;
+  onChange: (value: string) => void;
   disabled?: boolean;
   error?: boolean;
   helperText?: string;
+  propertyId?: string;
 }
 
-const UnitSelect: React.FC<UnitSelectProps> = ({ propertyId, value, onChange, disabled, error, helperText }) => {
-  const [units, setUnits] = useState<PropertyUnit[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+const UnitSelect: React.FC<UnitSelectProps> = ({ 
+  value, 
+  onChange, 
+  disabled, 
+  error, 
+  helperText, 
+  propertyId 
+}) => {
+  const [units, setUnits] = useState<UnitDetails[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,17 +39,14 @@ const UnitSelect: React.FC<UnitSelectProps> = ({ propertyId, value, onChange, di
       if (!propertyId) {
         setUnits([]);
         setLoading(false);
-        setFetchError(null);
         return;
       }
 
       setLoading(true);
       setFetchError(null);
       try {
-        const fetchedUnits = await getUnitsForProperty(propertyId);
-        const validUnits = fetchedUnits.filter(unit => unit.unit_number);
-        const uniqueUnits = Array.from(new Map(validUnits.map(unit => [unit.unit_number, unit])).values());
-        setUnits(uniqueUnits);
+        const response = await getUnitsForProperty(propertyId);
+        setUnits(response || []);
       } catch (err: unknown) {
         console.error('Error fetching units:', err);
         setFetchError(err instanceof Error ? err.message : 'Failed to load units.');
@@ -45,47 +60,47 @@ const UnitSelect: React.FC<UnitSelectProps> = ({ propertyId, value, onChange, di
   }, [propertyId]);
 
   return (
-    <FormControl fullWidth error={error || !!fetchError}>
-      <InputLabel id="unit-select-label">Unit</InputLabel>
+    <div className="space-y-2">
+      <Label htmlFor="unit-select" className={error || fetchError ? 'text-destructive' : ''}>
+        Unit
+      </Label>
       <Select
-        labelId="unit-select-label"
-        id="unit-select"
-        value={loading || fetchError ? '' : value}
-        label="Unit"
-        onChange={onChange}
+        value={loading || fetchError || !propertyId ? '' : value}
+        onValueChange={onChange}
         disabled={disabled || loading || !!fetchError || !propertyId}
       >
-        {loading && (
-          <MenuItem value="" disabled>
-            <CircularProgress size={20} style={{ marginRight: '8px' }} />
-            Loading units...
-          </MenuItem>
-        )}
-        {fetchError && (
-          <MenuItem value="" disabled>
-            Error loading units
-          </MenuItem>
-        )}
-        {!loading && !fetchError && units.length === 0 && propertyId && (
-          <MenuItem value="" disabled>
-            No units found for this property
-          </MenuItem>
-        )}
-        {!loading && !fetchError && units.length === 0 && !propertyId && (
-          <MenuItem value="" disabled>
-            Select a property first
-          </MenuItem>
-        )}
-        {!loading && !fetchError && units.map((unit) => (
-          <MenuItem key={unit.id || unit.unit_number} value={unit.unit_number}>
-            {unit.unit_number}
-          </MenuItem>
-        ))}
+        <SelectTrigger className={`w-full ${error || fetchError ? 'border-destructive' : ''}`}>
+          <SelectValue placeholder={
+            !propertyId ? (
+              "Select a property first"
+            ) : loading ? (
+              <div className="flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading units...
+              </div>
+            ) : fetchError ? (
+              "Error loading units"
+            ) : units.length === 0 ? (
+              "No units found"
+            ) : (
+              "Select a unit"
+            )
+          } />
+        </SelectTrigger>
+        <SelectContent>
+          {!loading && !fetchError && propertyId && units.map((unit) => (
+            <SelectItem key={unit.id} value={unit.id}>
+              Unit {unit.unit_number} - {unit.status}
+            </SelectItem>
+          ))}
+        </SelectContent>
       </Select>
       {(helperText || fetchError) && (
-        <FormHelperText error={!!fetchError}>{fetchError || helperText}</FormHelperText>
+        <p className={`text-sm ${fetchError ? 'text-destructive' : 'text-muted-foreground'}`}>
+          {fetchError || helperText}
+        </p>
       )}
-    </FormControl>
+    </div>
   );
 };
 

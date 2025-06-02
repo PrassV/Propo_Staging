@@ -5,6 +5,7 @@ node_modules
 
 # Testing
 coverage
+.pytest_cache
 
 # Production
 dist
@@ -35,3 +36,27 @@ yarn-error.log*
 
 # Supabase
 .supabase
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+temp_venv/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+*.tmp
+*~
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Thumbs.db

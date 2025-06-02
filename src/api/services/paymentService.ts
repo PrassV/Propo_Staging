@@ -192,43 +192,6 @@ export const recordPayment = async (
   return response.data;
 };
 
-/*
-// TODO: Remove or adapt this function. Endpoint `/tenants/{tenantId}/payments/due` does not exist.
-// Get payments due for a specific tenant
-export const getPaymentsDueForTenant = async (tenantId: string): Promise<Payment[]> => {
-  const response = await apiClient.get<Payment[]>(`/tenants/${tenantId}/payments/due`);
-  return response.data;
-};
-*/
-
-/*
-// TODO: Remove or adapt this function. Endpoint `/properties/{propertyId}/payments/history` does not exist.
-// Get payment history for a property
-export const getPaymentHistoryForProperty = async (propertyId: string): Promise<Payment[]> => {
-  const response = await apiClient.get<Payment[]>(`/properties/${propertyId}/payments/history`);
-  return response.data;
-};
-*/
-
-/*
-// TODO: Fix this function based on backend implementation.
-// 1. Endpoint mismatch: Should be `/payments/{paymentId}/reminders` (plural).
-// 2. Request data missing: Backend expects Form data (`recipient_email`, `message`).
-// 3. Response handling: Backend returns `dict`, not `{ success: boolean }`.
-
-// Send payment reminder
-export const sendPaymentReminder = async (paymentId: string): Promise<{ success: boolean }> => {
-  // Needs recipient_email and message in request body/form data
-  const response = await apiClient.post<{ message: string }>( // Adjust expected response type
-    `/payments/${paymentId}/remind`, // Fix endpoint path
-    // Add form data here, e.g.:
-    // { recipient_email: '...', message: '...' }
-    );
-  // Handle the actual response message if needed
-  return { success: response.status === 200 }; // Or parse response.data.message
-};
-*/
-
 // Placeholder type - adjust based on actual data
 export interface RecentPaymentStatus {
     nextDueDate: string | null;
@@ -263,24 +226,6 @@ export const getTenantPaymentStatus = async (tenantId: string): Promise<RecentPa
        throw new Error(errorMessage);
     }
 };
-
-/*
-// Interface remains the same
-interface NotifyTenantParams {
-    email: string;
-    name: string;
-    type: 'electricity' | 'tax';
-    propertyId: string;
-    unitNumber: string;
-}
-
-// TODO: Refactor notifyTenant if it needs to call a backend API or remove if unused
-export async function notifyTenant(_params: NotifyTenantParams): Promise<{ success: boolean, data?: unknown, error?: string }> {
-    console.warn("notifyTenant function needs refactoring or removal.");
-    // Placeholder return
-    return { success: false, error: "Function not implemented" };
-}
-*/
 
 /**
  * Fetches payment history for a tenant.
@@ -332,9 +277,9 @@ export const createPaymentRequest = async (data: {
   due_date: string;
   payment_type: string;
   description: string;
-}): Promise<any> => {
+}): Promise<Payment> => {
   try {
-    const response = await apiClient.post('/payments', data);
+    const response = await apiClient.post<Payment>('/payments', data);
     return response.data;
   } catch (error: unknown) {
     console.error('Error creating payment request:', error);
@@ -357,9 +302,9 @@ export const recordManualPayment = async (paymentId: string, data: {
   payment_date: string;
   payment_method: string;
   notes?: string;
-}): Promise<any> => {
+}): Promise<Payment> => {
   try {
-    const response = await apiClient.post(`/payments/${paymentId}/record`, data);
+    const response = await apiClient.post<Payment>(`/payments/${paymentId}/record`, data);
     return response.data;
   } catch (error: unknown) {
     console.error(`Error recording payment for ${paymentId}:`, error);
@@ -380,13 +325,13 @@ export const recordManualPayment = async (paymentId: string, data: {
 export const sendPaymentReminder = async (paymentId: string, data: {
   recipient_email: string;
   message: string;
-}): Promise<any> => {
+}): Promise<{ message: string }> => {
   try {
     const formData = new FormData();
     formData.append('recipient_email', data.recipient_email);
     formData.append('message', data.message);
 
-    const response = await apiClient.post(`/payments/${paymentId}/reminders`, formData);
+    const response = await apiClient.post<{ message: string }>(`/payments/${paymentId}/reminders`, formData);
     return response.data;
   } catch (error: unknown) {
     console.error(`Error sending payment reminder for ${paymentId}:`, error);

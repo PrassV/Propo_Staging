@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { FormControl, InputLabel, Select, MenuItem, CircularProgress, FormHelperText, SelectChangeEvent } from '@mui/material';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 // Remove Supabase import
 // import { supabase } from '../../../lib/supabase';
 // Remove unused useAuth import as service handles auth implicitly
@@ -21,8 +29,7 @@ interface Property {
 
 interface PropertySelectProps {
   value: string;
-  // Use the correct MUI event type
-  onChange: (event: SelectChangeEvent<string>) => void;
+  onChange: (value: string) => void;
   disabled?: boolean;
   error?: boolean;
   helperText?: string;
@@ -32,7 +39,7 @@ const PropertySelect: React.FC<PropertySelectProps> = ({ value, onChange, disabl
   // Remove user state, not needed for fetching
   // const { user } = useAuth(); 
   const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState<boolean>(true); // Start loading true initially
+  const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,48 +66,45 @@ const PropertySelect: React.FC<PropertySelectProps> = ({ value, onChange, disabl
   }, []); // Empty dependency array, fetch once on mount
 
   return (
-    <FormControl fullWidth error={error || !!fetchError}>
-      <InputLabel id="property-select-label">Property</InputLabel>
+    <div className="space-y-2">
+      <Label htmlFor="property-select" className={error || fetchError ? 'text-destructive' : ''}>
+        Property
+      </Label>
       <Select
-        labelId="property-select-label"
-        id="property-select"
-        value={loading || fetchError ? '' : value} // Handle loading/error state
-        label="Property"
-        onChange={onChange}
+        value={loading || fetchError ? '' : value}
+        onValueChange={onChange}
         disabled={disabled || loading || !!fetchError}
-        required // Keep required if needed
       >
-        {/* Add Loading state */}
-        {loading && (
-          <MenuItem value="" disabled>
-            <CircularProgress size={20} style={{ marginRight: '8px' }} />
-            Loading properties...
-          </MenuItem>
-        )}
-        {/* Add Error state */}
-        {fetchError && (
-          <MenuItem value="" disabled>
-            Error loading properties
-          </MenuItem>
-        )}
-        {/* Placeholder/No data state */}
-        {!loading && !fetchError && properties.length === 0 && (
-            <MenuItem value="" disabled>
-                No properties found
-            </MenuItem>
-        )}
-        {/* Property options */}
-        {!loading && !fetchError && properties.map((property) => (
-          <MenuItem key={property.id} value={property.id}>
-            {property.property_name} - {property.address_line1}, {property.city}
-          </MenuItem>
-        ))}
+        <SelectTrigger className={`w-full ${error || fetchError ? 'border-destructive' : ''}`}>
+          <SelectValue placeholder={
+            loading ? (
+              <div className="flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading properties...
+              </div>
+            ) : fetchError ? (
+              "Error loading properties"
+            ) : properties.length === 0 ? (
+              "No properties found"
+            ) : (
+              "Select a property"
+            )
+          } />
+        </SelectTrigger>
+        <SelectContent>
+          {!loading && !fetchError && properties.map((property) => (
+            <SelectItem key={property.id} value={property.id}>
+              {property.property_name} - {property.address_line1}, {property.city}
+            </SelectItem>
+          ))}
+        </SelectContent>
       </Select>
-       {/* Display helper text or fetch error */}
       {(helperText || fetchError) && (
-        <FormHelperText error={!!fetchError}>{fetchError || helperText}</FormHelperText>
+        <p className={`text-sm ${fetchError ? 'text-destructive' : 'text-muted-foreground'}`}>
+          {fetchError || helperText}
+        </p>
       )}
-    </FormControl>
+    </div>
   );
 };
 

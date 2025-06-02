@@ -1,58 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
-  Box,
-  Button,
-  Typography,
-  Paper,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  MenuItem,
-  Grid,
-  IconButton,
-  Tooltip,
-  CircularProgress
-} from '@mui/material';
-import { Plus as AddIcon, Pencil as EditIcon, Trash as DeleteIcon } from 'lucide-react';
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus as AddIcon, Pencil as EditIcon, Trash as DeleteIcon, Loader2 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
 import { useSnackbar } from 'notistack';
 
-import { getLeases, getLease, createLease, updateLease, deleteLease } from '../api/services/leaseService';
+import { getLeases, createLease, updateLease, deleteLease } from '../api/services/leaseService';
 import { getTenants } from '../api/services/tenantService';
-import { getUnits } from '../api/services/propertyService';
-
-interface Lease {
-  id: string;
-  property_id: string;
-  tenant_id: string;
-  unit_number: string;
-  start_date: string;
-  end_date: string | null;
-  created_at: string;
-  updated_at: string;
-  tenant_details?: {
-    name: string;
-    email: string;
-    phone: string;
-  };
-}
-
-interface Tenant {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-}
+import { getUnitsForProperty } from '../api/services/propertyService';
+import { Tenant as TenantType, LeaseAgreement } from '../api/types';
 
 interface Unit {
   id: string;
@@ -62,26 +43,26 @@ interface Unit {
 
 interface LeaseFormData {
   tenant_id: string;
-  unit_number: string;
-  start_date: Date | null;
-  end_date: Date | null;
+  unit_id: string;
+  start_date: Date | undefined;
+  end_date: Date | undefined;
 }
 
 const LeaseManagement: React.FC = () => {
   const { propertyId } = useParams<{ propertyId: string }>();
   const { enqueueSnackbar } = useSnackbar();
 
-  const [leases, setLeases] = useState<Lease[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [leases, setLeases] = useState<LeaseAgreement[]>([]);
+  const [tenants, setTenants] = useState<TenantType[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [openDialog, setOpenDialog] = useState<boolean>(false);
   const [editingLease, setEditingLease] = useState<string | null>(null);
   const [formData, setFormData] = useState<LeaseFormData>({
     tenant_id: '',
-    unit_number: '',
-    start_date: null,
-    end_date: null
+    unit_id: '',
+    start_date: undefined,
+    end_date: undefined
   });
 
   useEffect(() => {
@@ -118,7 +99,7 @@ const LeaseManagement: React.FC = () => {
   const fetchUnits = async () => {
     try {
       if (propertyId) {
-        const response = await getUnits(propertyId);
+        const response = await getUnitsForProperty(propertyId);
         setUnits(response || []);
       }
     } catch (error) {
@@ -135,9 +116,9 @@ const LeaseManagement: React.FC = () => {
       if (lease) {
         setFormData({
           tenant_id: lease.tenant_id,
-          unit_number: lease.unit_number,
-          start_date: lease.start_date ? new Date(lease.start_date) : null,
-          end_date: lease.end_date ? new Date(lease.end_date) : null
+          unit_id: lease.unit_id,
+          start_date: lease.start_date ? new Date(lease.start_date) : undefined,
+          end_date: lease.end_date ? new Date(lease.end_date) : undefined
         });
       }
     } else {
@@ -145,9 +126,9 @@ const LeaseManagement: React.FC = () => {
       setEditingLease(null);
       setFormData({
         tenant_id: '',
-        unit_number: '',
-        start_date: null,
-        end_date: null
+        unit_id: '',
+        start_date: undefined,
+        end_date: undefined
       });
     }
     setOpenDialog(true);
@@ -158,12 +139,7 @@ const LeaseManagement: React.FC = () => {
     setEditingLease(null);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleDateChange = (name: string, date: Date | null) => {
+  const handleDateChange = (name: string, date: Date | undefined) => {
     setFormData(prev => ({ ...prev, [name]: date }));
   };
 
@@ -171,7 +147,7 @@ const LeaseManagement: React.FC = () => {
     try {
       if (!propertyId) return;
 
-      if (!formData.tenant_id || !formData.unit_number || !formData.start_date) {
+      if (!formData.tenant_id || !formData.unit_id || !formData.start_date) {
         enqueueSnackbar('Please fill in all required fields', { variant: 'warning' });
         return;
       }
@@ -179,9 +155,9 @@ const LeaseManagement: React.FC = () => {
       const leaseData = {
         property_id: propertyId,
         tenant_id: formData.tenant_id,
-        unit_number: formData.unit_number,
+        unit_id: formData.unit_id,
         start_date: formData.start_date.toISOString().split('T')[0],
-        end_date: formData.end_date ? formData.end_date.toISOString().split('T')[0] : null
+        end_date: formData.end_date ? formData.end_date.toISOString().split('T')[0] : undefined
       };
 
       if (editingLease) {
@@ -203,160 +179,164 @@ const LeaseManagement: React.FC = () => {
   };
 
   const handleDelete = async (leaseId: string) => {
-    if (window.confirm('Are you sure you want to delete this lease?')) {
-      try {
-        await deleteLease(leaseId);
-        enqueueSnackbar('Lease deleted successfully', { variant: 'success' });
-        fetchLeases(); // Refresh the list
-      } catch (error) {
-        console.error('Error deleting lease:', error);
-        enqueueSnackbar('Failed to delete lease', { variant: 'error' });
-      }
+    try {
+      await deleteLease(leaseId);
+      enqueueSnackbar('Lease deleted successfully', { variant: 'success' });
+      fetchLeases(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting lease:', error);
+      enqueueSnackbar('Failed to delete lease', { variant: 'error' });
     }
   };
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5" component="h1">
-          Lease Management
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Lease
-        </Button>
-      </Box>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading leases...</span>
+      </div>
+    );
+  }
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <TableContainer component={Paper}>
+  return (
+    <div className="p-6">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Lease Management</CardTitle>
+            <Button onClick={() => handleOpenDialog()}>
+              <AddIcon className="h-4 w-4 mr-2" />
+              Add Lease
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
           <Table>
-            <TableHead>
+            <TableHeader>
               <TableRow>
-                <TableCell>Tenant</TableCell>
-                <TableCell>Unit</TableCell>
-                <TableCell>Start Date</TableCell>
-                <TableCell>End Date</TableCell>
-                <TableCell>Actions</TableCell>
+                <TableHead>Tenant</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            </TableHead>
+            </TableHeader>
             <TableBody>
-              {leases.length > 0 ? (
-                leases.map((lease) => (
+              {leases.map((lease) => {
+                const tenant = tenants.find(t => t.id === lease.tenant_id);
+                const unit = units.find(u => u.id === lease.unit_id);
+                
+                return (
                   <TableRow key={lease.id}>
                     <TableCell>
-                      {lease.tenant_details?.name || 'Unknown'}
-                      <Typography variant="caption" display="block">
-                        {lease.tenant_details?.email || 'No email'}
-                      </Typography>
+                      {tenant?.name || lease.tenant_id}
                     </TableCell>
-                    <TableCell>{lease.unit_number}</TableCell>
-                    <TableCell>{format(new Date(lease.start_date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell>{unit?.unit_number || lease.unit_id}</TableCell>
                     <TableCell>
-                      {lease.end_date
-                        ? format(new Date(lease.end_date), 'MMM dd, yyyy')
-                        : 'No end date'
-                      }
+                      {lease.start_date ? format(new Date(lease.start_date), 'MMM dd, yyyy') : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Edit">
-                        <IconButton onClick={() => handleOpenDialog(lease.id)}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton onClick={() => handleDelete(lease.id)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {lease.end_date ? format(new Date(lease.end_date), 'MMM dd, yyyy') : 'Ongoing'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenDialog(lease.id)}
+                        >
+                          <EditIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(lease.id)}
+                        >
+                          <DeleteIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    No leases found
-                  </TableCell>
-                </TableRow>
-              )}
+                );
+              })}
             </TableBody>
           </Table>
-        </TableContainer>
-      )}
+        </CardContent>
+      </Card>
 
-      {/* Lease Form Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>{editingLease ? 'Edit Lease' : 'Add New Lease'}</DialogTitle>
-        <DialogContent>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Tenant"
-                  name="tenant_id"
-                  value={formData.tenant_id}
-                  onChange={handleInputChange}
-                  required
-                >
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLease ? 'Edit Lease' : 'Add New Lease'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_id">Tenant</Label>
+              <Select
+                value={formData.tenant_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, tenant_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select tenant" />
+                </SelectTrigger>
+                <SelectContent>
                   {tenants.map((tenant) => (
-                    <MenuItem key={tenant.id} value={tenant.id}>
-                      {tenant.name} ({tenant.email})
-                    </MenuItem>
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </SelectItem>
                   ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Unit"
-                  name="unit_number"
-                  value={formData.unit_number}
-                  onChange={handleInputChange}
-                  required
-                >
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="unit_id">Unit</Label>
+              <Select
+                value={formData.unit_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, unit_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select unit" />
+                </SelectTrigger>
+                <SelectContent>
                   {units.map((unit) => (
-                    <MenuItem key={unit.id} value={unit.unit_number}>
-                      {unit.unit_number} ({unit.status})
-                    </MenuItem>
+                    <SelectItem key={unit.id} value={unit.id}>
+                      Unit {unit.unit_number}
+                    </SelectItem>
                   ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="Start Date"
-                  value={formData.start_date}
-                  onChange={(date) => handleDateChange('start_date', date)}
-                  slotProps={{ textField: { fullWidth: true, required: true } }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="End Date"
-                  value={formData.end_date}
-                  onChange={(date) => handleDateChange('end_date', date)}
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-              </Grid>
-            </Grid>
-          </LocalizationProvider>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <DatePicker
+                date={formData.start_date ? new Date(formData.start_date) : undefined}
+                onSelect={(date) => handleDateChange('start_date', date)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>End Date (Optional)</Label>
+              <DatePicker
+                date={formData.end_date ? new Date(formData.end_date) : undefined}
+                onSelect={(date) => handleDateChange('end_date', date)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDialog}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit}>
+              {editingLease ? 'Update' : 'Create'} Lease
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">
-            {editingLease ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 };
 

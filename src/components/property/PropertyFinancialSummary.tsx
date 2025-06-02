@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +10,45 @@ import { FinancialSummary } from '@/api/types';
 interface PropertyFinancialSummaryProps {
   propertyId: string;
 }
+
+// Backend response structure
+interface BackendFinancialResponse {
+  period?: string;
+  date_range?: {
+    start_date: string;
+    end_date: string;
+  };
+  summary?: {
+    total_income: number;
+    total_expenses: number;
+    net_income: number;
+    profit_margin: number;
+  };
+  occupancy_rate?: number;
+  income_breakdown?: Array<{ category: string; amount: number }>;
+  expense_breakdown?: Array<{ category: string; amount: number }>;
+  trend_data?: Array<{ 
+    month: string; 
+    revenue: number; 
+    expenses: number; 
+    net_income: number; 
+  }>;
+}
+
+// Helper function to safely format numbers
+const formatCurrency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0.00';
+  }
+  return value.toFixed(2);
+};
+
+const formatPercentage = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0';
+  }
+  return value.toFixed(0);
+};
 
 export default function PropertyFinancialSummary({ propertyId }: PropertyFinancialSummaryProps) {
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
@@ -26,14 +65,36 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
       
       try {
         // Use the new financial service API
-        const data = await api.financial.getFinancialSummary(propertyId, period);
-        setFinancialData(data);
+        const response = await api.financial.getFinancialSummary(propertyId, period);
+        
+        // Check if response matches FinancialSummary structure or needs transformation
+        if (response && typeof response === 'object') {
+          // If response has the expected structure, use it directly
+          if ('total_revenue' in response && 'total_expenses' in response) {
+            setFinancialData(response as FinancialSummary);
+          } else {
+            // Transform backend response to match frontend expectations
+            const backendResponse = response as BackendFinancialResponse;
+            const transformedData: FinancialSummary = {
+              total_revenue: backendResponse.summary?.total_income || 0,
+              total_expenses: backendResponse.summary?.total_expenses || 0,
+              net_income: backendResponse.summary?.net_income || 0,
+              occupancy_rate: backendResponse.occupancy_rate || 0,
+              rent_collection_rate: backendResponse.summary?.profit_margin || 85,
+              payment_history: backendResponse.trend_data || [],
+              expense_breakdown: backendResponse.expense_breakdown || []
+            };
+            setFinancialData(transformedData);
+          }
+        } else {
+          // Fallback to placeholder data if response is invalid
+          generatePlaceholderData();
+        }
       } catch (err) {
         console.error("Error fetching financial data:", err);
         setError(err instanceof Error ? err.message : 'Failed to load financial data');
-        setFinancialData(null);
         
-        // Fallback to placeholder data for now (until backend is implemented)
+        // Fallback to placeholder data for development
         generatePlaceholderData();
       } finally {
         setLoading(false);
@@ -42,7 +103,6 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
     
     // Temporary function to generate placeholder data until backend is ready
     const generatePlaceholderData = () => {
-      // Placeholder data generation logic - this will be removed once backend is done
       const revenue = Math.round(Math.random() * 15000) + 5000;
       const expenses = Math.round(revenue * 0.3);
       
@@ -129,19 +189,19 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Total Revenue</p>
-            <p className="text-2xl font-bold">${financialData.total_revenue.toFixed(2)}</p>
+            <p className="text-2xl font-bold">${formatCurrency(financialData.total_revenue)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Total Expenses</p>
-            <p className="text-2xl font-bold">${financialData.total_expenses.toFixed(2)}</p>
+            <p className="text-2xl font-bold">${formatCurrency(financialData.total_expenses)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Net Income</p>
-            <p className="text-2xl font-bold">${financialData.net_income.toFixed(2)}</p>
+            <p className="text-2xl font-bold">${formatCurrency(financialData.net_income)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Collection Rate</p>
-            <p className="text-2xl font-bold">{financialData.rent_collection_rate.toFixed(0)}%</p>
+            <p className="text-2xl font-bold">{formatPercentage(financialData.rent_collection_rate)}%</p>
           </div>
         </div>
         
@@ -151,13 +211,13 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={financialData.payment_history}
+                  data={financialData.payment_history || []}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`$${value}`, '']} />
+                  <Tooltip formatter={(value) => [`$${formatCurrency(Number(value))}`, '']} />
                   <Bar dataKey="revenue" name="Revenue" fill="#8884d8" />
                   <Bar dataKey="expenses" name="Expenses" fill="#82ca9d" />
                 </BarChart>
@@ -171,26 +231,21 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={financialData.expense_breakdown}
+                    data={financialData.expense_breakdown || []}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name}: ${formatPercentage(percent * 100)}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="amount"
                     nameKey="category"
                   >
-                    {financialData.expense_breakdown.map((entry, index) => (
+                    {(financialData.expense_breakdown || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => {
-                    if (typeof value === 'number') {
-                      return [`$${value.toFixed(2)}`, ''];
-                    }
-                    return [`$${value}`, ''];
-                  }} />
+                  <Tooltip formatter={(value) => [`$${formatCurrency(Number(value))}`, '']} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

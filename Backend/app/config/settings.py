@@ -1,6 +1,6 @@
 import os
 from typing import List
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 import logging
 
@@ -49,10 +49,12 @@ class Settings(BaseSettings):
     GENERAL_UPLOAD_BUCKET: str = os.getenv("GENERAL_UPLOAD_BUCKET", "general-uploads") # A default bucket
     # Add others as needed based on your Supabase setup
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env", 
+        "env_file_encoding": "utf-8", 
+        "case_sensitive": True,
+        "extra": "ignore"  # Allow extra environment variables
+    }
 
 # Create settings instance
 settings = Settings()

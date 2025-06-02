@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -68,6 +68,8 @@ class MaintenanceUpdate(BaseModel):
     access_instructions: Optional[str] = None
 
 class MaintenanceRequest(MaintenanceBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     owner_id: str
     tenant_id: Optional[str] = None
@@ -82,16 +84,12 @@ class MaintenanceRequest(MaintenanceBase):
     notes: Optional[str] = None
     images: Optional[List[MaintenanceImage]] = None
 
-    class Config:
-        from_attributes = True
-
 class MaintenanceComment(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     request_id: str
     user_id: str
     comment: str
     user_type: Optional[str] = "owner"  # owner, tenant, vendor
     created_at: Optional[datetime] = None
-    attachments: Optional[List[str]] = None
-
-    class Config:
-        from_attributes = True 
+    attachments: Optional[List[str]] = None 

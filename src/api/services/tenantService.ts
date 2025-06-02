@@ -119,36 +119,18 @@ export const deleteTenant = async (id: string): Promise<{ message: string }> => 
   }
 };
 
-/*
-// TODO: Uncomment and adjust when backend document upload/linking endpoint for tenants is confirmed.
-// The endpoint `/tenants/{tenantId}/documents` does not seem to exist in the current backend API.
-// Verify the correct endpoint and data format (e.g., direct upload or passing URL).
-
-// Upload tenant document
+/**
+ * Upload tenant document
+ * @deprecated This endpoint is not yet implemented in the backend
+ */
 export const uploadTenantDocument = async (
-  tenantId: string, 
-  documentName: string, 
-  documentUrl: string, 
-  documentType: string
-): Promise<Tenant> => { // Adjust return type based on actual backend response
-  const formData = new FormData();
-  formData.append('document_name', documentName);
-  formData.append('document_url', documentUrl);
-  formData.append('document_type', documentType);
-  
-  const response = await apiClient.post<TenantResponse>( // Use correct response type
-    `/tenants/${tenantId}/documents`, // Use the correct backend endpoint
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data', // Check if this is correct or if it should be application/json
-      },
-    }
-  );
-  
-  return response.data.tenant; // Adjust based on actual backend response structure
+  _tenantId: string, 
+  _documentName: string, 
+  _documentUrl: string, 
+  _documentType: string
+): Promise<void> => {
+  throw new Error('Tenant document upload is not yet implemented');
 };
-*/
 
 /**
  * Invite a tenant to a property via email

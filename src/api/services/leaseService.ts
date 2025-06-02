@@ -9,14 +9,6 @@ interface LeaseParams {
   limit?: number;
 }
 
-interface LeaseData {
-  property_id: string;
-  tenant_id: string;
-  unit_number: string;
-  start_date: string;
-  end_date: string | null;
-}
-
 /**
  * Get lease agreement by unit ID
  * Calls GET /leases endpoint with unit_id parameter
@@ -123,7 +115,7 @@ export const deleteLease = async (leaseId: string): Promise<{ message: string }>
  * Get all leases with optional filtering
  * Calls GET /leases with optional parameters
  */
-export const getLeases = async (params: LeaseParams = {}) => {
+export const getLeases = async (params: LeaseParams = {}): Promise<{ items: LeaseAgreement[]; total?: number; message?: string }> => {
   try {
     const response = await apiClient.get('/leases', { params });
     return response.data;
@@ -138,3 +130,9 @@ export const getLeases = async (params: LeaseParams = {}) => {
     throw new Error(errorMessage);
   }
 };
+
+/**
+ * Alias for getLeaseById for backward compatibility
+ * @deprecated Use getLeaseById instead
+ */
+export const getLease = getLeaseById;

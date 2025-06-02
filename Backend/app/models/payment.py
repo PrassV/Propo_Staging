@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -62,6 +62,8 @@ class RecordPaymentRequest(BaseModel):
     notes: Optional[str] = None
 
 class Payment(PaymentBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: uuid.UUID
     owner_id: uuid.UUID
     status: PaymentStatus = PaymentStatus.PENDING
@@ -73,26 +75,21 @@ class Payment(PaymentBase):
     amount_paid: Optional[float] = 0
     receipt_url: Optional[str] = None
     transaction_id: Optional[str] = None
-    
-    class Config:
-        orm_mode = True
 
 class PaymentReceipt(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     payment_id: str
     url: str
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class PaymentReminder(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     payment_id: str
     sent_at: datetime
     recipient_email: str
     status: str
-    message: str
-    
-    class Config:
-        from_attributes = True 
+    message: str 

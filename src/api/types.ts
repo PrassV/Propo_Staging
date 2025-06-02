@@ -1,3 +1,37 @@
+// Import Supabase database types for schema alignment
+import type { 
+  Property as SupabaseProperty,
+  PropertyInsert as SupabasePropertyInsert,
+  PropertyUpdate as SupabasePropertyUpdate,
+  Unit as SupabaseUnit,
+  UnitInsert as SupabaseUnitInsert,
+  UnitUpdate as SupabaseUnitUpdate,
+  Tenant as SupabaseTenant,
+  TenantInsert as SupabaseTenantInsert,
+  TenantUpdate as SupabaseTenantUpdate,
+  Payment as SupabasePayment,
+  PaymentInsert as SupabasePaymentInsert,
+  PaymentUpdate as SupabasePaymentUpdate,
+  MaintenanceRequest as SupabaseMaintenanceRequest,
+  MaintenanceRequestInsert as SupabaseMaintenanceRequestInsert,
+  MaintenanceRequestUpdate as SupabaseMaintenanceRequestUpdate,
+  Document as SupabaseDocument,
+  DocumentInsert as SupabaseDocumentInsert,
+  DocumentUpdate as SupabaseDocumentUpdate,
+  Agreement as SupabaseAgreement,
+  AgreementInsert as SupabaseAgreementInsert,
+  AgreementUpdate as SupabaseAgreementUpdate,
+  Vendor as SupabaseVendor,
+  VendorInsert as SupabaseVendorInsert,
+  VendorUpdate as SupabaseVendorUpdate,
+  UserProfile as SupabaseUserProfile,
+  UserProfileInsert as SupabaseUserProfileInsert,
+  UserProfileUpdate as SupabaseUserProfileUpdate,
+  DashboardSummary as SupabaseDashboardSummary,
+  PropertyType,
+  TenantStatus
+} from './supabase-types';
+
 // Standard API Response types
 export interface ApiResponse<T> {
   data: T;
@@ -37,22 +71,11 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
-export interface UserProfile {
-  id: string;
-  email: string;
+// Use Supabase types as base and extend for frontend needs
+export interface UserProfile extends Omit<SupabaseUserProfile, 'user_type'> {
   full_name?: string;
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
   user_type?: 'owner' | 'tenant' | 'admin' | null;
   role?: 'owner' | 'tenant' | 'admin' | null;
-  created_at?: string;
-  updated_at?: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
 }
 
 // Define and export Session type for AuthContext
@@ -74,64 +97,25 @@ export interface PropertiesListResponse {
   total: number;
 }
 
-// Property types
-export interface Property {
-  id: string;
-  property_name: string;
-  property_type: string;
-  address_line1: string;
-  address_line2?: string;
-  city: string;
-  state: string;
-  pincode: string;
+// Property types - aligned with Supabase schema
+export interface Property extends Omit<SupabaseProperty, 'status' | 'country'> {
+  status: 'Rented' | 'Vacant' | 'For Sale' | 'Unknown';
   country: string;
-  description?: string;
-  bedrooms?: number;
-  bathrooms?: number;
   area?: number | null;
   area_unit?: string;
-  year_built?: number | null;
-  owner_id: string;
   image_url?: string;
-  status: 'Rented' | 'Vacant' | 'For Sale' | 'Unknown';
-  created_at: string;
-  updated_at: string;
   tenants?: Tenant[];
 }
 
-export interface PropertyCreate {
-  property_name: string;
-  property_type: string;
-  address_line1: string;
-  address_line2?: string;
-  city: string;
-  state: string;
-  pincode: string;
-  country: string;
-  description?: string;
-  bedrooms?: number;
-  bathrooms?: number;
+export interface PropertyCreate extends Omit<SupabasePropertyInsert, 'survey_number' | 'owner_id'> {
   area?: number;
   area_unit?: string;
-  year_built?: number;
   image_url?: string;
 }
 
-export interface PropertyUpdate {
-  property_name?: string;
-  property_type?: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-  country?: string;
-  description?: string;
-  bedrooms?: number;
-  bathrooms?: number;
+export interface PropertyUpdate extends Omit<SupabasePropertyUpdate, 'survey_number' | 'owner_id'> {
   area?: number;
   area_unit?: string;
-  year_built?: number;
   image_url?: string;
 }
 
@@ -166,79 +150,100 @@ export interface PropertyFormData {
   doorNumber?: string; // From original form state
 }
 
-// Represents the detailed data for a single Unit within a Property
-export interface UnitDetails {
-  id: string;
-  property_id: string;
-  unit_number: string;
-  status: 'Occupied' | 'Vacant' | 'Under Maintenance' | string;
-  current_tenant_id: string | null;
-  current_lease_id: string | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  area_sqft: number | null;
-  rent: number | null;
-  deposit: number | null;
-  // Add any other relevant unit details from API
+// Represents the detailed data for a single Unit within a Property - aligned with Supabase
+export interface UnitDetails extends SupabaseUnit {
+  current_tenant_id?: string | null;
+  current_lease_id?: string | null;
 }
 
 // Represents the detailed data returned for a single property view
-export interface PropertyDetails extends Property {
+export interface PropertyDetails {
+  id: string;
+  property_name: string;
+  property_type: string | null;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+  status: 'Rented' | 'Vacant' | 'For Sale' | 'Unknown';
+  owner_id: string;
+  created_at: string;
+  updated_at: string | null;
   image_urls: string[];
   units: UnitDetails[];
   documents: Document[];
-  amenities?: string[];
-  description?: string;
-  bedrooms?: number;
-  bathrooms?: number;
+  amenities?: string[] | null;
+  description?: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
   area?: number | null;
   year_built?: number | null;
+  price?: number | null;
+  size_sqft?: number | null;
   // Add other detailed fields if needed
 }
 
 // Define Unit type (as used in propertyService)
 export interface PropertyUnit {
-    id: string;
-    property_id: string;
-    unit_number: string;
-    tenant_id?: string;
-    // Add other relevant unit fields returned by GET /properties/{id}/units
-    // e.g., beds?: number; baths?: number;
+  id: string;
+  property_id: string;
+  unit_number: string;
+  tenant_id?: string;
+  // Add other relevant unit fields returned by GET /properties/{id}/units
+  // e.g., beds?: number; baths?: number;
 }
 
-// Tenant types
+// Tenant types - aligned with Supabase schema
 export interface Tenant {
   id: string;
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
+  user_id: string;
+  owner_id: string;
+  created_at: string | null;
+  updated_at: string | null;
+  dob: string;
+  gender: string;
+  family_size: number;
+  id_type: string;
+  id_number: string;
+  id_proof_url: string | null;
+  permanent_address: string;
+  university: string | null;
+  advance_amount: number | null;
+  rental_amount: number | null;
+  rental_start_date: string | null;
+  rental_end_date: string | null;
+  rental_type: string | null;
+  maintenance_fee: number | null;
+  lease_amount: number | null;
+  lease_start_date: string | null;
+  lease_end_date: string | null;
+  notice_period_days: number | null;
+  electricity_responsibility: string | null;
+  water_responsibility: string | null;
+  property_tax_responsibility: string | null;
+  status?: TenantStatus;
+  tenant_type?: 'individual' | 'company';
+  move_in_date?: string;
+  rent_amount?: number;
+  rent_frequency?: 'monthly' | 'quarterly' | 'annually';
+  property_id?: string;
+}
+
+export interface TenantCreate extends Omit<SupabaseTenantInsert, 'dob' | 'gender' | 'family_size' | 'id_type' | 'id_number' | 'permanent_address' | 'owner_id' | 'user_id'> {
   tenant_type?: 'individual' | 'company';
   move_in_date?: string;
   lease_end_date?: string;
   rent_amount?: number;
   rent_frequency?: 'monthly' | 'quarterly' | 'annually';
   property_id: string;
-  user_id?: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface TenantCreate {
-  name: string;
-  email: string;
-  phone?: string;
-  tenant_type?: 'individual' | 'company';
-  move_in_date?: string;
-  lease_end_date?: string;
-  rent_amount?: number;
-  rent_frequency?: 'monthly' | 'quarterly' | 'annually';
-  property_id: string;
-}
-
-export interface TenantUpdate {
-  name?: string;
-  email?: string;
-  phone?: string;
+export interface TenantUpdate extends Omit<SupabaseTenantUpdate, 'dob' | 'gender' | 'family_size' | 'id_type' | 'id_number' | 'permanent_address' | 'owner_id' | 'user_id'> {
   tenant_type?: 'individual' | 'company';
   move_in_date?: string;
   lease_end_date?: string;
@@ -246,16 +251,12 @@ export interface TenantUpdate {
   rent_frequency?: 'monthly' | 'quarterly' | 'annually';
 }
 
-// Dashboard types
-export interface DashboardSummary {
-  // Owner Dashboard Fields
-  total_properties: number;
-  total_tenants: number;
-  occupied_units: number;
-  vacant_units: number;
-  total_revenue: number;
-  pending_rent: number;
-  maintenance_requests: number;
+// Dashboard types - aligned with Supabase view
+export interface DashboardSummary extends SupabaseDashboardSummary {
+  // Additional computed fields for frontend
+  total_revenue?: number;
+  pending_rent?: number;
+  maintenance_requests?: number;
   
   // Tenant Dashboard Fields
   next_due_date?: string;
@@ -263,7 +264,6 @@ export interface DashboardSummary {
   lease_end?: string;
 }
 
-// Payment record in dashboard
 export interface RecentPayment {
   id: string;
   amount: number;
@@ -273,7 +273,6 @@ export interface RecentPayment {
   property_name: string;
 }
 
-// Maintenance issue in dashboard
 export interface MaintenanceIssue {
   id: string;
   title: string;
@@ -290,26 +289,22 @@ export interface DashboardData {
   revenue_by_month: { month: string; amount: number }[];
 }
 
-// Backend response structure for single tenant
 export interface TenantResponse {
   tenant: Tenant;
   message: string;
 }
 
-// Backend response structure for tenant list
 export interface TenantsListResponse {
   items: Tenant[];
   total: number;
   message: string;
 }
 
-// Backend response structure for tenant invitation (based on backend code)
 export interface TenantInvitationResponse {
     invitation: TenantInvitation; // TenantInvitation is already defined
     message: string;
 }
 
-// Tenant Invitation types
 export interface TenantInvitation {
   id: string;
   property_id: string;
@@ -333,86 +328,50 @@ export interface TenantInvitationVerify {
   token: string;
 }
 
-// Payment types
-export interface Payment {
-  id: string;
-  amount: number;
-  due_date: string;
-  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+// Payment types - aligned with Supabase schema
+export interface Payment extends Omit<SupabasePayment, 'payment_type'> {
   payment_type: 'rent' | 'deposit' | 'maintenance' | 'other';
-  description?: string;
-  property_id: string;
-  tenant_id: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface PaymentCreate {
-  amount: number;
-  due_date: string;
+export interface PaymentCreate extends Omit<SupabasePaymentInsert, 'lease_id' | 'unit_id'> {
   payment_type: 'rent' | 'deposit' | 'maintenance' | 'other';
-  description?: string;
-  property_id: string;
-  tenant_id: string;
 }
 
-export interface PaymentUpdate {
-  status?: 'pending' | 'paid' | 'overdue' | 'cancelled';
+export interface PaymentUpdate extends SupabasePaymentUpdate {
   // Add other updatable fields if needed, e.g., description
   description?: string;
   // Note: payment_date is NOT part of the Payment model, so cannot be updated here
 }
 
-// Define Maintenance Status Type
-export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+// Maintenance types - aligned with Supabase schema
+export type MaintenanceStatus = 'new' | 'in_progress' | 'completed' | 'rejected';
 
-// Define Maintenance Priority Type
-export type MaintenancePriority = 'low' | 'medium' | 'high' | 'emergency';
+export type MaintenancePriority = 'emergency' | 'urgent' | 'normal' | 'low';
 
-// Define Maintenance Category Type (add more specific categories as needed)
 export type MaintenanceCategory = 
-    'plumbing' | 'electrical' | 'hvac' | 'appliances' | 
-    'painting' | 'carpentry' | 'landscaping' | 'cleaning' | 
-    'pest_control' | 'roofing' | 'general' | 'other';
+    'plumbing' | 'electrical' | 'carpentry' | 'painting' | 'appliance' | 'other';
 
-// Maintenance Request Types
-export interface MaintenanceRequest {
-  id: string;
-  property_id: string;
-  tenant_id?: string;
-  title: string;
-  description: string;
+export interface MaintenanceRequest extends Omit<SupabaseMaintenanceRequest, 'status' | 'priority' | 'category'> {
   status: MaintenanceStatus;
-  priority: MaintenancePriority; // Use the defined type
-  category: MaintenanceCategory; // Use the defined type
+  priority: MaintenancePriority;
+  category: MaintenanceCategory;
   images?: string[];
   assigned_to?: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface MaintenanceRequestCreate {
-  property_id: string;
-  tenant_id?: string;
-  title: string;
-  description: string;
-  priority: MaintenancePriority; // Use the defined type
-  category: MaintenanceCategory; // Use the defined type
+export interface MaintenanceRequestCreate extends Omit<SupabaseMaintenanceRequestInsert, 'created_by' | 'unit_id' | 'status' | 'priority' | 'category'> {
+  priority: MaintenancePriority;
+  category: MaintenanceCategory;
   // images?: string[]; // Add if API expects image URLs during creation
 }
 
-export interface MaintenanceRequestUpdate {
-  title?: string;
-  description?: string;
+export interface MaintenanceRequestUpdate extends Omit<SupabaseMaintenanceRequestUpdate, 'status' | 'priority' | 'category'> {
   status?: MaintenanceStatus;
-  priority?: MaintenancePriority; // Use the defined type
-  category?: MaintenanceCategory; // Use the defined type
+  priority?: MaintenancePriority;
+  category?: MaintenanceCategory;
   assigned_to?: string; 
 }
 
-// Add other related types if needed, e.g., for Comments, Vendors etc. 
-
-// Rent Estimation types
 export interface RentEstimationRequest {
   property_type: string;
   area: number;
@@ -431,9 +390,6 @@ export interface RentEstimationResponse {
   comparable_properties?: unknown[]; // Use unknown instead of any
 }
 
-// ############# DOCUMENT TYPES START #############
-
-// Matches backend DocumentType enum
 export type DocumentType = 
     'lease_agreement' | 
     'id_proof' | 
@@ -443,88 +399,50 @@ export type DocumentType =
     'property_photo' | 
     'other';
 
-// Matches backend DocumentStatus enum
 export type DocumentStatus = 'active' | 'archived' | 'pending_review';
 
-// Matches backend DocumentAccess enum
 export type DocumentAccess = 'private' | 'shared_link' | 'shared_user';
 
-// Document types (Consolidated Definition)
-export interface Document {
-  id: string;
+// Document types - aligned with Supabase schema
+export interface Document extends Omit<SupabaseDocument, 'document_name' | 'document_type' | 'status'> {
   title: string;
-  description?: string;
-  owner_id: string;
-  property_id?: string;
-  tenant_id?: string;
-  unit_id?: string;
-  maintenance_request_id?: string;
-  payment_id?: string;
-  file_url: string;
   file_name: string;
   file_type: string;
   file_path?: string;
-  file_extension?: string;
-  file_size?: number;
   document_type?: DocumentType;
   access_level: DocumentAccess;
   status?: DocumentStatus;
   tags?: string[];
-  version?: number;
-  created_at: string; 
-  updated_at?: string;
+  unit_id?: string;
 }
 
-// --- Document Create Payload Type --- 
-// Aligned with DB schema + necessary frontend fields
-export interface DocumentCreate {
-  document_name: string;
-  file_url: string;
-  property_id?: string; 
-  tenant_id?: string;
-  unit_id?: string;
-  maintenance_request_id?: string;
-  payment_id?: string;
-  document_type?: DocumentType;
-  mime_type?: string;
-  file_extension?: string;
-  file_size?: number;
-  description?: string;
+export interface DocumentCreate extends Omit<SupabaseDocumentInsert, 'owner_id'> {
   title?: string;
   file_name?: string;
   file_path?: string;
   access_level?: DocumentAccess;
   tags?: string[];
+  unit_id?: string;
 }
 
-export interface DocumentUpdate {
+export interface DocumentUpdate extends SupabaseDocumentUpdate {
   title?: string; // Changed from document_name
-  description?: string;
-  document_type?: DocumentType;
-  property_id?: string | null; 
-  tenant_id?: string | null;   
-  maintenance_request_id?: string | null;
-  payment_id?: string | null;
   access_level?: DocumentAccess;
   tags?: string[];
 }
 
-// Backend response structure for single document
 export interface DocumentResponse {
   document: Document;
   message?: string;
 }
 
-// Backend response structure for document list
 export interface DocumentsResponse {
   documents: Document[];
   count: number;
   message?: string;
 }
 
-// ############# DOCUMENT TYPES END #############
-
-// Type for updating user profile
+// User types - aligned with Supabase schema
 export interface UserUpdate {
   first_name?: string;
   last_name?: string;
@@ -532,14 +450,12 @@ export interface UserUpdate {
   // Can add other fields users are allowed to update
 }
 
-// Upload response type
 export interface UploadResponse {
   message: string;
   imageUrls?: string[];
   fileUrl?: string; // For single file uploads
 }
 
-// Reporting types (Define based on backend models)
 export interface Report {
   id: string;
   owner_id: string;
@@ -575,27 +491,28 @@ export interface ReportSchedule {
   updated_at: string;
 }
 
-// Backend response structures
 export interface ReportResponse {
   report: Report;
   message: string;
 }
+
 export interface ReportsResponse {
   reports: Report[];
   count: number;
   message: string;
 }
+
 export interface ReportScheduleResponse {
   schedule: ReportSchedule;
   message: string;
 }
+
 export interface ReportSchedulesResponse {
   schedules: ReportSchedule[];
   count: number;
   message: string;
 }
 
-// Notification types
 export interface Notification {
   id: string;
   user_id: string;
@@ -622,63 +539,35 @@ export interface NotificationSettings {
   // e.g., notify_payment_due: boolean;
 }
 
-// Backend response structures
 export interface NotificationResponse {
   notification: Notification;
   message: string;
 }
+
 export interface NotificationsResponse {
   notifications: Notification[];
   count: number;
   unread_count: number;
   message: string;
 }
+
 export interface NotificationSettingsResponse {
   settings: NotificationSettings;
   message: string;
 }
 
-// Agreement types
-export interface Agreement {
-  id: string;
-  owner_id: string;
-  tenant_id: string;
-  property_id: string;
-  agreement_type: string; // e.g., 'lease', 'rental'
-  status: string; // e.g., 'draft', 'pending_tenant', 'pending_landlord', 'signed', 'expired'
-  start_date: string;
-  end_date: string;
-  rent_amount: number;
-  rent_frequency: string;
-  deposit_amount?: number;
-  terms?: string;
-  document_url?: string; // Link to the generated/signed document
-  created_at: string;
-  updated_at: string;
+// Agreement types - aligned with Supabase schema
+export interface Agreement extends SupabaseAgreement {
+  rent_frequency?: string;
 }
 
-export interface AgreementCreate {
-  tenant_id: string;
-  property_id: string;
-  agreement_type: string;
-  start_date: string;
-  end_date: string;
-  rent_amount: number;
-  rent_frequency: string;
-  deposit_amount?: number;
-  terms?: string;
+export interface AgreementCreate extends SupabaseAgreementInsert {
+  rent_frequency?: string;
   template_id?: string; // Optional template to use
 }
 
-export interface AgreementUpdate {
-  status?: string;
-  start_date?: string;
-  end_date?: string;
-  rent_amount?: number;
+export interface AgreementUpdate extends SupabaseAgreementUpdate {
   rent_frequency?: string;
-  deposit_amount?: number;
-  terms?: string;
-  document_url?: string;
 }
 
 export interface AgreementTemplate {
@@ -690,48 +579,20 @@ export interface AgreementTemplate {
   updated_at: string;
 }
 
-// Backend response structures (assuming most return the model directly)
-// Add specific response types if backend wraps them (like for delete) 
-
-// Vendor types
-export interface Vendor {
-  id: string;
-  owner_id: string;
-  company_name: string;
-  contact_name?: string;
-  email: string;
-  phone?: string;
+// Vendor types - aligned with Supabase schema
+export interface Vendor extends Omit<SupabaseVendor, 'categories'> {
   category: string; // e.g., 'plumbing', 'electrical', 'hvac'
-  status: string; // e.g., 'active', 'inactive', 'pending'
-  rating?: number;
-  completed_jobs?: number;
-  address?: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface VendorCreate {
-  company_name: string;
-  contact_name?: string;
-  email: string;
-  phone?: string;
+export interface VendorCreate extends Omit<SupabaseVendorInsert, 'categories' | 'owner_id'> {
   category: string;
-  address?: string;
 }
 
-export interface VendorUpdate {
-  company_name?: string;
-  contact_name?: string;
-  email?: string;
-  phone?: string;
+export interface VendorUpdate extends Omit<SupabaseVendorUpdate, 'categories' | 'owner_id'> {
   category?: string;
-  status?: string;
-  address?: string;
 }
 
-// Add specific response types if needed, e.g., for stats or jobs 
-
-// Lease Agreement Type
+// Lease Agreement types
 export interface LeaseAgreement {
     id: string;
     property_id: string;
@@ -749,7 +610,6 @@ export interface LeaseAgreement {
     // Add other relevant fields like termination details, clauses etc.
 }
 
-// Maintenance Comment Type (Add if missing)
 export interface MaintenanceComment {
     id: string;
     request_id: string;
@@ -760,25 +620,23 @@ export interface MaintenanceComment {
     // Add other fields like attachments if supported
 }
 
-// Add UnitCreate Type
+// Unit types - aligned with Supabase schema
 export interface UnitCreate {
-    unit_number?: string;
-    status?: 'Occupied' | 'Vacant' | 'Under Maintenance' | string;
-    bedrooms?: number | null;
-    bathrooms?: number | null;
-    area_sqft?: number | null;
-    rent?: number | null;
-    deposit?: number | null;
-    // Add other fields required/allowed for creating a unit
+  property_id: string;
+  unit_number: string;
+  area_sqft?: number | null;
+  bathrooms?: number | null;
+  bedrooms?: number | null;
+  deposit?: number | null;
+  rent?: number | null;
+  status?: string | null;
 }
 
-// Add UnitResponse Type (adjust based on actual API response)
 export interface UnitResponse {
     unit: UnitDetails;
     message?: string;
 }
 
-// Interface for Rent Agreement Form Data
 export interface RentAgreementFormData { 
     landlordName?: string;
     landlordAddress?: string;
@@ -796,14 +654,12 @@ export interface RentAgreementFormData {
     // Add other fields from the form as needed
 }
 
-// Interface for the response from the agreement generation utility/API
 export interface AgreementGenerationResponse {
     agreement: string; // The generated agreement text
     success?: boolean; // Optional success flag
     // Add other potential response fields from the API
 }
 
-// Financial Summary types
 export interface FinancialSummary {
   total_revenue: number;
   total_expenses: number;
@@ -822,7 +678,6 @@ export interface FinancialSummary {
   }[];
 }
 
-// Property Tax types
 export interface PropertyTax {
   id: string;
   property_id: string;
@@ -845,4 +700,38 @@ export interface PropertyTaxCreate {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   document_id?: string;
   notes?: string;
-} 
+}
+
+// Re-export Supabase types for direct use
+export type {
+  PropertyType,
+  TenantStatus,
+  SupabaseProperty,
+  SupabasePropertyInsert,
+  SupabasePropertyUpdate,
+  SupabaseUnit,
+  SupabaseUnitInsert,
+  SupabaseUnitUpdate,
+  SupabaseTenant,
+  SupabaseTenantInsert,
+  SupabaseTenantUpdate,
+  SupabasePayment,
+  SupabasePaymentInsert,
+  SupabasePaymentUpdate,
+  SupabaseMaintenanceRequest,
+  SupabaseMaintenanceRequestInsert,
+  SupabaseMaintenanceRequestUpdate,
+  SupabaseDocument,
+  SupabaseDocumentInsert,
+  SupabaseDocumentUpdate,
+  SupabaseAgreement,
+  SupabaseAgreementInsert,
+  SupabaseAgreementUpdate,
+  SupabaseVendor,
+  SupabaseVendorInsert,
+  SupabaseVendorUpdate,
+  SupabaseUserProfile,
+  SupabaseUserProfileInsert,
+  SupabaseUserProfileUpdate,
+  SupabaseDashboardSummary
+}; 

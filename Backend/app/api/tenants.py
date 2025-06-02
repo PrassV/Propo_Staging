@@ -480,128 +480,80 @@ async def get_tenant_maintenance(
             detail=f"Error retrieving tenant maintenance requests: {str(e)}"
         )
 
-@router.get("/{tenant_id}/payment_status", response_model=PaymentStatusResponse)
+@router.get("/{tenant_id}/payment-status", response_model=Dict[str, Any])
 async def get_tenant_payment_status(
-    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    tenant_id: uuid.UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
-    """
-    Get the current payment status for a tenant, including upcoming and past payments.
-    This endpoint provides:
-    - Next payment due date and amount
-    - Most recent payment date and amount
-    - Whether any payment is overdue
-
-    Access is restricted to:
-    - The tenant themselves
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get payment status for a specific tenant"""
     try:
-        # Convert string UUID from auth to UUID object for service layer
-        user_id = uuid.UUID(current_user["id"])
-        tenant_id_obj = uuid.UUID(str(tenant_id))
-
-        # Check if current user has permission to access this tenant
-        tenant = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
-        if not tenant:
+        # Verify access - tenant can view their own, owner can view their tenants
+        user_id = current_user.get("id")
+        user_type = current_user.get("user_type", "owner")
+        
+        if user_type == "tenant" and str(tenant_id) != user_id:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tenant not found or you don't have permission to access this tenant's payment information"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenants can only view their own payment status"
             )
-
-        # Get payment history from database
-        now = datetime.now()
-
-        # Look for the most recent payment
-        payment_history_response = await tenant_service.get_tenant_payments(
-            tenant_id=tenant_id_obj,
-            limit=1,
-            sort_by="payment_date",
+        
+        # Get tenant's current payments
+        from app.services import payment_service
+        
+        # Get recent payment status
+        payments, _ = await payment_service.get_payments(
+            user_id=user_id,
+            user_type=user_type,
+            tenant_id=str(tenant_id),
+            skip=0,
+            limit=5,
+            sort_by="due_date",
             sort_order="desc"
         )
-        last_payment = payment_history_response[0] if payment_history_response else None
-
-        # Look for upcoming or overdue payments
-        payment_tracking_response = await tenant_service.get_tenant_payment_tracking(
-            tenant_id=tenant_id_obj,
-            sort_by="payment_date",
-            sort_order="asc"
-        )
-
-        # Filter for unpaid payments
-        unpaid_payments = [p for p in payment_tracking_response if p.get('payment_status', '').lower() != 'paid']
-
+        
+        if not payments:
+            return {
+                "nextDueDate": None,
+                "nextDueAmount": None,
+                "lastPaymentDate": None,
+                "lastPaymentAmount": None,
+                "isOverdue": False
+            }
+        
         # Find next due payment
-        next_payment = None
-        for payment in unpaid_payments:
-            payment_date = payment.get('payment_date')
-            if not payment_date:
-                continue
-
-            if isinstance(payment_date, str):
-                payment_date = datetime.fromisoformat(payment_date)
-
-            if payment_date >= now:
-                next_payment = payment
-                break
-
-        # Find overdue payments
-        overdue_payments = [p for p in unpaid_payments if p.get('payment_date') and
-                            (isinstance(p.get('payment_date'), datetime) and p.get('payment_date') < now or
-                            isinstance(p.get('payment_date'), str) and datetime.fromisoformat(p.get('payment_date')) < now)]
-
-        # Format the response
-        response = {
-            "message": "Payment status retrieved successfully"
+        from datetime import date
+        today = date.today()
+        
+        next_due = None
+        last_payment = None
+        is_overdue = False
+        
+        for payment in payments:
+            if payment.status == "pending" and payment.due_date >= today:
+                if not next_due or payment.due_date < next_due.due_date:
+                    next_due = payment
+            elif payment.status == "paid":
+                if not last_payment or (payment.payment_date and payment.payment_date > last_payment.payment_date):
+                    last_payment = payment
+            elif payment.status == "overdue":
+                is_overdue = True
+        
+        return {
+            "nextDueDate": next_due.due_date.isoformat() if next_due else None,
+            "nextDueAmount": float(next_due.amount_due) if next_due else None,
+            "lastPaymentDate": last_payment.payment_date.isoformat() if last_payment and last_payment.payment_date else None,
+            "lastPaymentAmount": float(last_payment.amount_paid or 0) if last_payment else None,
+            "isOverdue": is_overdue
         }
-
-        if next_payment:
-            payment_date = next_payment.get('payment_date')
-            if isinstance(payment_date, str):
-                payment_date = datetime.fromisoformat(payment_date)
-
-            response["nextDueDate"] = payment_date.isoformat() if payment_date else None
-
-            # Try to get amount from different possible fields
-            amount = 0
-            if 'total_amount' in next_payment:
-                amount = float(next_payment.get('total_amount', 0))
-            elif 'rent_amount' in next_payment:
-                amount = float(next_payment.get('rent_amount', 0))
-                if 'maintenance_fee' in next_payment:
-                    amount += float(next_payment.get('maintenance_fee', 0))
-
-            response["nextDueAmount"] = amount
-
-        if last_payment:
-            payment_date = last_payment.get('payment_date')
-            if isinstance(payment_date, str):
-                payment_date = datetime.fromisoformat(payment_date)
-
-            response["lastPaymentDate"] = payment_date.isoformat() if payment_date else None
-
-            # Try to get amount from different possible fields
-            amount = 0
-            if 'total_amount' in last_payment:
-                amount = float(last_payment.get('total_amount', 0))
-            elif 'rent_amount' in last_payment:
-                amount = float(last_payment.get('rent_amount', 0))
-                if 'maintenance_fee' in last_payment:
-                    amount += float(last_payment.get('maintenance_fee', 0))
-
-            response["lastPaymentAmount"] = amount
-
-        # Set overdue status
-        response["isOverdue"] = len(overdue_payments) > 0
-
-        return response
-
-    except HTTPException as http_exc:
-        raise http_exc
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error getting tenant payment status: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving tenant payment status: {str(e)}"
+            status_code=500,
+            detail=f"Failed to get payment status: {str(e)}"
         )
 
 # Note: The tenant document upload endpoint (POST /{tenant_id}/documents) has been removed

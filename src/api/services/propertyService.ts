@@ -132,34 +132,9 @@ export const deleteProperty = async (id: string): Promise<void> => {
     }
 };
 
-/*
-// TODO: Uncomment and adjust when backend image upload endpoint is confirmed/created.
-// The endpoint '/properties/{propertyId}/images' does not seem to exist in the current backend API.
-// Verify the correct endpoint and data format (e.g., direct upload or passing URL).
-
-// Upload property image
-export const uploadPropertyImage = async (propertyId: string, imageUrl: string, isPrimary: boolean = false): Promise<Property> => {
-  const formData = new FormData();
-  formData.append('image_url', imageUrl);
-  formData.append('is_primary', isPrimary.toString());
-
-  const response = await apiClient.post<Property>( // Use the correct response type from backend
-    `/properties/${propertyId}/images`, // Use the correct backend endpoint
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }
-  );
-
-  return response.data; // Adjust based on actual backend response structure
-};
-*/
-
 /**
  * Fetches units for a specific property.
- * Calls GET /properties/{propertyId}/units
+ * Calls GET /units with property_id parameter
  */
 export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetails[]> => {
     if (!propertyId) {
@@ -167,7 +142,9 @@ export const getUnitsForProperty = async (propertyId: string): Promise<UnitDetai
     }
 
     try {
-        const response = await apiClient.get<UnitDetails[]>(`/properties/${propertyId}/units`);
+        const response = await apiClient.get<UnitDetails[]>('/units', {
+            params: { property_id: propertyId }
+        });
         return response.data || [];
     } catch (error: unknown) {
         console.error(`Error fetching units for property ${propertyId}:`, error);
@@ -227,11 +204,14 @@ export const uploadPropertyImages = async (images: File[]): Promise<{ imagePaths
 
 /**
  * Create a unit for a property
- * Calls POST /properties/{propertyId}/units
+ * Calls POST /units with property_id in the request body
  */
 export const createUnit = async (propertyId: string, unitData: UnitCreate): Promise<UnitResponse> => {
     try {
-        const response = await apiClient.post<UnitResponse>(`/properties/${propertyId}/units`, unitData);
+        const response = await apiClient.post<UnitResponse>('/units', {
+            ...unitData,
+            property_id: propertyId
+        });
         return response.data;
     } catch (error: unknown) {
         console.error(`Error creating unit for property ${propertyId}:`, error);
