@@ -702,6 +702,15 @@ export interface PropertyTaxCreate {
   notes?: string;
 }
 
+export interface TenantAssignment {
+  tenant_id: string;
+  lease_start: string;
+  lease_end?: string | null;
+  rent_amount?: number;
+  deposit_amount?: number | null;
+  notes?: string;
+}
+
 // Re-export Supabase types for direct use
 export type {
   PropertyType,

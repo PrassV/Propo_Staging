@@ -1,6 +1,6 @@
 import apiClient from '../client';
 // Import PropertiesListResponse and remove ApiResponse if no longer needed elsewhere
-import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse, PropertyTax, PropertyTaxCreate } from '../types';
+import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse, PropertyTax, PropertyTaxCreate, TenantAssignment } from '../types';
 import axios from 'axios';
 
 // Define Unit type (adjust based on actual API response)
@@ -350,6 +350,36 @@ export const deleteUnitImage = async (unitId: string, imageUrl: string): Promise
     console.error(`Error deleting image from unit ${unitId}:`, error);
     let errorMessage = 'Failed to delete unit image';
     if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Assign a tenant to a unit
+ * Calls POST /units/{unitId}/tenants
+ */
+export const assignTenantToUnit = async (
+  unitId: string, 
+  assignmentData: {
+    tenant_id: string;
+    lease_start: string;
+    lease_end?: string | null;
+    rent_amount?: number;
+    deposit_amount?: number | null;
+    notes?: string;
+  }
+): Promise<TenantAssignment> => {
+  try {
+    const response = await apiClient.post<TenantAssignment>(`/units/${unitId}/tenants`, assignmentData);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error assigning tenant to unit ${unitId}:`, error);
+    let errorMessage = 'Failed to assign tenant to unit';
+    if (error && typeof error === 'object' && 'formattedMessage' in error) {
+      errorMessage = (error as { formattedMessage: string }).formattedMessage;
+    } else if (error instanceof Error) {
       errorMessage = error.message;
     }
     throw new Error(errorMessage);

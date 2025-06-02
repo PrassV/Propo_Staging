@@ -13,7 +13,6 @@ import DocumentList from '@/components/documents/DocumentList'; // Import Docume
 import AddUnitForm from '@/components/property/AddUnitForm'; // Import the AddUnitForm component
 import PropertyFinancialSummary from '@/components/property/PropertyFinancialSummary'; // Import the financial summary component
 import PropertyLocationMap from '@/components/property/PropertyLocationMap'; // Import the location map component
-import LeaseManagement from '@/components/LeaseManagement'; // Import the LeaseManagement component
 
 // Import Dialog components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -329,6 +328,8 @@ export default function PropertyDetailsPage() {
                     <UnitCard
                         key={unit.id}
                         unit={unit}
+                        propertyId={property.id}
+                        onUpdate={fetchPropertyDetails}
                     />
                 ))}
             </div>
