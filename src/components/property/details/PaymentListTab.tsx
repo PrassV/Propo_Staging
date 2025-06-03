@@ -60,6 +60,10 @@ export default function PaymentListTab({ unitId, tenantId }: PaymentListTabProps
         console.error("Error fetching payments:", err);
         setError(err instanceof Error ? err.message : 'Failed to load payments.');
         setPayments([]); // Clear on error
+        // Set a fallback message for missing API
+        if (err instanceof Error && (err.message.includes('404') || err.message.includes('endpoint'))) {
+          setError('Payment functionality is not yet implemented. This feature is coming soon.');
+        }
       } finally { setLoading(false); }
     };
     fetchPayments();
@@ -233,8 +237,42 @@ export default function PaymentListTab({ unitId, tenantId }: PaymentListTabProps
     }
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <p className="text-sm text-destructive">Error: {error}</p>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Payment Management</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-blue-800 text-sm">
+              💡 This feature will allow you to:
+            </p>
+            <ul className="text-blue-700 text-sm mt-2 space-y-1">
+              <li>• Track rent payments and due dates</li>
+              <li>• Generate payment requests</li>
+              <li>• Record manual payments</li>
+              <li>• View payment history</li>
+            </ul>
+          </div>
+        </div>
+        <Button 
+          onClick={() => window.location.reload()} 
+          variant="outline"
+          className="mt-4"
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

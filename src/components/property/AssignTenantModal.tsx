@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,12 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tenant, TenantAssignment } from '../../api/types';
 import { getTenants, createTenant } from '../../api/services/tenantService';
 import { assignTenantToUnit } from '../../api/services/propertyService';
+import { Textarea } from "@/components/ui/textarea";
 
 interface AssignTenantModalProps {
   isOpen: boolean;
   onClose: () => void;
   unitId: string;
-  propertyId: string;
   unitNumber: string;
   onSuccess: () => void;
 }
@@ -24,7 +24,6 @@ export default function AssignTenantModal({
   isOpen,
   onClose,
   unitId,
-  propertyId,
   unitNumber,
   onSuccess
 }: AssignTenantModalProps) {
@@ -44,6 +43,10 @@ export default function AssignTenantModal({
     name: '',
     email: '',
     phone: '',
+    dob: '',
+    gender: '',
+    family_size: '',
+    permanent_address: '',
     rental_type: 'rent' as 'rent' | 'lease',
     rental_amount: '',
     rental_frequency: 'monthly' as 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
@@ -80,6 +83,10 @@ export default function AssignTenantModal({
       name: '',
       email: '',
       phone: '',
+      dob: '',
+      gender: '',
+      family_size: '',
+      permanent_address: '',
       rental_type: 'rent',
       rental_amount: '',
       rental_frequency: 'monthly'
@@ -121,32 +128,42 @@ export default function AssignTenantModal({
 
   const handleCreateAndAssignTenant = async () => {
     if (!newTenantData.name || !newTenantData.email || !newTenantData.rental_amount || !leaseData.lease_start) {
-      toast.error('Please fill in all required fields (name, email, rental amount, and lease start date)');
+      toast.error('Please fill in all required fields');
       return;
     }
 
     setLoading(true);
     try {
-      // First create the tenant
-      const tenantCreateData = {
+      // Create tenant data with additional fields
+      const tenantData = {
         name: newTenantData.name,
         email: newTenantData.email,
         phone: newTenantData.phone,
-        property_id: propertyId,
-        rental_start_date: leaseData.lease_start,
-        rental_end_date: leaseData.lease_end,
+        dob: newTenantData.dob || null,
+        gender: newTenantData.gender || null,
+        family_size: newTenantData.family_size ? parseInt(newTenantData.family_size) : null,
+        permanent_address: newTenantData.permanent_address || null,
         rental_type: newTenantData.rental_type,
+        rental_frequency: newTenantData.rental_frequency,
         rental_amount: parseFloat(newTenantData.rental_amount),
-        rental_frequency: newTenantData.rental_frequency
+        rental_start_date: leaseData.lease_start,
+        rental_end_date: leaseData.lease_end || null,
+        property_id: '' // This will be set by the backend based on unit
       };
 
-      const createdTenantResponse = await createTenant(tenantCreateData);
+      // Create the tenant first
+      const createdTenantResponse = await createTenant(tenantData);
+      
+      if (!createdTenantResponse?.tenant) {
+        throw new Error('Failed to create tenant');
+      }
 
+      // Then assign to unit with lease information
       const assignmentData: TenantAssignment = {
         tenant_id: createdTenantResponse.tenant.id,
         lease_start: leaseData.lease_start,
         lease_end: leaseData.lease_end || null,
-        rent_amount: parseFloat(newTenantData.rental_amount),
+        rent_amount: leaseData.rent_amount ? parseFloat(leaseData.rent_amount) : parseFloat(newTenantData.rental_amount),
         deposit_amount: leaseData.deposit_amount ? parseFloat(leaseData.deposit_amount) : null
       };
 
@@ -310,6 +327,57 @@ export default function AssignTenantModal({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="new-tenant-dob">Date of Birth</Label>
+                  <Input
+                    id="new-tenant-dob"
+                    type="date"
+                    value={newTenantData.dob}
+                    onChange={(e) => setNewTenantData({...newTenantData, dob: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new-tenant-gender">Gender</Label>
+                  <Select 
+                    value={newTenantData.gender} 
+                    onValueChange={(value) => setNewTenantData({...newTenantData, gender: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="new-tenant-family-size">Family Size</Label>
+                  <Input
+                    id="new-tenant-family-size"
+                    type="number"
+                    min="1"
+                    value={newTenantData.family_size}
+                    onChange={(e) => setNewTenantData({...newTenantData, family_size: e.target.value})}
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="new-tenant-address">Permanent Address</Label>
+                <Textarea
+                  id="new-tenant-address"
+                  value={newTenantData.permanent_address}
+                  onChange={(e) => setNewTenantData({...newTenantData, permanent_address: e.target.value})}
+                  placeholder="Enter permanent address"
+                  rows={2}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
