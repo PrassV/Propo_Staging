@@ -24,7 +24,7 @@ from app.models.maintenance import MaintenanceRequest  # Placeholder, replace wi
 from ..services import tenant_service
 from ..db import tenants as tenants_db
 from ..db import properties as properties_db
-from ..auth.auth import get_current_user
+from ..config.auth import get_current_user
 
 # For pagination
 from app.utils.common import PaginationParams  # Assuming this exists or define below
