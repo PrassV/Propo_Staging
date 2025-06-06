@@ -375,12 +375,17 @@ async def update_tenant_user_id(tenant_id: uuid.UUID, user_id: uuid.UUID) -> boo
 async def create_property_tenant_link(link_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Create a new property-tenant link in the property_tenants table.
+    
+    BUSINESS LOGIC: A unit can only have ONE active tenant at a time.
+    If a unit already has an active tenant, this operation will fail with an error.
+    The existing tenant must be properly removed (lease terminated, advance refunded) 
+    before a new tenant can be assigned.
 
     Args:
-        link_data: The link data including property_id, tenant_id, etc.
+        link_data: The link data including property_id, tenant_id, unit_id, etc.
 
     Returns:
-        Created link data or None if creation failed
+        Created link data or None if operation failed
     """
     try:
         # Create a copy of the data to avoid modifying the original
@@ -393,6 +398,8 @@ async def create_property_tenant_link(link_data: Dict[str, Any]) -> Optional[Dic
             link_data_copy['property_id'] = str(link_data_copy['property_id'])
         if 'tenant_id' in link_data_copy and isinstance(link_data_copy['tenant_id'], uuid.UUID):
             link_data_copy['tenant_id'] = str(link_data_copy['tenant_id'])
+        if 'unit_id' in link_data_copy and isinstance(link_data_copy['unit_id'], uuid.UUID):
+            link_data_copy['unit_id'] = str(link_data_copy['unit_id'])
             
         # Convert all datetime/date objects to ISO format strings
         for key, value in link_data_copy.items():
@@ -401,14 +408,93 @@ async def create_property_tenant_link(link_data: Dict[str, Any]) -> Optional[Dic
             elif isinstance(value, date):
                 link_data_copy[key] = value.isoformat()
 
+        # BUSINESS LOGIC CHECK: Ensure unit doesn't already have an active tenant
+        property_id = link_data_copy.get('property_id')
+        unit_id = link_data_copy.get('unit_id')
+        
+        if unit_id:
+            # Check for existing active tenant in this unit
+            existing_tenant_response = supabase_client.table('property_tenants')\
+                .select('*')\
+                .eq('unit_id', unit_id)\
+                .execute()
+            
+            if hasattr(existing_tenant_response, 'error') and existing_tenant_response.error:
+                logger.error(f"Error checking existing tenant for unit {unit_id}: {existing_tenant_response.error.message}")
+                return None
+                
+            if existing_tenant_response.data:
+                # Check if any of the existing assignments are still active
+                today = date.today().isoformat()
+                for existing_link in existing_tenant_response.data:
+                    end_date = existing_link.get('end_date')
+                    # If end_date is None (no end date) or future date, tenant is still active
+                    if end_date is None or end_date >= today:
+                        existing_tenant_id = existing_link.get('tenant_id')
+                        logger.error(f"Unit {unit_id} already has active tenant {existing_tenant_id}. "
+                                   f"Existing tenant must be properly removed before assigning new tenant.")
+                        return None
+                        
+        elif property_id:
+            # If no unit_id specified, check for property-level assignment
+            existing_property_response = supabase_client.table('property_tenants')\
+                .select('*')\
+                .eq('property_id', property_id)\
+                .is_('unit_id', 'null')\
+                .execute()
+                
+            if hasattr(existing_property_response, 'error') and existing_property_response.error:
+                logger.error(f"Error checking existing tenant for property {property_id}: {existing_property_response.error.message}")
+                return None
+                
+            if existing_property_response.data:
+                # Check if any property-level assignments are still active
+                today = date.today().isoformat()
+                for existing_link in existing_property_response.data:
+                    end_date = existing_link.get('end_date')
+                    if end_date is None or end_date >= today:
+                        existing_tenant_id = existing_link.get('tenant_id')
+                        logger.error(f"Property {property_id} already has active tenant {existing_tenant_id}. "
+                                   f"Existing tenant must be properly removed before assigning new tenant.")
+                        return None
+
+        # DUPLICATE CHECK: Ensure same tenant isn't already assigned to this unit/property
+        duplicate_check_response = supabase_client.table('property_tenants')\
+            .select('*')\
+            .eq('tenant_id', link_data_copy['tenant_id'])
+            
+        if unit_id:
+            duplicate_check_response = duplicate_check_response.eq('unit_id', unit_id)
+        else:
+            duplicate_check_response = duplicate_check_response.eq('property_id', property_id).is_('unit_id', 'null')
+            
+        duplicate_check_response = duplicate_check_response.execute()
+        
+        if hasattr(duplicate_check_response, 'error') and duplicate_check_response.error:
+            logger.error(f"Error checking for duplicate assignment: {duplicate_check_response.error.message}")
+            return None
+            
+        if duplicate_check_response.data:
+            # Check if any existing assignments are still active
+            today = date.today().isoformat()
+            for existing_link in duplicate_check_response.data:
+                end_date = existing_link.get('end_date')
+                if end_date is None or end_date >= today:
+                    logger.error(f"Tenant {link_data_copy['tenant_id']} is already assigned to this location. "
+                               f"Cannot create duplicate active assignment.")
+                    return None
+
+        # If we get here, it's safe to create the new assignment
         response = supabase_client.table('property_tenants').insert(link_data_copy).execute()
 
-        # Handle different Supabase client versions
         if hasattr(response, 'error') and response.error:
             logger.error(f"Error creating property-tenant link: {response.error.message}")
             return None
 
+        logger.info(f"Successfully created property-tenant link for tenant {link_data_copy['tenant_id']} "
+                   f"to {'unit ' + unit_id if unit_id else 'property ' + property_id}")
         return response.data[0] if response.data else None
+            
     except Exception as e:
         logger.error(f"Failed to create property-tenant link: {str(e)}")
         return None
@@ -1140,3 +1226,303 @@ async def get_tenants_by_owner_id(
     except Exception as e:
         logger.exception(f"Failed to get tenants by owner_id {owner_id}: {str(e)}")
         return [], 0
+
+async def terminate_tenant_lease(
+    link_id: uuid.UUID,
+    termination_date: date,
+    refund_advance: bool = True,
+    termination_reason: str = "owner_termination"
+) -> Dict[str, Any]:
+    """
+    Properly terminate a tenant's lease with business logic for advance payment refunds.
+    
+    BUSINESS LOGIC:
+    1. Sets the lease end_date to the termination_date
+    2. Updates tenant status if they have no other active leases
+    3. Handles advance payment refund if requested
+    4. Creates audit trail of the termination
+    
+    Args:
+        link_id: The property_tenant link ID to terminate
+        termination_date: The date the lease terminates
+        refund_advance: Whether to refund the advance payment (default: True)
+        termination_reason: Reason for termination (owner_termination, tenant_request, etc.)
+        
+    Returns:
+        Dictionary with termination results including refund information
+    """
+    try:
+        # Get the existing lease details
+        existing_lease = await get_property_tenant_link_by_id(link_id)
+        if not existing_lease:
+            logger.error(f"Lease link {link_id} not found")
+            return {"success": False, "error": "Lease not found"}
+            
+        tenant_id = existing_lease.get('tenant_id')
+        property_id = existing_lease.get('property_id')
+        unit_id = existing_lease.get('unit_id')
+        advance_amount = existing_lease.get('advance_amount', 0)
+        
+        logger.info(f"Terminating lease {link_id} for tenant {tenant_id} on {termination_date}")
+        
+        # 1. Update the lease end_date
+        termination_data = {
+            'end_date': termination_date.isoformat(),
+            'termination_reason': termination_reason,
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        updated_lease = await update_property_tenant_link(link_id, termination_data)
+        if not updated_lease:
+            logger.error(f"Failed to update lease termination for {link_id}")
+            return {"success": False, "error": "Failed to update lease"}
+            
+        result = {
+            "success": True,
+            "lease_terminated": True,
+            "termination_date": termination_date.isoformat(),
+            "tenant_id": tenant_id,
+            "property_id": property_id,
+            "unit_id": unit_id,
+            "advance_refund": None
+        }
+        
+        # 2. Handle advance payment refund
+        if refund_advance and advance_amount > 0:
+            try:
+                # Create a refund record in payment_history
+                refund_data = {
+                    'id': str(uuid.uuid4()),
+                    'tenant_id': tenant_id,
+                    'property_id': property_id,
+                    'unit_id': unit_id,
+                    'amount': advance_amount,
+                    'payment_type': 'advance_refund',
+                    'payment_method': 'refund',
+                    'payment_date': datetime.utcnow().isoformat(),
+                    'status': 'pending_refund',
+                    'description': f'Advance refund for lease termination on {termination_date}',
+                    'reference_number': f'REF-{link_id}-{datetime.utcnow().strftime("%Y%m%d")}',
+                    'created_at': datetime.utcnow().isoformat()
+                }
+                
+                refund_response = supabase_client.table('payment_history').insert(refund_data).execute()
+                
+                if hasattr(refund_response, 'error') and refund_response.error:
+                    logger.error(f"Failed to create refund record: {refund_response.error.message}")
+                    result["advance_refund"] = {"success": False, "error": "Failed to create refund record"}
+                else:
+                    result["advance_refund"] = {
+                        "success": True,
+                        "amount": advance_amount,
+                        "status": "pending_refund",
+                        "reference": refund_data['reference_number']
+                    }
+                    logger.info(f"Created advance refund record of {advance_amount} for tenant {tenant_id}")
+                    
+            except Exception as refund_error:
+                logger.error(f"Error processing advance refund: {str(refund_error)}")
+                result["advance_refund"] = {"success": False, "error": str(refund_error)}
+        
+        # 3. Check if tenant has any other active leases
+        try:
+            other_leases_response = supabase_client.table('property_tenants')\
+                .select('*')\
+                .eq('tenant_id', tenant_id)\
+                .neq('id', str(link_id))\
+                .execute()
+                
+            if hasattr(other_leases_response, 'error') and other_leases_response.error:
+                logger.warning(f"Could not check other leases for tenant {tenant_id}: {other_leases_response.error.message}")
+            else:
+                # Check if any other leases are still active
+                today = date.today().isoformat()
+                has_other_active_leases = False
+                
+                for lease in (other_leases_response.data or []):
+                    end_date = lease.get('end_date')
+                    if end_date is None or end_date >= today:
+                        has_other_active_leases = True
+                        break
+                
+                # Update tenant status if no other active leases
+                if not has_other_active_leases:
+                    status_updated = await update_tenant_status(uuid.UUID(tenant_id), 'unassigned')
+                    result["tenant_status_updated"] = status_updated
+                    if status_updated:
+                        logger.info(f"Updated tenant {tenant_id} status to 'unassigned' - no other active leases")
+                else:
+                    result["tenant_status_updated"] = False
+                    logger.info(f"Tenant {tenant_id} still has other active leases - status unchanged")
+                    
+        except Exception as status_error:
+            logger.warning(f"Could not update tenant status: {str(status_error)}")
+            result["tenant_status_updated"] = False
+        
+        # 4. Log the termination for audit trail
+        logger.info(f"Lease termination completed for tenant {tenant_id}. "
+                   f"Advance refund: {result.get('advance_refund', {}).get('success', False)}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to terminate tenant lease {link_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+async def get_active_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get the currently active tenant for a specific unit.
+    An active tenant is one whose lease end_date is null or in the future.
+    
+    Args:
+        unit_id: The unit ID to check
+        
+    Returns:
+        Dictionary with active tenant info and lease details, or None if no active tenant
+    """
+    try:
+        today = date.today().isoformat()
+        
+        # Find active lease for this unit
+        lease_response = supabase_client.table('property_tenants')\
+            .select('*, tenant:tenants(*)')\
+            .eq('unit_id', str(unit_id))\
+            .or_(f"end_date.gte.{today},end_date.is.null")\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
+            
+        if hasattr(lease_response, 'error') and lease_response.error:
+            logger.error(f"Error checking active tenant for unit {unit_id}: {lease_response.error.message}")
+            return None
+            
+        if lease_response.data:
+            lease_data = lease_response.data[0]
+            return {
+                "lease_id": lease_data.get('id'),
+                "tenant_id": lease_data.get('tenant_id'),
+                "tenant_details": lease_data.get('tenant'),
+                "start_date": lease_data.get('start_date'),
+                "end_date": lease_data.get('end_date'),
+                "advance_amount": lease_data.get('advance_amount'),
+                "rental_amount": lease_data.get('rental_amount'),
+                "status": "active"
+            }
+            
+        return None
+        
+    except Exception as e:
+        logger.error(f"Failed to get active tenant for unit {unit_id}: {str(e)}")
+        return None
+
+async def get_unit_availability_status(unit_id: uuid.UUID) -> Dict[str, Any]:
+    """
+    Get comprehensive availability status for a unit including active tenant info.
+    
+    Args:
+        unit_id: The unit ID to check
+        
+    Returns:
+        Dictionary with availability status and details
+    """
+    try:
+        active_tenant = await get_active_tenant_for_unit(unit_id)
+        
+        if active_tenant:
+            return {
+                "available": False,
+                "status": "occupied",
+                "active_tenant": active_tenant,
+                "message": f"Unit is currently occupied by tenant {active_tenant['tenant_id']}. "
+                          f"Lease ends on {active_tenant['end_date'] or 'no end date specified'}."
+            }
+        else:
+            return {
+                "available": True,
+                "status": "vacant",
+                "active_tenant": None,
+                "message": "Unit is available for new tenant assignment."
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to get unit availability status for {unit_id}: {str(e)}")
+        return {
+            "available": False,
+            "status": "error",
+            "active_tenant": None,
+            "message": f"Error checking unit availability: {str(e)}"
+        }
+
+async def get_upcoming_lease_expirations(
+    owner_id: uuid.UUID,
+    days_ahead: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Get leases that are expiring within the specified number of days.
+    Useful for advance payment refund planning and unit turnover management.
+    
+    Args:
+        owner_id: The property owner ID
+        days_ahead: Number of days to look ahead for expiring leases (default: 30)
+        
+    Returns:
+        List of leases expiring soon with tenant and unit details
+    """
+    try:
+        from datetime import timedelta
+        
+        today = date.today()
+        future_date = today + timedelta(days=days_ahead)
+        
+        # Get properties owned by this user
+        properties_response = supabase_client.table('properties')\
+            .select('id')\
+            .eq('owner_id', str(owner_id))\
+            .execute()
+            
+        if not properties_response.data:
+            return []
+            
+        property_ids = [prop['id'] for prop in properties_response.data]
+        
+        # Find leases expiring in the date range
+        expiring_leases = []
+        for property_id in property_ids:
+            lease_response = supabase_client.table('property_tenants')\
+                .select('*, tenant:tenants(*), property:properties(*)')\
+                .eq('property_id', property_id)\
+                .gte('end_date', today.isoformat())\
+                .lte('end_date', future_date.isoformat())\
+                .order('end_date', desc=False)\
+                .execute()
+                
+            if hasattr(lease_response, 'error') and lease_response.error:
+                logger.warning(f"Error fetching expiring leases for property {property_id}: {lease_response.error.message}")
+                continue
+                
+            if lease_response.data:
+                for lease in lease_response.data:
+                    lease_info = {
+                        "lease_id": lease.get('id'),
+                        "property_id": lease.get('property_id'),
+                        "unit_id": lease.get('unit_id'),
+                        "tenant_id": lease.get('tenant_id'),
+                        "tenant_details": lease.get('tenant'),
+                        "property_details": lease.get('property'),
+                        "start_date": lease.get('start_date'),
+                        "end_date": lease.get('end_date'),
+                        "advance_amount": lease.get('advance_amount', 0),
+                        "rental_amount": lease.get('rental_amount', 0),
+                        "days_until_expiry": (date.fromisoformat(lease.get('end_date')) - today).days
+                    }
+                    expiring_leases.append(lease_info)
+        
+        # Sort by expiry date
+        expiring_leases.sort(key=lambda x: x['end_date'])
+        
+        logger.info(f"Found {len(expiring_leases)} leases expiring within {days_ahead} days for owner {owner_id}")
+        return expiring_leases
+        
+    except Exception as e:
+        logger.error(f"Failed to get upcoming lease expirations for owner {owner_id}: {str(e)}")
+        return []

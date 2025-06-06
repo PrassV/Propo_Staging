@@ -37,7 +37,7 @@ async def get_requests_for_unit_db(
     """Get maintenance requests filtered by unit_id."""
     try:
         query = db_client.table('maintenance_requests')\
-                       .select('*, vendor:vendors(*)')\
+                       .select('*, vendor:maintenance_vendors(*)')\
                        .eq('unit_id', unit_id)\
                        .order('created_at', desc=True)\
                        .range(skip, skip + limit - 1)
@@ -74,7 +74,7 @@ async def get_maintenance_requests(
     
     Args:
         property_id: Optional property ID to filter by
-        owner_id: Optional owner ID to filter by
+        owner_id: Optional owner ID to filter by (filters via property ownership)
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         start_date: Optional start date (YYYY-MM-DD) to filter by created_at
@@ -84,13 +84,17 @@ async def get_maintenance_requests(
         List of maintenance requests
     """
     try:
-        query = supabase_client.table('maintenance_requests').select('*, vendor:vendors(*)')
+        # When filtering by owner_id, we need to join with properties table
+        if owner_id:
+            query = supabase_client.table('maintenance_requests')\
+                .select('*, vendor:maintenance_vendors(*), property:properties!inner(*)')\
+                .eq('property.owner_id', owner_id)
+        else:
+            query = supabase_client.table('maintenance_requests')\
+                .select('*, vendor:maintenance_vendors(*)')
         
         if property_id:
             query = query.eq('property_id', property_id)
-        
-        if owner_id:
-            query = query.eq('owner_id', owner_id)
         
         if tenant_id:
             query = query.eq('tenant_id', tenant_id)
@@ -118,6 +122,9 @@ async def get_maintenance_requests(
         for request in requests:
             if request.get('vendor'):
                 request['vendor_details'] = request.pop('vendor')
+            # Remove the property data as it's only needed for filtering
+            if request.get('property'):
+                request.pop('property')
                 
         return requests
     except Exception as e:
@@ -135,7 +142,7 @@ async def get_maintenance_request_by_id(request_id: str) -> Optional[Dict[str, A
         Maintenance request data or None if not found
     """
     try:
-        response = supabase_client.table('maintenance_requests').select('*, vendor:vendors(*)').eq('id', request_id).single().execute()
+        response = supabase_client.table('maintenance_requests').select('*, vendor:maintenance_vendors(*)').eq('id', request_id).single().execute()
         
         if "error" in response and response["error"]:
             logger.error(f"Error fetching maintenance request: {response['error']}")

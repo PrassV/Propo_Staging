@@ -301,47 +301,88 @@ async def assign_tenant_to_unit(
     assignment_data: Dict[str, Any]
 ) -> Optional[Tenant]:
     """
-    Assign a tenant to a specific unit by creating a property_tenant_link record.
+    Assign a tenant to a specific unit with proper business logic validation.
     
-    Args:
-        db_client: The Supabase client
-        unit_id: The ID of the unit
-        user_id: The ID of the requesting user (must own the parent property)
-        assignment_data: Dict containing tenant_id, lease_start, lease_end, etc.
-        
-    Returns:
-        The tenant that was assigned, or None if assignment failed
-        
-    Raises:
-        HTTPException: For authorization or validation errors
-    """
-    logger.info(f"Service: Assigning tenant {assignment_data.get('tenant_id')} to unit {unit_id}")
-    
-    try:
-        # 1. Authorization Check: Does the requesting user own the parent property?
-        parent_property_id = await properties_db.get_parent_property_id_for_unit(unit_id)
-        if not parent_property_id:
-            logger.warning(f"Unit {unit_id} not found during tenant assignment.")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")
+    BUSINESS LOGIC: A unit can only have ONE active tenant at a time.
+    This function will check for existing active tenants and prevent assignment if found.
+    To replace an existing tenant, the old tenant must be properly terminated first.
 
-        property_owner = await properties_db.get_property_owner(db_client, str(parent_property_id))
-        if not property_owner or property_owner != str(user_id):
-            logger.warning(f"User {user_id} not authorized to assign tenant to unit {unit_id}")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
-                              detail="Not authorized to assign tenant to this unit")
+    Args:
+        db_client: Database client
+        unit_id: The ID of the unit to assign tenant to
+        user_id: The ID of the user making the assignment (must own the property)
+        assignment_data: Assignment details including tenant_id, lease dates, amounts
+
+    Returns:
+        Tenant object if successful, None if failed
+
+    Raises:
+        HTTPException: If business logic is violated or other errors occur
+    """
+    try:
+        from . import properties_service
         
-        # 2. Validation: Check if tenant exists
-        tenant_id = assignment_data.get('tenant_id')
-        if not tenant_id:
+        tenant_id = uuid.UUID(assignment_data.get('tenant_id'))
+        
+        # 1. Verify unit exists and get parent property
+        unit = await properties_service.get_unit_by_id(db_client, unit_id)
+        if not unit:
+            logger.error(f"Unit {unit_id} not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                              detail="Unit not found")
+
+        parent_property_id = unit.get('property_id')
+        if not parent_property_id:
+            logger.error(f"Unit {unit_id} has no parent property")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, 
-                              detail="tenant_id is required")
-            
-        tenant = await get_tenant_by_id(tenant_id, user_id)
+                              detail="Unit has no associated property")
+
+        # 2. Verify user owns the property
+        property_owner = await properties_db.get_property_owner(db_client, uuid.UUID(parent_property_id))
+        if property_owner != user_id:
+            logger.error(f"User {user_id} does not own property {parent_property_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                              detail="Not authorized to assign tenants to this property")
+
+        # 3. BUSINESS LOGIC CHECK: Verify unit is available for assignment
+        unit_availability = await tenants_db.get_unit_availability_status(unit_id)
+        
+        if not unit_availability.get('available', False):
+            active_tenant_info = unit_availability.get('active_tenant')
+            if active_tenant_info:
+                error_msg = (f"Unit {unit_id} is currently occupied by tenant {active_tenant_info['tenant_id']}. "
+                           f"Lease ends on {active_tenant_info['end_date'] or 'no end date specified'}. "
+                           f"Existing tenant must be properly terminated before assigning a new tenant.")
+            else:
+                error_msg = unit_availability.get('message', 'Unit is not available for assignment.')
+                
+            logger.error(f"Unit assignment blocked: {error_msg}")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, 
+                              detail=error_msg)
+
+        # 4. Verify tenant exists and is available
+        tenant = await tenants_db.get_tenant_by_id(tenant_id)
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                               detail="Tenant not found or not accessible")
-        
-        # 3. Create a property_tenant_link (lease) record
+
+        # 5. Check if tenant is already assigned elsewhere
+        existing_assignments = await tenants_db.get_property_links_for_tenant(tenant_id)
+        if existing_assignments:
+            # Check if any existing assignments are still active
+            today = date.today().isoformat()
+            for assignment in existing_assignments:
+                end_date = assignment.get('end_date')
+                if end_date is None or end_date >= today:
+                    existing_unit = assignment.get('unit_id')
+                    existing_property = assignment.get('property_id')
+                    error_msg = (f"Tenant {tenant_id} is already assigned to "
+                               f"{'unit ' + existing_unit if existing_unit else 'property ' + existing_property}. "
+                               f"Existing assignment must be terminated before creating a new one.")
+                    logger.error(f"Tenant assignment blocked: {error_msg}")
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
+        # 6. Create the property_tenant_link (lease) record
         link_data = {
             "id": uuid.uuid4(),
             "property_id": str(parent_property_id),
@@ -349,38 +390,45 @@ async def assign_tenant_to_unit(
             "unit_id": str(unit_id),
             "start_date": assignment_data.get('lease_start').isoformat() if isinstance(assignment_data.get('lease_start'), date) else assignment_data.get('lease_start'),
             "end_date": assignment_data.get('lease_end').isoformat() if assignment_data.get('lease_end') and isinstance(assignment_data.get('lease_end'), date) else assignment_data.get('lease_end'),
-            "rent_amount": assignment_data.get('rent_amount'),
-            "deposit_amount": assignment_data.get('deposit_amount'),
+            "rental_amount": assignment_data.get('rent_amount'),
+            "advance_amount": assignment_data.get('deposit_amount'),
             "notes": assignment_data.get('notes'),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
         
-        # 4. Insert the link record
+        # 7. Create the lease - this will now enforce business logic
         lease_created = await tenants_db.create_property_tenant_link(link_data)
         if not lease_created:
             logger.error(f"Failed to create lease for tenant {tenant_id} on unit {unit_id}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
                               detail="Failed to create tenant assignment")
-        
-        # 5. Update unit status to occupied (if needed)
+
+        # 8. Update unit status to occupied and set current tenant
         unit_update = {
             "status": "occupied",
             "current_tenant_id": str(tenant_id),
             "updated_at": datetime.utcnow().isoformat()
         }
-        await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
-        
-        # 6. Return the tenant details
+        unit_updated = await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
+        if not unit_updated:
+            logger.warning(f"Created lease but failed to update unit {unit_id} status")
+
+        # 9. Update tenant status to active
+        tenant_status_updated = await tenants_db.update_tenant_status(tenant_id, 'active')
+        if not tenant_status_updated:
+            logger.warning(f"Created lease but failed to update tenant {tenant_id} status")
+
+        logger.info(f"Successfully assigned tenant {tenant_id} to unit {unit_id}")
         return tenant
         
     except HTTPException as http_exc:
         # Re-raise specific HTTP exceptions from validations
         raise http_exc
     except Exception as e:
-        logger.exception(f"Error assigning tenant to unit {unit_id}: {e}")
+        logger.exception(f"Unexpected error in assign_tenant_to_unit: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                           detail="An unexpected error occurred while assigning tenant")
+                          detail=f"Error assigning tenant to unit: {str(e)}")
 
 # --- Tenant Invitation ---
 
@@ -515,13 +563,90 @@ async def can_access_lease(lease_id: uuid.UUID, requesting_user_id: uuid.UUID) -
         return False
 
 async def create_lease(lease_data: PropertyTenantLinkCreate) -> Optional[Dict[str, Any]]:
-    """Create a new lease."""
+    """
+    Create a new lease with proper business logic validation.
+    
+    BUSINESS LOGIC: A unit can only have ONE active tenant at a time.
+    This function checks for existing active tenants and prevents lease creation if found.
+    
+    Args:
+        lease_data: The lease data to create
+        
+    Returns:
+        Created lease data or None if failed
+        
+    Raises:
+        HTTPException: If business logic is violated or other errors occur
+    """
     try:
-        # Prepare data for insertion
+        # 1. BUSINESS LOGIC CHECK: Verify unit/property is available for assignment
+        unit_id = getattr(lease_data, 'unit_id', None)
+        property_id = lease_data.property_id
+        
+        if unit_id:
+            # Check unit availability
+            unit_availability = await tenants_db.get_unit_availability_status(unit_id)
+            
+            if not unit_availability.get('available', False):
+                active_tenant_info = unit_availability.get('active_tenant')
+                if active_tenant_info:
+                    error_msg = (f"Unit is currently occupied by tenant {active_tenant_info['tenant_id']}. "
+                               f"Lease ends on {active_tenant_info['end_date'] or 'no end date specified'}. "
+                               f"Existing tenant must be properly terminated before creating a new lease.")
+                else:
+                    error_msg = unit_availability.get('message', 'Unit is not available for lease creation.')
+                    
+                logger.error(f"Lease creation blocked: {error_msg}")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+        else:
+            # Check for property-level active assignments
+            from ..config.database import supabase_client
+            existing_response = supabase_client.table('property_tenants')\
+                .select('*')\
+                .eq('property_id', str(property_id))\
+                .is_('unit_id', 'null')\
+                .execute()
+                
+            if hasattr(existing_response, 'error') and existing_response.error:
+                logger.error(f"Error checking existing tenant for property {property_id}: {existing_response.error.message}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                                  detail="Error checking property availability")
+                
+            if existing_response.data:
+                # Check if any property-level assignments are still active
+                today = date.today().isoformat()
+                for existing_link in existing_response.data:
+                    end_date_check = existing_link.get('end_date')
+                    if end_date_check is None or end_date_check >= today:
+                        existing_tenant_id = existing_link.get('tenant_id')
+                        error_msg = (f"Property {property_id} already has active tenant {existing_tenant_id}. "
+                                   f"Existing tenant must be properly removed before creating new lease.")
+                        logger.error(f"Lease creation blocked: {error_msg}")
+                        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
+        # 2. Check if tenant is already assigned elsewhere
+        tenant_id = lease_data.tenant_id
+        existing_assignments = await tenants_db.get_property_links_for_tenant(tenant_id)
+        if existing_assignments:
+            # Check if any existing assignments are still active
+            today = date.today().isoformat()
+            for assignment in existing_assignments:
+                assignment_end_date = assignment.get('end_date')
+                if assignment_end_date is None or assignment_end_date >= today:
+                    existing_unit = assignment.get('unit_id')
+                    existing_property = assignment.get('property_id')
+                    error_msg = (f"Tenant {tenant_id} is already assigned to "
+                               f"{'unit ' + existing_unit if existing_unit else 'property ' + existing_property}. "
+                               f"Existing assignment must be terminated before creating a new lease.")
+                    logger.error(f"Lease creation blocked: {error_msg}")
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
+        # 3. Prepare data for insertion
         link_data = {
             "id": uuid.uuid4(),
             "property_id": lease_data.property_id,
             "tenant_id": lease_data.tenant_id,
+            "unit_id": unit_id,
             "unit_number": lease_data.unit_number,
             "start_date": lease_data.start_date.isoformat(),
             "end_date": lease_data.end_date.isoformat() if lease_data.end_date else None,
@@ -529,12 +654,41 @@ async def create_lease(lease_data: PropertyTenantLinkCreate) -> Optional[Dict[st
             "updated_at": datetime.now(datetime.timezone.utc)
         }
 
-        # Create the lease
+        # 4. Create the lease - this will now enforce business logic at the database layer
         created_lease = await tenants_db.create_property_tenant_link(link_data)
+        if not created_lease:
+            logger.error(f"Failed to create lease for tenant {tenant_id}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                              detail="Failed to create lease")
+
+        # 5. Update tenant status to active
+        tenant_status_updated = await tenants_db.update_tenant_status(tenant_id, 'active')
+        if not tenant_status_updated:
+            logger.warning(f"Created lease but failed to update tenant {tenant_id} status")
+
+        # 6. Update unit status if unit assignment
+        if unit_id:
+            from ..config.database import supabase_client as db_client
+            unit_update = {
+                "status": "occupied",
+                "current_tenant_id": str(tenant_id),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            unit_updated = await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
+            if not unit_updated:
+                logger.warning(f"Created lease but failed to update unit {unit_id} status")
+
+        logger.info(f"Successfully created lease for tenant {tenant_id} on " + 
+                   (f"unit {unit_id}" if unit_id else f"property {property_id}"))
         return created_lease
+        
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions with proper status codes
+        raise http_exc
     except Exception as e:
         logger.error(f"Error in create_lease service: {str(e)}")
-        return None
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail=f"Error creating lease: {str(e)}")
 
 async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate) -> Optional[Dict[str, Any]]:
     """Update an existing lease."""
@@ -799,8 +953,24 @@ async def link_tenant_to_property(
     creator_user_id: uuid.UUID
 ) -> Optional[Dict[str, Any]]:
     """
-    Links an existing tenant to a property.
-    Requires creator_user_id to own the target property.
+    Links an existing tenant to a property with proper business logic validation.
+    
+    BUSINESS LOGIC: A unit can only have ONE active tenant at a time.
+    This function checks for existing active tenants and prevents assignment if found.
+    
+    Args:
+        tenant_id: The tenant to link
+        property_id: The property to link to
+        unit_number: Optional unit number (for multi-unit properties)
+        start_date: Lease start date
+        end_date: Optional lease end date
+        creator_user_id: User creating the link (must own the property)
+        
+    Returns:
+        Created link data or None if failed
+        
+    Raises:
+        HTTPException: If business logic is violated or other errors occur
     """
     try:
         # 1. Check if property exists and creator owns it
@@ -808,22 +978,99 @@ async def link_tenant_to_property(
         property_owner = await properties_db.get_property_owner(db_client, property_id)
         if not property_owner:
             logger.error(f"Property not found: {property_id}")
-            return None
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                              detail="Property not found")
         if property_owner != creator_user_id:
             logger.error(f"User {creator_user_id} does not own property {property_id}")
-            return None
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                              detail="Not authorized to assign tenants to this property")
             
         # 2. Check if tenant exists
         tenant = await tenants_db.get_tenant_by_id(tenant_id)
         if not tenant:
             logger.error(f"Tenant not found: {tenant_id}")
-            return None
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                              detail="Tenant not found")
+
+        # 3. Get unit_id if unit_number is provided
+        unit_id = None
+        if unit_number:
+            # Find the unit by number within this property
+            from . import properties_service
+            units = await properties_service.get_units_by_property_id(db_client, property_id)
+            for unit in units:
+                if unit.get('unit_number') == unit_number:
+                    unit_id = uuid.UUID(unit['id'])
+                    break
             
-        # 3. Create PropertyTenantLink
+            if not unit_id:
+                logger.error(f"Unit {unit_number} not found in property {property_id}")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                                  detail=f"Unit {unit_number} not found in property")
+
+        # 4. BUSINESS LOGIC CHECK: Verify unit/property is available for assignment
+        if unit_id:
+            # Check unit availability
+            unit_availability = await tenants_db.get_unit_availability_status(unit_id)
+            
+            if not unit_availability.get('available', False):
+                active_tenant_info = unit_availability.get('active_tenant')
+                if active_tenant_info:
+                    error_msg = (f"Unit {unit_number} is currently occupied by tenant {active_tenant_info['tenant_id']}. "
+                               f"Lease ends on {active_tenant_info['end_date'] or 'no end date specified'}. "
+                               f"Existing tenant must be properly terminated before assigning a new tenant.")
+                else:
+                    error_msg = unit_availability.get('message', 'Unit is not available for assignment.')
+                    
+                logger.error(f"Unit assignment blocked: {error_msg}")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+        else:
+            # Check for property-level active assignments
+            existing_response = supabase_client.table('property_tenants')\
+                .select('*')\
+                .eq('property_id', str(property_id))\
+                .is_('unit_id', 'null')\
+                .execute()
+                
+            if hasattr(existing_response, 'error') and existing_response.error:
+                logger.error(f"Error checking existing tenant for property {property_id}: {existing_response.error.message}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                                  detail="Error checking property availability")
+                
+            if existing_response.data:
+                # Check if any property-level assignments are still active
+                today = date.today().isoformat()
+                for existing_link in existing_response.data:
+                    end_date_check = existing_link.get('end_date')
+                    if end_date_check is None or end_date_check >= today:
+                        existing_tenant_id = existing_link.get('tenant_id')
+                        error_msg = (f"Property {property_id} already has active tenant {existing_tenant_id}. "
+                                   f"Existing tenant must be properly removed before assigning new tenant.")
+                        logger.error(f"Property assignment blocked: {error_msg}")
+                        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
+        # 5. Check if tenant is already assigned elsewhere
+        existing_assignments = await tenants_db.get_property_links_for_tenant(tenant_id)
+        if existing_assignments:
+            # Check if any existing assignments are still active
+            today = date.today().isoformat()
+            for assignment in existing_assignments:
+                assignment_end_date = assignment.get('end_date')
+                if assignment_end_date is None or assignment_end_date >= today:
+                    existing_unit = assignment.get('unit_id')
+                    existing_property = assignment.get('property_id')
+                    error_msg = (f"Tenant {tenant_id} is already assigned to "
+                               f"{'unit ' + existing_unit if existing_unit else 'property ' + existing_property}. "
+                               f"Existing assignment must be terminated before creating a new one.")
+                    logger.error(f"Tenant assignment blocked: {error_msg}")
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+            
+        # 6. Create PropertyTenantLink with business logic validation
         link_data = {
             "id": uuid.uuid4(),
             "property_id": property_id,
             "tenant_id": tenant_id,
+            "unit_id": unit_id,
             "unit_number": unit_number,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat() if end_date else None,
@@ -831,15 +1078,40 @@ async def link_tenant_to_property(
             "updated_at": datetime.utcnow()
         }
         
+        # This will now enforce business logic in the database layer
         link_created = await tenants_db.create_property_tenant_link(link_data)
         if not link_created:
             logger.error(f"Failed to link tenant {tenant_id} to property {property_id}")
-            return None
-            
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                              detail="Failed to create tenant-property link")
+
+        # 7. Update tenant status to active
+        tenant_status_updated = await tenants_db.update_tenant_status(tenant_id, 'active')
+        if not tenant_status_updated:
+            logger.warning(f"Created link but failed to update tenant {tenant_id} status")
+
+        # 8. Update unit status if unit assignment
+        if unit_id:
+            unit_update = {
+                "status": "occupied",
+                "current_tenant_id": str(tenant_id),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            unit_updated = await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
+            if not unit_updated:
+                logger.warning(f"Created link but failed to update unit {unit_id} status")
+
+        logger.info(f"Successfully linked tenant {tenant_id} to property {property_id}" + 
+                   (f" unit {unit_number}" if unit_number else ""))
         return link_created
+        
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions with proper status codes
+        raise http_exc
     except Exception as e:
         logger.exception(f"Error in link_tenant_to_property: {e}")
-        return None
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail=f"Error linking tenant to property: {str(e)}")
 
 # --- New Service Function: Get Current Tenant for Unit ---
 async def get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, Any]]:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Path, Query, Body
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, UUID4, Field
 import uuid
@@ -21,8 +21,10 @@ from app.models.property import Property  # Assuming Property model exists
 from app.models.payment import Payment  # Placeholder, replace with actual model
 from app.models.maintenance import MaintenanceRequest  # Placeholder, replace with actual model
 
-from app.services import tenant_service
-from app.config.auth import get_current_user
+from ..services import tenant_service
+from ..db import tenants as tenants_db
+from ..db import properties as properties_db
+from ..auth.auth import get_current_user
 
 # For pagination
 from app.utils.common import PaginationParams  # Assuming this exists or define below
@@ -660,4 +662,175 @@ async def link_tenant_to_property(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error linking tenant to property: {str(e)}"
+        )
+
+@router.post("/{tenant_id}/terminate-lease", response_model=Dict[str, Any])
+async def terminate_tenant_lease(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    termination_data: Dict[str, Any] = Body(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Terminate a tenant's lease with proper business logic for advance payment refunds.
+    
+    Required fields in termination_data:
+    - link_id: The property_tenant link ID to terminate
+    - termination_date: The date the lease terminates (YYYY-MM-DD)
+    - refund_advance: Whether to refund the advance payment (default: true)
+    - termination_reason: Reason for termination (default: "owner_termination")
+    """
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+        
+        # Validate required fields
+        link_id = termination_data.get('link_id')
+        termination_date_str = termination_data.get('termination_date')
+        
+        if not link_id or not termination_date_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="link_id and termination_date are required"
+            )
+        
+        # Parse termination date
+        try:
+            termination_date = date.fromisoformat(termination_date_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="termination_date must be in YYYY-MM-DD format"
+            )
+        
+        # Verify user has permission to terminate this lease
+        lease_details = await tenant_service.get_property_tenant_link_by_id(uuid.UUID(link_id))
+        if not lease_details:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lease not found"
+            )
+        
+        # Check if user owns the property
+        property_id = lease_details.get('property_id')
+        if property_id:
+            from ..config.database import supabase_client as db_client
+            property_owner = await properties_db.get_property_owner(db_client, uuid.UUID(property_id))
+            if property_owner != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to terminate this lease"
+                )
+        
+        # Perform the termination
+        result = await tenant_service.terminate_tenant_lease(
+            link_id=uuid.UUID(link_id),
+            termination_date=termination_date,
+            refund_advance=termination_data.get('refund_advance', True),
+            termination_reason=termination_data.get('termination_reason', 'owner_termination')
+        )
+        
+        if not result.get('success'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get('error', 'Failed to terminate lease')
+            )
+        
+        return {
+            "message": "Lease terminated successfully",
+            "termination_details": result
+        }
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error terminating tenant lease: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error terminating lease: {str(e)}"
+        )
+
+@router.get("/unit/{unit_id}/availability", response_model=Dict[str, Any])
+async def check_unit_availability(
+    unit_id: UUID4 = Path(..., description="The ID of the unit to check"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Check if a unit is available for tenant assignment.
+    Returns availability status and active tenant information if occupied.
+    """
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        unit_id_obj = uuid.UUID(str(unit_id))
+        
+        # Verify user has access to this unit (owns the property)
+        from ..services import properties_service
+        from ..config.database import supabase_client as db_client
+        
+        unit = await properties_service.get_unit_by_id(db_client, unit_id_obj)
+        if not unit:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Unit not found"
+            )
+        
+        property_id = unit.get('property_id')
+        if property_id:
+            property_owner = await properties_db.get_property_owner(db_client, uuid.UUID(property_id))
+            if property_owner != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to check this unit"
+                )
+        
+        # Get availability status
+        availability_status = await tenants_db.get_unit_availability_status(unit_id_obj)
+        
+        return availability_status
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error checking unit availability: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error checking unit availability: {str(e)}"
+        )
+
+@router.get("/owner/{owner_id}/expiring-leases", response_model=List[Dict[str, Any]])
+async def get_expiring_leases(
+    owner_id: UUID4 = Path(..., description="The ID of the property owner"),
+    days_ahead: int = Query(30, description="Number of days to look ahead for expiring leases"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get leases that are expiring within the specified number of days.
+    Useful for advance payment refund planning and unit turnover management.
+    """
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        owner_id_obj = uuid.UUID(str(owner_id))
+        
+        # Verify user is requesting their own data or has admin privileges
+        if user_id != owner_id_obj:
+            # Could add admin role check here in the future
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view these lease expirations"
+            )
+        
+        # Get expiring leases
+        expiring_leases = await tenants_db.get_upcoming_lease_expirations(
+            owner_id=owner_id_obj,
+            days_ahead=days_ahead
+        )
+        
+        return expiring_leases
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error getting expiring leases: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting expiring leases: {str(e)}"
         )
