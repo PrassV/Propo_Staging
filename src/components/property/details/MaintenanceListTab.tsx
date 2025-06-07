@@ -98,7 +98,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
                 priority: formData.priority as MaintenancePriority,
                 category: formData.category as MaintenanceCategory,
                 property_id: '', // Will be derived from unit_id by the backend
-                unit_number: unitId // The backend expects unit_number, not unit_id
+                unit_id: unitId // Changed from unit_number to unit_id
             });
 
             toast({

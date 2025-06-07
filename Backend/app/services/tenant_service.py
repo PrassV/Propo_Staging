@@ -322,7 +322,11 @@ async def assign_tenant_to_unit(
     try:
         from . import property_service
         
-        tenant_id = uuid.UUID(assignment_data.get('tenant_id'))
+        tenant_id_raw = assignment_data.get('tenant_id')
+        if isinstance(tenant_id_raw, uuid.UUID):
+            tenant_id = tenant_id_raw
+        else:
+            tenant_id = uuid.UUID(tenant_id_raw)
         
         # 1. Verify unit exists and get parent property
         unit = await property_service.get_unit_by_id(db_client, unit_id)

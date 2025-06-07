@@ -359,7 +359,7 @@ export interface MaintenanceRequest extends Omit<SupabaseMaintenanceRequest, 'st
   assigned_to?: string;
 }
 
-export interface MaintenanceRequestCreate extends Omit<SupabaseMaintenanceRequestInsert, 'created_by' | 'unit_id' | 'status' | 'priority' | 'category'> {
+export interface MaintenanceRequestCreate extends Omit<SupabaseMaintenanceRequestInsert, 'created_by' | 'status' | 'priority' | 'category'> {
   priority: MaintenancePriority;
   category: MaintenanceCategory;
   // images?: string[]; // Add if API expects image URLs during creation
