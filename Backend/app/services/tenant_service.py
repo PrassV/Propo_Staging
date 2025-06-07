@@ -320,12 +320,12 @@ async def assign_tenant_to_unit(
         HTTPException: If business logic is violated or other errors occur
     """
     try:
-        from . import properties_service
+        from . import property_service
         
         tenant_id = uuid.UUID(assignment_data.get('tenant_id'))
         
         # 1. Verify unit exists and get parent property
-        unit = await properties_service.get_unit_by_id(db_client, unit_id)
+        unit = await property_service.get_unit_by_id(db_client, unit_id)
         if not unit:
             logger.error(f"Unit {unit_id} not found")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
@@ -996,8 +996,8 @@ async def link_tenant_to_property(
         unit_id = None
         if unit_number:
             # Find the unit by number within this property
-            from . import properties_service
-            units = await properties_service.get_units_by_property_id(db_client, property_id)
+            from . import property_service
+            units = await property_service.get_units_by_property_id(db_client, property_id)
             for unit in units:
                 if unit.get('unit_number') == unit_number:
                     unit_id = uuid.UUID(unit['id'])
