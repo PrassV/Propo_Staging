@@ -358,6 +358,8 @@ async def check_property_access(property_id: uuid.UUID, user_id: str) -> bool:
         # Get the property owner
         property_owner = await property_db.get_property_owner(db_client, property_id)
         
+        logger.info(f"Checking property access - property_id: {property_id}, user_id: {user_id}, property_owner: {property_owner}")
+        
         # Check if the user is the property owner
         return property_owner == user_id
     except Exception as e:
@@ -695,6 +697,28 @@ async def delete_unit_image(unit_id: uuid.UUID, image_url: str) -> bool:
         return False 
 
 # --- Unit Specific Service Functions ---
+
+async def get_unit_by_id(
+    db_client: Client,
+    unit_id: uuid.UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Get unit details by ID without authorization check.
+    This is used internally by other services that handle their own authorization.
+    
+    Args:
+        db_client: Database client
+        unit_id: The unit ID
+        
+    Returns:
+        Unit data or None if not found
+    """
+    try:
+        unit_data = await property_db.get_unit_by_id_db(db_client, str(unit_id))
+        return unit_data
+    except Exception as e:
+        logger.error(f"Error getting unit by id {unit_id}: {str(e)}", exc_info=True)
+        return None
 
 async def get_filtered_units(
     db_client: Client,
