@@ -56,12 +56,12 @@ async def get_maintenance_request(request_id: str) -> Optional[Dict[str, Any]]:
     """
     return await maintenance_db.get_maintenance_request_by_id(request_id)
 
-async def create_maintenance_request(request_data: dict, user_id: str, user_type: str) -> Optional[Dict[str, Any]]:
+async def create_maintenance_request(request_data: MaintenanceCreate, user_id: str, user_type: str) -> Optional[Dict[str, Any]]:
     """
     Create a new maintenance request.
     
     Args:
-        request_data: The maintenance request data (as dict)
+        request_data: The maintenance request data
         user_id: The ID of the user creating the request
         user_type: The type of user (owner/tenant)
         
@@ -69,8 +69,9 @@ async def create_maintenance_request(request_data: dict, user_id: str, user_type
         Created maintenance request data or None if creation failed
     """
     try:
+        logger.info(f"Creating maintenance request with data: {request_data} for user: {user_id}")
         # Prepare request data
-        insert_data = request_data.copy()
+        insert_data = request_data.dict()
         
         # Set created_at timestamp
         insert_data['created_at'] = datetime.utcnow().isoformat()
@@ -88,12 +89,23 @@ async def create_maintenance_request(request_data: dict, user_id: str, user_type
         if 'created_by' not in insert_data:
             insert_data['created_by'] = user_id
             
+        # If user is a tenant, get their current unit and property
+        if user_type == 'tenant':
+            tenant_assignment = await tenant_db.get_current_tenant_assignment(user_id)
+            if tenant_assignment:
+                insert_data['unit_id'] = tenant_assignment.get('unit_id')
+                insert_data['property_id'] = tenant_assignment.get('property_id')
+            else:
+                logger.error(f"Tenant {user_id} has no active unit assignment")
+                return None
+            
         # Get property owner if property_id is provided
         if 'property_id' in insert_data and insert_data['property_id']:
             property_data = await property_db.get_property_by_id(insert_data['property_id'])
             if property_data:
                 insert_data['owner_id'] = property_data.get('owner_id')
         
+        logger.info(f"Inserting maintenance request data: {insert_data}")
         # Create the maintenance request
         created_request = await maintenance_db.create_maintenance_request(insert_data)
         

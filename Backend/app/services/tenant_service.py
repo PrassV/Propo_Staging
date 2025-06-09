@@ -735,9 +735,14 @@ async def create_lease(lease_data: PropertyTenantLinkCreate) -> Optional[Dict[st
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
                           detail=f"Error creating lease: {str(e)}")
 
-async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate) -> Optional[Dict[str, Any]]:
+async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate, requesting_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     """Update an existing lease."""
     try:
+        # Authorize user
+        if not await can_access_lease(lease_id, requesting_user_id):
+            logger.error(f"User {requesting_user_id} does not have permission to update lease {lease_id}")
+            return None
+
         # Get the current lease
         current_lease = await tenants_db.get_property_tenant_link_by_id(lease_id)
         if not current_lease:

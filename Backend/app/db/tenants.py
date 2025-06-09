@@ -557,6 +557,7 @@ async def update_property_tenant_link(link_id: uuid.UUID, link_data: Dict[str, A
         Updated link data or None if update failed
     """
     try:
+        logger.info(f"Updating property-tenant link {link_id} with data: {link_data}")
         # Create a copy of the data to avoid modifying the original
         link_data_copy = link_data.copy()
         
@@ -1068,6 +1069,8 @@ async def db_get_tenants_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
             .eq('unit_id', str(unit_id)) \
             .execute()
 
+        logger.info(f"Lease response for unit {unit_id}: {lease_response}")
+
         if hasattr(lease_response, 'error') and lease_response.error:
             logger.error(f"Error fetching leases for unit {unit_id}: {lease_response.error.message}")
             return []
@@ -1077,6 +1080,7 @@ async def db_get_tenants_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
             return []
 
         tenant_ids = {link.get('tenant_id') for link in lease_response.data if link.get('tenant_id')}
+        logger.info(f"Tenant IDs found for unit {unit_id}: {tenant_ids}")
         if not tenant_ids:
              return []
 

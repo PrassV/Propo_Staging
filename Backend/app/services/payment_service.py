@@ -92,6 +92,7 @@ async def create_payment(payment_data: dict, owner_id: str) -> Optional[Dict[str
         Created payment data or None if creation failed
     """
     try:
+        logger.info(f"Creating payment with data: {payment_data} for owner: {owner_id}")
         # Prepare payment data
         insert_data = payment_data.copy()
 
@@ -130,6 +131,7 @@ async def create_payment(payment_data: dict, owner_id: str) -> Optional[Dict[str
             logger.error("Missing required fields: unit_id and lease_id are required for payments")
             return None
 
+        logger.info(f"Inserting payment data: {insert_data}")
         # Create the payment
         return await payment_db.create_payment(insert_data)
     except Exception as e:
