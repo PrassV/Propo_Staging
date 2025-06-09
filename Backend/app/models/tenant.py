@@ -60,7 +60,7 @@ class TenantBase(BaseModel):
     # Default/Current Rental/Lease Info (consider moving to a Lease model later)
     rental_type: Optional[RentalType] = None
     rental_frequency: Optional[RentalFrequency] = None
-    rental_amount: Optional[float] = Field(None, ge=0)
+    rent_amount: Optional[float] = Field(None, ge=0)
     advance_amount: Optional[float] = Field(None, ge=0)
     rental_start_date: Optional[date] = None
     rental_end_date: Optional[date] = None # Optional for ongoing rentals
@@ -98,7 +98,7 @@ class TenantUpdate(BaseModel):
     status: Optional[TenantStatus] = None
     rental_type: Optional[RentalType] = None
     rental_frequency: Optional[RentalFrequency] = None
-    rental_amount: Optional[float] = Field(None, ge=0)
+    rent_amount: Optional[float] = Field(None, ge=0)
     advance_amount: Optional[float] = Field(None, ge=0)
     rental_start_date: Optional[date] = None
     rental_end_date: Optional[date] = None

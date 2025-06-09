@@ -1405,7 +1405,7 @@ async def get_active_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, A
                 "start_date": lease_data.get('start_date'),
                 "end_date": lease_data.get('end_date'),
                 "advance_amount": lease_data.get('advance_amount'),
-                "rental_amount": lease_data.get('rental_amount'),
+                "rent_amount": lease_data.get('rent_amount'),
                 "status": "active"
             }
             
@@ -1512,7 +1512,7 @@ async def get_upcoming_lease_expirations(
                         "start_date": lease.get('start_date'),
                         "end_date": lease.get('end_date'),
                         "advance_amount": lease.get('advance_amount', 0),
-                        "rental_amount": lease.get('rental_amount', 0),
+                        "rent_amount": lease.get('rent_amount', 0),
                         "days_until_expiry": (date.fromisoformat(lease.get('end_date')) - today).days
                     }
                     expiring_leases.append(lease_info)
