@@ -159,7 +159,7 @@ async def create_maintenance_request(
             
         # If property_id not provided, derive it from unit
         if not request_data.property_id:
-            unit_details = await property_service.get_unit_details_by_id(request_data.unit_id)
+            unit_details = await property_service.get_unit_details(request_data.unit_id)
             if not unit_details:
                 raise HTTPException(status_code=404, detail="Unit not found")
             request_data_dict = request_data.model_dump()

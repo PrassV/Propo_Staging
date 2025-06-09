@@ -9,9 +9,14 @@ interface GetVendorsParams {
   category?: string;
 }
 
+interface VendorsListResponse {
+  items: Vendor[];
+  total: number;
+}
+
 export const getVendors = async (params: GetVendorsParams = {}): Promise<Vendor[]> => {
-  const response = await apiClient.get<Vendor[]>('/vendors/', { params });
-  return response.data;
+  const response = await apiClient.get<VendorsListResponse>('/vendors/', { params });
+  return response.data.items;
 };
 
 export const getVendorById = async (id: string): Promise<Vendor> => {
