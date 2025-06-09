@@ -115,8 +115,9 @@ async def create_payment_request(
     """
     Create a new payment request.
     
-    Required fields: unit_id, lease_id, tenant_id, amount_due, due_date
-    Property_id is optional (will be derived from unit_id if not provided)
+    Required fields: tenant_id, amount_due, due_date
+    Property_id is optional (will be derived from tenant if not provided)
+    Unit_id and lease_id will be automatically derived from tenant's active assignment
     Only owners can create payment requests.
     """
     try:
@@ -129,26 +130,16 @@ async def create_payment_request(
              raise HTTPException(status_code=403, detail="Only property owners can create payment requests")
              
         # Validate required fields
-        if not payment_data.unit_id:
-            raise HTTPException(status_code=400, detail="unit_id is required")
+        if not payment_data.tenant_id:
+            raise HTTPException(status_code=400, detail="tenant_id is required")
             
-        if not payment_data.lease_id:
-            raise HTTPException(status_code=400, detail="lease_id is required")
+        # Convert Pydantic model to dict
+        payment_data_dict = payment_data.model_dump()
             
-        # If property_id not provided, derive it from unit
-        if not payment_data.property_id:
-            unit_details = await property_service.get_unit_details_by_id(payment_data.unit_id)
-            if not unit_details:
-                raise HTTPException(status_code=404, detail="Unit not found")
-            payment_data_dict = payment_data.model_dump()
-            payment_data_dict["property_id"] = unit_details.get("property_id")
-        else:
-            payment_data_dict = payment_data.model_dump()
-            
-        # Check if user has access to this property
-        can_access = await payment_service.check_user_access_to_property(user_id, payment_data_dict["property_id"])
-        if not can_access:
-            raise HTTPException(status_code=403, detail="Not authorized to create payment for this property")
+        # If property_id not provided, derive it from tenant
+        if not payment_data_dict.get('property_id'):
+            # This will be handled in the service layer along with unit_id and lease_id
+            pass
 
         created_payment = await payment_service.create_payment(
             payment_data=payment_data_dict,
@@ -156,7 +147,7 @@ async def create_payment_request(
         )
         
         if not created_payment:
-            raise HTTPException(status_code=500, detail="Failed to create payment request")
+            raise HTTPException(status_code=500, detail="Failed to create payment request. Ensure tenant has an active lease.")
             
         return PaymentResponse(payment=created_payment, message="Payment request created successfully")
     except HTTPException as http_exc:

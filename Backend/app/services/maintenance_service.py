@@ -56,35 +56,37 @@ async def get_maintenance_request(request_id: str) -> Optional[Dict[str, Any]]:
     """
     return await maintenance_db.get_maintenance_request_by_id(request_id)
 
-async def create_maintenance_request(request_data: MaintenanceCreate, tenant_id: str = None) -> Optional[Dict[str, Any]]:
+async def create_maintenance_request(request_data: dict, user_id: str, user_type: str) -> Optional[Dict[str, Any]]:
     """
     Create a new maintenance request.
     
     Args:
-        request_data: The maintenance request data
-        tenant_id: Optional tenant ID if request is created by tenant
+        request_data: The maintenance request data (as dict)
+        user_id: The ID of the user creating the request
+        user_type: The type of user (owner/tenant)
         
     Returns:
         Created maintenance request data or None if creation failed
     """
     try:
         # Prepare request data
-        insert_data = request_data.dict()
+        insert_data = request_data.copy()
         
         # Set created_at timestamp
         insert_data['created_at'] = datetime.utcnow().isoformat()
         insert_data['updated_at'] = insert_data['created_at']
         
-        # Generate unique ID
-        insert_data['id'] = str(uuid.uuid4())
+        # Generate unique ID if not provided
+        if 'id' not in insert_data:
+            insert_data['id'] = str(uuid.uuid4())
         
         # Set status to new if not provided
         if 'status' not in insert_data or not insert_data['status']:
             insert_data['status'] = MaintenanceStatus.NEW.value
         
-        # Set tenant_id if provided
-        if tenant_id:
-            insert_data['tenant_id'] = tenant_id
+        # Ensure created_by is set
+        if 'created_by' not in insert_data:
+            insert_data['created_by'] = user_id
             
         # Get property owner if property_id is provided
         if 'property_id' in insert_data and insert_data['property_id']:

@@ -80,7 +80,7 @@ async def get_payment(payment_id: str) -> Optional[Dict[str, Any]]:
     """
     return await payment_db.get_payment_by_id(payment_id)
 
-async def create_payment(payment_data: PaymentCreate, owner_id: str) -> Optional[Dict[str, Any]]:
+async def create_payment(payment_data: dict, owner_id: str) -> Optional[Dict[str, Any]]:
     """
     Create a new payment.
 
@@ -93,7 +93,7 @@ async def create_payment(payment_data: PaymentCreate, owner_id: str) -> Optional
     """
     try:
         # Prepare payment data
-        insert_data = payment_data.dict()
+        insert_data = payment_data.copy()
 
         # Add owner ID
         insert_data['owner_id'] = owner_id
@@ -111,6 +111,24 @@ async def create_payment(payment_data: PaymentCreate, owner_id: str) -> Optional
 
         # Initialize amount_paid to 0
         insert_data['amount_paid'] = 0
+
+        # If unit_id and lease_id are not provided, try to derive them from tenant_id
+        if 'tenant_id' in insert_data and insert_data['tenant_id']:
+            if 'unit_id' not in insert_data or not insert_data['unit_id']:
+                # Get tenant's current unit assignment
+                tenant_assignment = await tenant_db.get_current_tenant_assignment(insert_data['tenant_id'])
+                if tenant_assignment:
+                    insert_data['unit_id'] = tenant_assignment.get('unit_id')
+                    if 'lease_id' not in insert_data or not insert_data['lease_id']:
+                        insert_data['lease_id'] = tenant_assignment.get('id')  # property_tenants.id is the lease_id
+                else:
+                    logger.error(f"Tenant {insert_data['tenant_id']} has no active unit assignment")
+                    return None
+
+        # Validate required fields
+        if not insert_data.get('unit_id') or not insert_data.get('lease_id'):
+            logger.error("Missing required fields: unit_id and lease_id are required for payments")
+            return None
 
         # Create the payment
         return await payment_db.create_payment(insert_data)

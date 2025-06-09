@@ -182,6 +182,9 @@ async def create_maintenance_request(
         if not can_access:
             raise HTTPException(status_code=403, detail="Not authorized to create maintenance request for this unit")
 
+        # Add created_by field
+        request_data_dict["created_by"] = user_id
+
         # Create the request
         created_request = await maintenance_service.create_maintenance_request(
             request_data=request_data_dict,

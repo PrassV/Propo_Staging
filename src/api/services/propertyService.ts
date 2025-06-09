@@ -385,3 +385,41 @@ export const assignTenantToUnit = async (
     throw new Error(errorMessage);
   }
 };
+
+export const terminateLease = async (unitId: string, terminationDate: string): Promise<{ message: string }> => {
+  try {
+    const response = await apiClient.post<{ message: string }>(`/units/${unitId}/terminate_lease`, {
+      termination_date: terminationDate,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error terminating lease for unit ${unitId}:`, error);
+    let errorMessage = 'Failed to terminate lease';
+    if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || error.message;
+    } else if (error instanceof Error) {
+        errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get details for a single unit
+ * Calls GET /units/{unit_id}
+ */
+export const getUnitDetails = async (unitId: string): Promise<UnitDetails> => {
+  try {
+    const response = await apiClient.get<UnitDetails>(`/units/${unitId}`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error(`Error fetching unit details for ${unitId}:`, error);
+    let errorMessage = 'Failed to fetch unit details';
+    if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || error.message;
+    } else if (error instanceof Error) {
+        errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, User } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tenant, TenantAssignment } from '../../api/types';
-import { getTenants, createTenant } from '../../api/services/tenantService';
-import { assignTenantToUnit } from '../../api/services/propertyService';
+import { getTenants, createTenant, getTenantById } from '../../api/services/tenantService';
+import { assignTenantToUnit, getUnitDetails, terminateLease } from '../../api/services/propertyService';
 import { Textarea } from "@/components/ui/textarea";
 
 interface AssignTenantModalProps {
@@ -28,9 +28,12 @@ export default function AssignTenantModal({
   onSuccess
 }: AssignTenantModalProps) {
   const [loading, setLoading] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
+  const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
+  const [showWarning, setShowWarning] = useState(false);
   const [leaseData, setLeaseData] = useState({
     lease_start: '',
     lease_end: '',
@@ -56,18 +59,38 @@ export default function AssignTenantModal({
   useEffect(() => {
     if (isOpen) {
       loadTenants();
+      checkCurrentTenant();
       resetFormData();
     }
-  }, [isOpen]);
+  }, [isOpen, unitId]);
 
   const loadTenants = async () => {
     try {
-      const response = await getTenants();
-      // Handle TenantsListResponse structure
+      const response = await getTenants({});
       setTenants(response.items || []);
     } catch (error) {
       console.error('Error loading tenants:', error);
       toast.error('Failed to load tenants');
+    }
+  };
+
+  const checkCurrentTenant = async () => {
+    try {
+      const unitDetails = await getUnitDetails(unitId);
+      if (unitDetails?.current_tenant_id) {
+        const tenantDetails = await getTenantById(unitDetails.current_tenant_id);
+        if (tenantDetails) {
+          setCurrentTenant(tenantDetails.tenant);
+          setShowWarning(true);
+        }
+      } else {
+        setCurrentTenant(null);
+        setShowWarning(false);
+      }
+    } catch (error) {
+      console.error('Error checking current tenant:', error);
+      setCurrentTenant(null);
+      setShowWarning(false);
     }
   };
 
@@ -105,6 +128,11 @@ export default function AssignTenantModal({
       return;
     }
 
+    if (currentTenant && showWarning) {
+      toast.error('This unit is occupied. You must terminate the existing lease first.');
+      return;
+    }
+
     setLoading(true);
     try {
       const assignmentData: TenantAssignment = {
@@ -120,7 +148,14 @@ export default function AssignTenantModal({
       onSuccess();
     } catch (error) {
       console.error('Error assigning tenant:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to assign tenant');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to assign tenant';
+      
+      if (errorMessage.includes('currently occupied') || errorMessage.includes('active tenant')) {
+        toast.error('This unit has an active tenant. The existing tenant must be properly terminated first.');
+        setShowWarning(true);
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -130,6 +165,11 @@ export default function AssignTenantModal({
     if (!newTenantData.name || !newTenantData.email || !newTenantData.rental_amount || !leaseData.lease_start) {
       toast.error('Please fill in all required fields');
       return;
+    }
+
+    if (currentTenant && showWarning) {
+        toast.error('This unit is occupied. You must terminate the existing lease first.');
+        return;
     }
 
     setLoading(true);
@@ -178,6 +218,34 @@ export default function AssignTenantModal({
     }
   };
 
+  const handleTerminateAndAssign = async () => {
+    if (!currentTenant) return;
+
+    setTerminating(true);
+    try {
+      const terminationDate = new Date().toISOString().split('T')[0]; // Today's date
+      await terminateLease(unitId, terminationDate);
+      toast.success('Existing lease terminated successfully.');
+      
+      // Refresh tenant status
+      setCurrentTenant(null);
+      setShowWarning(false);
+
+      // Now proceed with assignment
+      if (activeTab === 'existing') {
+        await handleAssignExistingTenant();
+      } else {
+        await handleCreateAndAssignTenant();
+      }
+
+    } catch (error) {
+      console.error('Error terminating lease:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to terminate lease.');
+    } finally {
+      setTerminating(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -190,28 +258,44 @@ export default function AssignTenantModal({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'existing' | 'new')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="existing" className="flex items-center space-x-2">
-              <User size={16} />
-              <span>Assign Existing Tenant</span>
-            </TabsTrigger>
-            <TabsTrigger value="new" className="flex items-center space-x-2">
-              <Plus size={16} />
-              <span>Create New Tenant</span>
-            </TabsTrigger>
-          </TabsList>
+        {currentTenant && showWarning && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <h4 className="text-sm font-medium text-yellow-800 mb-2">⚠️ Unit Already Occupied</h4>
+            <p className="text-sm text-yellow-700">
+              This unit is currently occupied by <strong>{currentTenant.name}</strong>.
+            </p>
+            <p className="text-sm text-yellow-700 mt-1">
+              To assign a new tenant, you can terminate the current lease. This will set the end date to today.
+            </p>
+            <div className="mt-3">
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={handleTerminateAndAssign}
+                disabled={terminating || loading}
+              >
+                {terminating ? 'Terminating...' : 'Terminate Existing Lease & Assign New Tenant'}
+              </Button>
+            </div>
+          </div>
+        )}
 
-          <TabsContent value="existing" className="space-y-6">
-            <div className="space-y-4">
-              <div>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'existing' | 'new')} className="w-full">
+          <TabsList>
+            <TabsTrigger value="existing">Assign Existing Tenant</TabsTrigger>
+            <TabsTrigger value="new">Create New Tenant</TabsTrigger>
+          </TabsList>
+          <TabsContent value="existing">
+            {/* Form for existing tenants */}
+            <div className="space-y-4 pt-4">
+              <div className="grid grid-cols-1 gap-4">
                 <Label htmlFor="tenant-select">Select Tenant</Label>
                 <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a tenant..." />
+                  <SelectTrigger id="tenant-select">
+                    <SelectValue placeholder="Select an existing tenant" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tenants.map((tenant) => (
+                    {tenants.map(tenant => (
                       <SelectItem key={tenant.id} value={tenant.id}>
                         {tenant.name} ({tenant.email})
                       </SelectItem>
@@ -219,247 +303,164 @@ export default function AssignTenantModal({
                   </SelectContent>
                 </Select>
               </div>
-
+              {/* Lease details inputs */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="lease-start">Lease Start Date *</Label>
-                  <Input
-                    id="lease-start"
-                    type="date"
+                  <Label htmlFor="lease_start_existing">Lease Start Date</Label>
+                  <Input 
+                    id="lease_start_existing" 
+                    type="date" 
                     value={leaseData.lease_start}
-                    onChange={(e) => setLeaseData({...leaseData, lease_start: e.target.value})}
-                    required
+                    onChange={(e) => setLeaseData({ ...leaseData, lease_start: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="lease-end">Lease End Date</Label>
-                  <Input
-                    id="lease-end"
-                    type="date"
+                  <Label htmlFor="lease_end_existing">Lease End Date (Optional)</Label>
+                  <Input 
+                    id="lease_end_existing" 
+                    type="date" 
                     value={leaseData.lease_end}
-                    onChange={(e) => setLeaseData({...leaseData, lease_end: e.target.value})}
+                    onChange={(e) => setLeaseData({ ...leaseData, lease_end: e.target.value })}
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="rent-amount">Monthly Rent Amount *</Label>
-                  <Input
-                    id="rent-amount"
-                    type="number"
-                    placeholder="0.00"
+                  <Label htmlFor="rent_amount_existing">Rent Amount</Label>
+                  <Input 
+                    id="rent_amount_existing" 
+                    type="number" 
+                    placeholder="e.g., 1500" 
                     value={leaseData.rent_amount}
-                    onChange={(e) => setLeaseData({...leaseData, rent_amount: e.target.value})}
-                    required
+                    onChange={(e) => setLeaseData({ ...leaseData, rent_amount: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="deposit-amount">Security Deposit</Label>
-                  <Input
-                    id="deposit-amount"
-                    type="number"
-                    placeholder="0.00"
+                  <Label htmlFor="deposit_amount_existing">Deposit Amount (Optional)</Label>
+                  <Input 
+                    id="deposit_amount_existing" 
+                    type="number" 
+                    placeholder="e.g., 1500" 
                     value={leaseData.deposit_amount}
-                    onChange={(e) => setLeaseData({...leaseData, deposit_amount: e.target.value})}
+                    onChange={(e) => setLeaseData({ ...leaseData, deposit_amount: e.target.value })}
                   />
                 </div>
               </div>
-
-              <Button 
-                onClick={handleAssignExistingTenant}
-                disabled={loading || !selectedTenantId}
-                className="w-full"
-              >
-                {loading ? 'Assigning...' : 'Assign Tenant'}
-              </Button>
             </div>
           </TabsContent>
-
-          <TabsContent value="new" className="space-y-6">
-            <div className="space-y-4">
+          <TabsContent value="new">
+            {/* Form for new tenant */}
+            <div className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="new-tenant-name">Full Name *</Label>
-                  <Input
-                    id="new-tenant-name"
+                  <Label htmlFor="new_tenant_name">Full Name</Label>
+                  <Input 
+                    id="new_tenant_name" 
+                    placeholder="John Doe" 
                     value={newTenantData.name}
-                    onChange={(e) => setNewTenantData({...newTenantData, name: e.target.value})}
-                    placeholder="Enter tenant name"
-                    required
+                    onChange={(e) => setNewTenantData({ ...newTenantData, name: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="new-tenant-email">Email *</Label>
-                  <Input
-                    id="new-tenant-email"
-                    type="email"
+                  <Label htmlFor="new_tenant_email">Email Address</Label>
+                  <Input 
+                    id="new_tenant_email" 
+                    type="email" 
+                    placeholder="john.doe@example.com"
                     value={newTenantData.email}
-                    onChange={(e) => setNewTenantData({...newTenantData, email: e.target.value})}
-                    placeholder="Enter email address"
-                    required
+                    onChange={(e) => setNewTenantData({ ...newTenantData, email: e.target.value })}
                   />
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="new-tenant-phone">Phone Number</Label>
-                  <Input
-                    id="new-tenant-phone"
-                    value={newTenantData.phone}
-                    onChange={(e) => setNewTenantData({...newTenantData, phone: e.target.value})}
-                    placeholder="Enter phone number"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental-type">Rental Type</Label>
-                  <Select 
-                    value={newTenantData.rental_type} 
-                    onValueChange={(value) => setNewTenantData({...newTenantData, rental_type: value as 'rent' | 'lease'})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rent">Rental</SelectItem>
-                      <SelectItem value="lease">Lease</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid grid-2 gap-4">
+                  <div>
+                    <Label htmlFor="new_tenant_phone">Phone Number</Label>
+                    <Input 
+                        id="new_tenant_phone" 
+                        placeholder="+1234567890" 
+                        value={newTenantData.phone}
+                        onChange={(e) => setNewTenantData({ ...newTenantData, phone: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new_tenant_dob">Date of Birth</Label>
+                    <Input 
+                        id="new_tenant_dob" 
+                        type="date"
+                        value={newTenantData.dob}
+                        onChange={(e) => setNewTenantData({ ...newTenantData, dob: e.target.value })}
+                    />
+                  </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="new-tenant-dob">Date of Birth</Label>
-                  <Input
-                    id="new-tenant-dob"
-                    type="date"
-                    value={newTenantData.dob}
-                    onChange={(e) => setNewTenantData({...newTenantData, dob: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="new-tenant-gender">Gender</Label>
-                  <Select 
-                    value={newTenantData.gender} 
-                    onValueChange={(value) => setNewTenantData({...newTenantData, gender: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="new-tenant-family-size">Family Size</Label>
-                  <Input
-                    id="new-tenant-family-size"
-                    type="number"
-                    min="1"
-                    value={newTenantData.family_size}
-                    onChange={(e) => setNewTenantData({...newTenantData, family_size: e.target.value})}
-                    placeholder="1"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="new-tenant-address">Permanent Address</Label>
-                <Textarea
-                  id="new-tenant-address"
+              <div className="grid grid-1 gap-4">
+                <Label htmlFor="permanent_address">Permanent Address</Label>
+                <Textarea 
+                  id="permanent_address" 
+                  placeholder="123 Main St, Anytown, USA"
                   value={newTenantData.permanent_address}
-                  onChange={(e) => setNewTenantData({...newTenantData, permanent_address: e.target.value})}
-                  placeholder="Enter permanent address"
-                  rows={2}
+                  onChange={(e) => setNewTenantData({ ...newTenantData, permanent_address: e.target.value })}
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="rental-amount">Rental Amount *</Label>
-                  <Input
-                    id="rental-amount"
-                    type="number"
-                    placeholder="0.00"
-                    value={newTenantData.rental_amount}
-                    onChange={(e) => setNewTenantData({...newTenantData, rental_amount: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental-frequency">Payment Frequency</Label>
-                  <Select 
-                    value={newTenantData.rental_frequency} 
-                    onValueChange={(value) => setNewTenantData({...newTenantData, rental_frequency: value as 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="half-yearly">Half-Yearly</SelectItem>
-                      <SelectItem value="yearly">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="new-lease-start">Lease Start Date *</Label>
-                  <Input
-                    id="new-lease-start"
-                    type="date"
+                  <Label htmlFor="lease_start_new">Lease Start Date</Label>
+                  <Input 
+                    id="lease_start_new" 
+                    type="date" 
                     value={leaseData.lease_start}
-                    onChange={(e) => setLeaseData({...leaseData, lease_start: e.target.value})}
-                    required
+                    onChange={(e) => setLeaseData({ ...leaseData, lease_start: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="new-lease-end">Lease End Date</Label>
-                  <Input
-                    id="new-lease-end"
-                    type="date"
+                  <Label htmlFor="lease_end_new">Lease End Date (Optional)</Label>
+                  <Input 
+                    id="lease_end_new" 
+                    type="date" 
                     value={leaseData.lease_end}
-                    onChange={(e) => setLeaseData({...leaseData, lease_end: e.target.value})}
+                    onChange={(e) => setLeaseData({ ...leaseData, lease_end: e.target.value })}
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="new-deposit-amount">Security Deposit</Label>
-                  <Input
-                    id="new-deposit-amount"
-                    type="number"
-                    placeholder="0.00"
-                    value={leaseData.deposit_amount}
-                    onChange={(e) => setLeaseData({...leaseData, deposit_amount: e.target.value})}
-                  />
-                </div>
-                <div>
-                  {/* Placeholder for another field if needed */}
-                </div>
+                  <div>
+                    <Label htmlFor="new_tenant_rental_amount">Rent Amount</Label>
+                    <Input 
+                        id="new_tenant_rental_amount" 
+                        type="number"
+                        placeholder="e.g. 1500"
+                        value={newTenantData.rental_amount}
+                        onChange={(e) => setNewTenantData({ ...newTenantData, rental_amount: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new_tenant_rental_frequency">Rent Frequency</Label>
+                    <Select 
+                      value={newTenantData.rental_frequency} 
+                      onValueChange={(value) => setNewTenantData({ ...newTenantData, rental_frequency: value as 'monthly' | 'quarterly' | 'half-yearly' | 'yearly' })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                        <SelectItem value="half-yearly">Half-Yearly</SelectItem>
+                        <SelectItem value="yearly">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
               </div>
-
-              <Button 
-                onClick={handleCreateAndAssignTenant}
-                disabled={loading}
-                className="w-full"
-                variant="outline"
-              >
-                {loading ? 'Creating...' : 'Create & Assign Tenant'}
-              </Button>
             </div>
           </TabsContent>
         </Tabs>
+
+        <div className="flex justify-end pt-4">
+          <Button onClick={onClose} variant="outline" className="mr-2">Cancel</Button>
+          <Button 
+            onClick={activeTab === 'existing' ? handleAssignExistingTenant : handleCreateAndAssignTenant}
+            disabled={loading || terminating || (showWarning && !!currentTenant)}
+          >
+            {loading ? 'Assigning...' : 'Assign Tenant'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

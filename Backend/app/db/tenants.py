@@ -1526,3 +1526,33 @@ async def get_upcoming_lease_expirations(
     except Exception as e:
         logger.error(f"Failed to get upcoming lease expirations for owner {owner_id}: {str(e)}")
         return []
+
+async def get_current_tenant_assignment(tenant_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the current active assignment (lease) for a tenant.
+    
+    Args:
+        tenant_id: The tenant ID
+        
+    Returns:
+        The active property_tenant link data including unit_id and lease_id (which is the link id)
+    """
+    try:
+        today = date.today().isoformat()
+        
+        # Query for active assignments (where end_date is null or in the future)
+        response = supabase_client.table('property_tenants')\
+            .select('*')\
+            .eq('tenant_id', tenant_id)\
+            .or_(f'end_date.is.null,end_date.gte.{today}')\
+            .limit(1)\
+            .execute()
+            
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching current assignment for tenant {tenant_id}: {response.error.message}")
+            return None
+            
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Failed to get current assignment for tenant {tenant_id}: {str(e)}")
+        return None

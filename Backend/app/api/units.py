@@ -4,6 +4,7 @@ import uuid
 import logging
 from supabase import Client
 from pydantic import BaseModel
+from datetime import date
 
 # Import models (adjust paths as needed)
 # Assuming models are in app.models.property for now
@@ -38,6 +39,9 @@ router = APIRouter(
     tags=["Units"],
     responses={404: {"description": "Unit not found"}},
 )
+
+class LeaseTerminationPayload(BaseModel):
+    termination_date: date
 
 # --- Endpoint Implementations Below --- #
 
@@ -357,36 +361,70 @@ async def assign_tenant_to_unit(
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
-    Assign a tenant to a specific unit, potentially creating a lease.
-    Requires authentication and authorization (user must own parent property).
-    Requires tenant_id and lease details in the request body.
+    Assign a tenant to a unit. This creates a property_tenants link.
+    If the tenant does not exist, they can be created first.
+    If the unit is already occupied, the request will be rejected.
     """
-    logger.info(f"Endpoint: Assigning tenant to unit {unit_id}")
+    logger.info(f"Attempting to assign tenant to unit {unit_id}")
     user_id = current_user.get("id")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
 
+    # The service layer will handle the logic of checking for existing tenants,
+    # creating the link, and updating statuses.
     try:
-        # Convert pydantic model to dict for service function
-        assignment_data = tenant_assignment.dict()
-        logger.debug(f"Assignment payload: {assignment_data}")
+        # Pydantic v1
+        assignment_data_dict = tenant_assignment.dict()
         
-        # Call service function to handle assignment logic
         assigned_tenant = await tenant_service.assign_tenant_to_unit(
-            db_client=db_client, 
-            unit_id=unit_id, 
-            user_id=user_id, 
-            assignment_data=assignment_data
+            db_client=db_client,
+            unit_id=unit_id,
+            user_id=user_id,
+            assignment_data=assignment_data_dict
         )
-        
+        if not assigned_tenant:
+            # Service layer should raise specific HTTPException, but have a fallback
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Failed to assign tenant. The unit might be occupied or tenant data is invalid.")
         return assigned_tenant
     except HTTPException as http_exc:
-        # Re-raise HTTP exceptions from service layer
         raise http_exc
     except Exception as e:
-        logger.error(f"Endpoint error assigning tenant to unit {unit_id}: {e}", exc_info=True)
+        logger.error(f"Error assigning tenant to unit {unit_id}: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="An unexpected error occurred while assigning tenant to unit")
+                            detail="An unexpected error occurred during tenant assignment.")
+
+@router.post("/{unit_id}/terminate_lease", status_code=status.HTTP_200_OK)
+async def terminate_lease(
+    unit_id: str,
+    payload: LeaseTerminationPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Terminates a tenant's lease for a unit.
+    This action can only be performed by a property owner.
+    """
+    user_id = current_user.get("id")
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="User not authorized"
+        )
+
+    success = await tenant_service.terminate_lease_for_unit(
+        unit_id=unit_id,
+        owner_id=user_id,
+        termination_date=payload.termination_date
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to terminate lease. The unit may not be occupied or the lease is already terminated."
+        )
+
+    return {"message": "Lease terminated successfully"}
 
 # --- Unit Payments Endpoint (Placeholder) --- #
 

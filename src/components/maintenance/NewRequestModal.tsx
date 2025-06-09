@@ -43,7 +43,7 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<{
     propertyId: string;
-    unitNumber: string;
+    unitId: string;
     tenantId: string;
     title: string;
     description: string;
@@ -51,11 +51,11 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
     category: MaintenanceCategory | '';
   }>({
     propertyId: '',
-    unitNumber: '',
+    unitId: '',
     tenantId: '',
     title: '',
     description: '',
-    priority: 'medium',
+    priority: 'normal' as MaintenancePriority,
     category: '',
   });
   const [files, setFiles] = useState<File[]>([]);
@@ -71,6 +71,37 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loadingTenants, setLoadingTenants] = useState<boolean>(false);
   const [tenantError, setTenantError] = useState<string | null>(null);
+  const [availableTenantsForUnit, setAvailableTenantsForUnit] = useState<Tenant[]>([]);
+
+  const fetchUnits = async (propertyId: string) => {
+    setLoadingUnits(true);
+    setUnitError(null);
+    try {
+      const fetchedUnits = await getUnitsForProperty(propertyId);
+      setUnits(fetchedUnits || []);
+    } catch (err: unknown) {
+      console.error('Error fetching units:', err);
+      setUnitError(err instanceof Error ? err.message : 'Failed to load units.');
+      setUnits([]);
+    } finally {
+      setLoadingUnits(false);
+    }
+  };
+
+  const fetchTenants = async (propertyId: string) => {
+    setLoadingTenants(true);
+    setTenantError(null);
+    try {
+      const response = await getTenants({ property_id: propertyId });
+      setTenants(response.items || []);
+    } catch (err: unknown) {
+      console.error('Error fetching tenants:', err);
+      setTenantError(err instanceof Error ? err.message : 'Failed to load tenants.');
+      setTenants([]);
+    } finally {
+      setLoadingTenants(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -91,63 +122,30 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
   }, []);
 
   useEffect(() => {
-    const fetchUnits = async () => {
-      if (!formData.propertyId) {
-        setUnits([]);
-        setTenants([]); 
-        setFormData(prev => ({ ...prev, unitNumber: '', tenantId: '' })); 
-        return;
-      }
-      setLoadingUnits(true);
-      setUnitError(null);
-      setTenants([]); 
-      setFormData(prev => ({ ...prev, unitNumber: '', tenantId: '' })); 
-      try {
-        const fetchedUnits = await getUnitsForProperty(formData.propertyId);
-        setUnits(fetchedUnits || []);
-      } catch (err: unknown) {
-        console.error('Error fetching units:', err);
-        setUnitError(err instanceof Error ? err.message : 'Failed to load units.');
-        setUnits([]);
-      } finally {
-        setLoadingUnits(false);
-      }
-    };
-    fetchUnits();
+    if (formData.propertyId) {
+      fetchUnits(formData.propertyId);
+      fetchTenants(formData.propertyId);
+    } else {
+      setUnits([]);
+      setTenants([]);
+      setFormData(prev => ({ ...prev, unitId: '', tenantId: '' }));
+    }
   }, [formData.propertyId]);
 
   useEffect(() => {
-    const fetchTenantsForProperty = async () => {
-      if (!formData.propertyId) {
-         setTenants([]);
-         return;
+    if (formData.unitId && tenants.length > 0) {
+      const selectedUnit = units.find(u => u.id === formData.unitId);
+      if (selectedUnit) {
+        const propertyTenants = tenants.filter(t => t.property_id === formData.propertyId);
+        setAvailableTenantsForUnit(propertyTenants);
+        if (propertyTenants.length === 1) {
+          setFormData(prev => ({ ...prev, tenantId: propertyTenants[0].id }));
+        }
       }
-      if (loadingUnits || unitError) {
-          setTenants([]); 
-          return;
-      }
-      setLoadingTenants(true);
-      setTenantError(null);
-      try {
-        const response = await getTenants({ property_id: formData.propertyId });
-        setTenants(response.items || []);
-      } catch (err: unknown) {
-        console.error('Error fetching tenants:', err);
-        setTenantError(err instanceof Error ? err.message : 'Failed to load tenants.');
-        setTenants([]);
-      } finally {
-        setLoadingTenants(false);
-      }
-    };
-    fetchTenantsForProperty();
-  }, [formData.propertyId, loadingUnits, unitError]); 
-  
-  const availableTenantsForUnit = React.useMemo(() => {
-    if (!formData.unitNumber) return [];
-    const selectedUnit = units.find(u => u.unit_number === formData.unitNumber);
-    if (!selectedUnit || !selectedUnit.tenant_id) return []; 
-    return tenants.filter(t => t.id === selectedUnit.tenant_id);
-  }, [formData.unitNumber, tenants, units]);
+    } else {
+      setAvailableTenantsForUnit([]);
+    }
+  }, [formData.unitId, formData.propertyId, tenants, units]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -184,6 +182,7 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
 
       const requestAPIData: MaintenanceRequestCreate = {
         property_id: formData.propertyId,
+        unit_id: formData.unitId,
         tenant_id: formData.tenantId || undefined,
         title: formData.title,
         description: formData.description,
@@ -202,7 +201,7 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
             document_name: fileInfo.fileName,
             title: fileInfo.fileName,
             maintenance_request_id: createdRequest!.id,
-            property_id: formData.propertyId,
+            property_id: formData.propertyId || undefined,
             tenant_id: formData.tenantId || undefined,
             file_url: fileInfo.url,
             file_name: fileInfo.fileName,
@@ -236,8 +235,8 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
     if (!loading) {
         onOpenChange(false);
         setFormData({ 
-            propertyId: '', unitNumber: '', tenantId: '', title: '', 
-            description: '', priority: 'medium', category: '' 
+            propertyId: '', unitId: '', tenantId: '', title: '', 
+            description: '', priority: 'normal' as MaintenancePriority, category: '' 
         });
         setFiles([]);
     }
@@ -257,7 +256,7 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
               <Select 
                 value={formData.propertyId} 
                 onValueChange={(value) => {
-                  setFormData({ ...formData, propertyId: value, unitNumber: '', tenantId: '' });
+                  setFormData({ ...formData, propertyId: value, unitId: '', tenantId: '' });
                 }}
                 disabled={loadingProperties || loading}
               >
@@ -281,34 +280,35 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
             </div>
 
             <div className="space-y-2">
-               <Label htmlFor="unit">Unit</Label>
-               <Select 
-                 value={formData.unitNumber}
-                 onValueChange={(value) => {
-                     setFormData({ ...formData, unitNumber: value, tenantId: '' });
-                 }}
-                 disabled={!formData.propertyId || loadingUnits || !!unitError || loading}
-               >
-                 <SelectTrigger id="unit"><SelectValue placeholder="Select Unit..." /></SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="placeholder" disabled>Select property first</SelectItem>
-                   {loadingUnits && <SelectItem value="loading" disabled>Loading units...</SelectItem>}
-                   {unitError && <SelectItem value="error" disabled>Error loading units</SelectItem>}
-                   {!loadingUnits && !unitError && units.length === 0 && formData.propertyId && (
-                     <SelectItem value="no-units" disabled>No units found</SelectItem>
-                   )}
-                   {!loadingUnits && !unitError && !formData.propertyId && (
-                     <SelectItem value="placeholder" disabled>Select property first</SelectItem>
-                   )}
-                   {!loadingUnits && !unitError && units.map((unit) => (
-                     <SelectItem key={unit.id} value={unit.unit_number}>
-                       {unit.unit_number}
-                     </SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
-               {unitError && <p className="text-xs text-red-600">{unitError}</p>}
-             </div>
+              <Label htmlFor="unit">Unit</Label>
+              <Select 
+                value={formData.unitId} 
+                onValueChange={(value) => {
+                  setFormData({ ...formData, unitId: value, tenantId: '' });
+                }}
+                disabled={!formData.propertyId || loadingUnits || !!unitError || loading}
+              >
+                <SelectTrigger id="unit">
+                  <SelectValue placeholder="Select Unit..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingUnits && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                  {unitError && <SelectItem value="error" disabled>Error loading</SelectItem>}
+                  {!loadingUnits && !unitError && !formData.propertyId && (
+                    <SelectItem value="placeholder" disabled>Select property first</SelectItem>
+                  )}
+                  {!loadingUnits && !unitError && units.length === 0 && formData.propertyId && (
+                    <SelectItem value="no-units" disabled>No units found</SelectItem>
+                  )}
+                  {!loadingUnits && !unitError && units.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      Unit {unit.unit_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {unitError && <p className="text-xs text-red-600">{unitError}</p>}
+            </div>
           </div>
 
            <div className="space-y-2">
@@ -318,17 +318,17 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
                 onValueChange={(value) => {
                     setFormData({ ...formData, tenantId: value });
                 }}
-                disabled={!formData.unitNumber || loadingTenants || !!tenantError || loading} 
+                disabled={!formData.unitId || loadingTenants || !!tenantError || loading} 
               >
                <SelectTrigger id="tenant"><SelectValue placeholder="Select Tenant..." /></SelectTrigger>
                <SelectContent>
                   <SelectItem value="placeholder" disabled>Select unit first</SelectItem>
                   {loadingTenants && <SelectItem value="loading" disabled>Loading tenants...</SelectItem>}
                   {tenantError && <SelectItem value="error" disabled>Error loading tenants</SelectItem>}
-                  {!loadingTenants && !tenantError && !formData.unitNumber && (
+                  {!loadingTenants && !tenantError && !formData.unitId && (
                     <SelectItem value="placeholder" disabled>Select unit first</SelectItem>
                   )}
-                  {!loadingTenants && !tenantError && availableTenantsForUnit.length === 0 && formData.unitNumber && (
+                  {!loadingTenants && !tenantError && availableTenantsForUnit.length === 0 && formData.unitId && (
                     <SelectItem value="no-tenant" disabled>No tenant found for this unit</SelectItem>
                   )}
                   {!loadingTenants && !tenantError && availableTenantsForUnit.map((tenant) => (

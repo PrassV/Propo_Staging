@@ -249,6 +249,47 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         logger.exception(f"Error in delete_tenant service: {str(e)}")
         return False
 
+async def terminate_lease_for_unit(unit_id: str, owner_id: str, termination_date: date) -> bool:
+    """
+    Terminates the active lease for a specific unit.
+    """
+    try:
+        # 1. Find the active lease for the unit
+        active_lease = await tenants_db.get_active_tenant_for_unit(unit_id)
+
+        if not active_lease:
+            logger.warning(f"No active lease found for unit {unit_id} to terminate.")
+            return False
+
+        # 2. Verify owner has permission
+        property_id = active_lease.get("property_id")
+        from ..config.database import supabase_client as db_client
+        property_owner = await properties_db.get_property_owner(db_client, property_id)
+        if str(property_owner) != owner_id:
+            logger.error(f"User {owner_id} does not own property {property_id}, cannot terminate lease.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+        link_id = active_lease.get("id")
+
+        # 3. Call the DB function to terminate the lease
+        result = await tenants_db.terminate_tenant_lease(
+            link_id=link_id,
+            termination_date=termination_date
+        )
+        
+        success = result.get("success", False)
+
+        if success:
+            logger.info(f"Successfully terminated lease {link_id} for unit {unit_id} by owner {owner_id}")
+        else:
+            logger.error(f"Failed to terminate lease {link_id} in DB. Reason: {result.get('message')}")
+            
+        return success
+
+    except Exception as e:
+        logger.exception(f"Error in terminate_lease_for_unit service: {e}")
+        return False
+
 # --- New Service Function ---
 async def get_tenants_for_unit(unit_id: uuid.UUID, requesting_user_id: uuid.UUID) -> List[Tenant]:
     """
