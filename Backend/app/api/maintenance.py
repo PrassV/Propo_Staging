@@ -17,6 +17,7 @@ from app.services import maintenance_service
 from app.config.auth import get_current_user
 from app.services import property_service
 from app.config.database import supabase_client
+from app.services import tenant_service
 
 router = APIRouter(
     prefix="/maintenance",
@@ -172,13 +173,15 @@ async def create_maintenance_request(
         user_type = current_user.get("user_type") or "owner"  # Default to owner if not specified
         if user_type == "tenant":
             request_data_dict["tenant_id"] = user_id
-
-        # Check if user has access to this unit
-        can_access = False
-        if user_type == "tenant":
-            can_access = await property_service.tenant_has_access_to_unit(user_id, request_data.unit_id)
+            
+            # Check if tenant is associated with this unit
+            tenant_info = await tenant_service.get_current_tenant_for_unit(request_data.unit_id)
+            can_access = tenant_info is not None and str(tenant_info.get('user_id')) == user_id
         else:
-            can_access = await property_service.owner_has_access_to_unit(user_id, request_data.unit_id)
+            # Owner authorization check - get property ID for the unit, then check access
+            property_id = await property_service.get_property_id_for_unit(request_data.unit_id)
+            if property_id:
+                can_access = await property_service.check_property_access(property_id, user_id)
             
         if not can_access:
             raise HTTPException(status_code=403, detail="Not authorized to create maintenance request for this unit")
@@ -229,8 +232,15 @@ async def update_maintenance_request(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only update their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
+        else:
+            # Owners can update requests for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
 
         # Update the request
         updated_request = await maintenance_service.update_maintenance_request(
@@ -272,8 +282,15 @@ async def delete_maintenance_request(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Tenants are not authorized to delete maintenance requests")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only delete their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to delete this maintenance request")
+        else:
+            # Owners can delete requests for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to delete this maintenance request")
 
         # Delete the request
         success = await maintenance_service.delete_maintenance_request(request_id)
@@ -360,16 +377,23 @@ async def update_status(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
-
-        # Tenants can only mark as completed or cancelled
-        allowed_statuses = [MaintenanceStatus.COMPLETED.value, MaintenanceStatus.CANCELLED.value]
-        if status not in allowed_statuses:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Tenants can only update status to {', '.join(allowed_statuses)}"
-            )
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only update status of their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
+                
+            # Tenants can only mark as completed or cancelled
+            allowed_statuses = [MaintenanceStatus.COMPLETED.value, MaintenanceStatus.CANCELLED.value]
+            if status not in allowed_statuses:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Tenants can only update status to {', '.join(allowed_statuses)}"
+                )
+        else:
+            # Owners can update to any status for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
 
         # Update the status
         updated_request = await maintenance_service.update_request_status(
@@ -413,8 +437,15 @@ async def add_image(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this maintenance request")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only add images to their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to add images to this maintenance request")
+        else:
+            # Owners can add images to requests for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to add images to this maintenance request")
 
         # Add the image
         updated_request = await maintenance_service.add_maintenance_image(
@@ -458,8 +489,15 @@ async def add_comment(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to comment on this maintenance request")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only comment on their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to comment on this maintenance request")
+        else:
+            # Owners can comment on requests for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to comment on this maintenance request")
 
         # Set the request_id and user_id in the comment data
         comment_data.request_id = request_id
@@ -507,8 +545,15 @@ async def get_comments(
             raise HTTPException(status_code=404, detail="Maintenance request not found")
 
         # Check authorization
-        if existing_request.get("tenant_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view comments for this maintenance request")
+        user_type = current_user.get("user_type") or current_user.get("role")
+        if user_type == "tenant":
+            # Tenants can only view comments on their own requests
+            if existing_request.get("tenant_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to view comments for this maintenance request")
+        else:
+            # Owners can view comments on requests for their properties
+            if existing_request.get("owner_id") != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to view comments for this maintenance request")
 
         # Get the comments
         comments = await maintenance_service.get_maintenance_comments(request_id)
