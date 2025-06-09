@@ -436,7 +436,7 @@ async def assign_tenant_to_unit(
             "start_date": assignment_data.get('lease_start').isoformat() if isinstance(assignment_data.get('lease_start'), date) else assignment_data.get('lease_start'),
             "end_date": assignment_data.get('lease_end').isoformat() if assignment_data.get('lease_end') and isinstance(assignment_data.get('lease_end'), date) else assignment_data.get('lease_end'),
             "rental_amount": assignment_data.get('rent_amount'),
-            "advance_amount": assignment_data.get('deposit_amount'),
+            "deposit_amount": assignment_data.get('deposit_amount'),
             "notes": assignment_data.get('notes'),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
