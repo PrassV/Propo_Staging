@@ -91,8 +91,8 @@ async def get_payments(
             query = query.lte('due_date', end_date)
 
         # Apply sorting
-        sort_direction = 'desc' if sort_order.lower() == 'desc' else 'asc'
-        query = query.order(sort_by, sort_direction)
+        is_descending = sort_order.lower() == 'desc'
+        query = query.order(sort_by, desc=is_descending)
 
         # Apply pagination
         query = query.range(skip, skip + limit - 1)
