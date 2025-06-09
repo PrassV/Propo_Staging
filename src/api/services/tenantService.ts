@@ -45,6 +45,7 @@ export const getTenants = async (params: {
  */
 export const getTenantById = async (id: string): Promise<TenantResponse> => {
   try {
+    console.log(`Fetching tenant by ID: ${id}`);
     const response = await apiClient.get<TenantResponse>(`/tenants/${id}`);
     return response.data;
   } catch (error: unknown) {

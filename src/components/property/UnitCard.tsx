@@ -13,13 +13,13 @@ import AssignTenantModal from './AssignTenantModal';
 
 interface UnitCardProps {
   unit: UnitDetails;
-  propertyId: string;
   onUpdate?: () => void;
   className?: string;
   tenant?: Tenant | null;
+  isLoading?: boolean;
 }
 
-export default function UnitCard({ unit, onUpdate, className, tenant }: UnitCardProps) {
+export default function UnitCard({ unit, onUpdate, className, tenant, isLoading }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showAssignTenant, setShowAssignTenant] = useState(false);
     
@@ -86,7 +86,9 @@ export default function UnitCard({ unit, onUpdate, className, tenant }: UnitCard
                         <TabsTrigger value="payments">Payments</TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
-                        {hasActiveTenant ? (
+                        {isLoading ? (
+                            <div className="text-center p-4 text-muted-foreground">Loading tenant details...</div>
+                        ) : hasActiveTenant ? (
                             <div className="space-y-4">
                               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                                 <p className="text-sm text-green-700 font-medium">

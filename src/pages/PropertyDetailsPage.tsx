@@ -75,17 +75,17 @@ export default function PropertyDetailsPage() {
         setDocumentsError(null);
         try {
             const response = await api.document.getDocuments({ property_id: propertyId });
-      setDocuments(response.documents || []);
-    } catch (err) {
+            setDocuments(response.documents || []);
+        } catch (err: unknown) {
             console.error("Error fetching documents:", err);
             setDocumentsError(err instanceof Error ? err.message : 'Failed to load documents.');
-      setDocuments([]);
-    } finally {
+            setDocuments([]);
+        } finally {
             setDocumentsLoading(false);
-    }
-  };
+        }
+    };
 
-  useEffect(() => {
+    useEffect(() => {
         fetchPropertyDetails();
         fetchDocuments(); // Fetch documents when component mounts or propertyId changes
     }, [propertyId]);
@@ -103,7 +103,7 @@ export default function PropertyDetailsPage() {
                             try {
                                 const response = await getTenantById(unit.current_tenant_id);
                                 tenantsMap[unit.id] = response.tenant || null;
-                            } catch (err) {
+                            } catch {
                                 tenantsMap[unit.id] = null;
                             }
                         } else {
@@ -112,7 +112,8 @@ export default function PropertyDetailsPage() {
                     })
                 );
                 setUnitTenants(tenantsMap);
-            } catch (err) {
+                console.log('Unit tenants updated:', tenantsMap);
+            } catch {
                 setTenantsError('Failed to load tenant details for units.');
             } finally {
                 setTenantsLoading(false);
@@ -125,21 +126,21 @@ export default function PropertyDetailsPage() {
         if (!property) return;
         // Define formData type explicitly
         const formData: Partial<PropertyFormData> & { id: string } = {
-      id: property.id,
-      propertyName: property.property_name,
-      propertyType: property.property_type,
-      addressLine1: property.address_line1,
-      addressLine2: property.address_line2,
-      city: property.city,
-      state: property.state,
+            id: property.id,
+            propertyName: property.property_name,
+            propertyType: property.property_type ?? '',
+            addressLine1: property.address_line1,
+            addressLine2: property.address_line2 ?? undefined,
+            city: property.city,
+            state: property.state,
             pincode: property.pincode,
             country: property.country,
-      description: property.description,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
+            description: property.description ?? '',
+            bedrooms: property.bedrooms ?? undefined,
+            bathrooms: property.bathrooms ?? undefined,
             // Convert null to undefined for sizeSqft and yearBuilt
             sizeSqft: property.area ?? undefined,
-      yearBuilt: property.year_built ?? undefined,
+            yearBuilt: property.year_built ?? undefined,
             category: '', // Placeholder
             listedIn: '', // Placeholder
             status: property.status, // Assuming PropertyDetails has status
@@ -230,7 +231,7 @@ export default function PropertyDetailsPage() {
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 {/* Display overview details if they exist */}
-                                {property.area && <div><span className="font-semibold">Size:</span> {property.area} {property.area_unit || 'sqft'}</div>} {/* Use area and area_unit */}
+                                {property.area && <div><span className="font-semibold">Size:</span> {property.area} sqft</div>}
                                 {typeof property.bedrooms === 'number' && <div><span className="font-semibold">Bedrooms:</span> {property.bedrooms}</div>}
                                 {typeof property.bathrooms === 'number' && <div><span className="font-semibold">Bathrooms:</span> {property.bathrooms}</div>}
                                 {property.year_built && <div><span className="font-semibold">Year Built:</span> {property.year_built}</div>}
@@ -259,142 +260,102 @@ export default function PropertyDetailsPage() {
                         </CardContent>
                     </Card>
 
-                    {/* NEW: Financial Summary Card */}
+                    {/* Units Card */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Units</CardTitle>
+                                <CardDescription>Manage units within this property.</CardDescription>
+                            </div>
+                            <Button size="sm" onClick={() => setAddUnitDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Unit
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {property.units && property.units.length > 0 ? (
+                                <div className="space-y-4">
+                                    {property.units.map(unit => (
+                                        <UnitCard
+                                            key={unit.id}
+                                            unit={unit}
+                                            tenant={unitTenants[unit.id] || null}
+                                            isLoading={tenantsLoading}
+                                            onUpdate={fetchPropertyDetails}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-6">
+                                    <p className="text-muted-foreground">No units found for this property.</p>
+                                    <Button variant="link" onClick={() => setAddUnitDialogOpen(true)}>Add the first unit</Button>
+                                </div>
+                            )}
+                            {tenantsError && <p className="text-destructive text-sm mt-4">{tenantsError}</p>}
+                        </CardContent>
+                    </Card>
+
+                    {/* Financial Summary */}
                     <PropertyFinancialSummary propertyId={property.id} />
 
-                    {/* NEW: Location Map Card */}
+                </div>
+
+                {/* Right Column - 1/3 width */}
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Location Card */}
                     <PropertyLocationMap
                         address={property.address_line1}
                         city={property.city}
                         state={property.state}
-                        pincode={property.pincode || ''}
+                        pincode={property.pincode}
                     />
 
-                    {/* Property-Level Documents Card */}
+                    {/* Documents Card */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Property Documents</CardTitle>
-                            {/* TODO: Add button/mechanism to upload property-level documents */}
+                            <CardTitle>Documents</CardTitle>
+                            <CardDescription>All related property documents.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <DocumentList
                                 documents={documents}
                                 isLoading={documentsLoading}
                                 error={documentsError}
-                                // Add delete/upload handlers if needed
                             />
                         </CardContent>
                     </Card>
-                </div>
 
-                {/* Right Column - 1/3 width */}
-                <div className="space-y-6">
-                    {/* Quick Stats Card */}
+                    {/* Quick Actions Card */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Quick Stats</CardTitle>
+                            <CardTitle>Quick Actions</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="space-y-2">
-                                <div className="flex justify-between">
-                                    <span>Total Units:</span>
-                                    <span className="font-medium">{property.units?.length || 0}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Occupied Units:</span>
-                                    <span className="font-medium">
-                                        {property.units?.filter(u => u.status === 'Occupied').length || 0}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Vacant Units:</span>
-                                    <span className="font-medium">
-                                        {property.units?.filter(u => u.status === 'Vacant').length || 0}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Occupancy Rate:</span>
-                                    <span className="font-medium">
-                                        {property.units?.length
-                                            ? Math.round((property.units.filter(u => u.status === 'Occupied').length / property.units.length) * 100)
-                                            : 0}%
-                                    </span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Property Actions Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Actions</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button className="w-full" onClick={() => setAddUnitDialogOpen(true)}>
-                                <Plus className="mr-2 h-4 w-4" /> Add Unit
-                            </Button>
-                            <Button className="w-full" asChild>
-                                <Link to={`/dashboard/properties/${property.id}/leases`}>
-                                    <Users className="mr-2 h-4 w-4" /> Manage Leases
-                                </Link>
-                            </Button>
-                            <Button className="w-full" asChild>
-                                <Link to="/dashboard/maintenance">
-                                    <Wrench className="mr-2 h-4 w-4" /> Maintenance
-                                </Link>
-                            </Button>
-                            <Button className="w-full" asChild>
-                                <Link to="/dashboard/payments">
-                                    <CreditCard className="mr-2 h-4 w-4" /> Payments
-                                </Link>
-                            </Button>
-                            {/* Add more action buttons as needed */}
+                        <CardContent className="grid grid-cols-2 gap-4">
+                            <Button variant="outline"><Users className="mr-2 h-4 w-4" /> Manage Tenants</Button>
+                            <Button variant="outline"><Wrench className="mr-2 h-4 w-4" /> Maintenance</Button>
+                            <Button variant="outline"><CreditCard className="mr-2 h-4 w-4" /> View Payments</Button>
+                            {/* Add more actions as needed */}
                         </CardContent>
                     </Card>
                 </div>
             </div>
-
-            {/* Units Section - Full Width */}
-            <div>
-                <div className="text-xl font-semibold mb-4">Units</div>
-                {tenantsLoading && <p className="text-muted-foreground text-sm">Loading tenant details...</p>}
-                {tenantsError && <p className="text-destructive text-sm">{tenantsError}</p>}
-                <div className="space-y-4">
-                    {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm">No units added yet.</p>}
-                    {property?.units?.map(unit => (
-                        <UnitCard
-                            key={unit.id}
-                            unit={unit}
-                            propertyId={property.id}
-                            tenant={unitTenants[unit.id] || null}
-                            onUpdate={fetchPropertyDetails}
-                        />
-                    ))}
-                </div>
-            </div>
-
-            {/* REMOVED: Old Unit Details Tabs Section */}
-            {/* <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"> ... Tabs ... </div> */}
 
             {/* Add Unit Dialog */}
             <Dialog open={addUnitDialogOpen} onOpenChange={setAddUnitDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Add New Unit</DialogTitle>
                         <DialogDescription>
-                            Create a new unit for this property. Fill in the details below.
+                            Enter the details for the new unit in "{property.property_name}".
                         </DialogDescription>
                     </DialogHeader>
-
-                    {/* Add the AddUnitForm component */}
                     <AddUnitForm
                         onSubmit={handleAddUnit}
                         onCancel={() => setAddUnitDialogOpen(false)}
-                        isLoading={addingUnit}
+                        isLoading={addingUnit} // Pass loading state
                     />
                 </DialogContent>
             </Dialog>
-            </div>
         </div>
     );
-};
+}
