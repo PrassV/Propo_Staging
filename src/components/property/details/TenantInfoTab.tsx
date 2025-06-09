@@ -7,14 +7,21 @@ import { Link } from 'react-router-dom';
 
 interface TenantInfoTabProps {
   tenantId: string;
+  tenant?: Tenant | null;
 }
 
-export default function TenantInfoTab({ tenantId }: TenantInfoTabProps) {
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function TenantInfoTab({ tenantId, tenant: propTenant }: TenantInfoTabProps) {
+  const [tenant, setTenant] = useState<Tenant | null>(propTenant || null);
+  const [loading, setLoading] = useState(!propTenant);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (propTenant) {
+      setTenant(propTenant);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     const fetchTenant = async () => {
       if (!tenantId) {
         setError('No Tenant ID provided.');
@@ -41,7 +48,7 @@ export default function TenantInfoTab({ tenantId }: TenantInfoTabProps) {
       }
     };
     fetchTenant();
-  }, [tenantId]);
+  }, [tenantId, propTenant]);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <p className="text-sm text-destructive">Error: {error}</p>;

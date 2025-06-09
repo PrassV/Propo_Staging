@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
-import { PropertyDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
+import { PropertyDetails, Document as ApiDocument, PropertyFormData, UnitCreate, Tenant } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
 import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import DocumentList from '@/components/documents/DocumentList'; // Import Docume
 import AddUnitForm from '@/components/property/AddUnitForm'; // Import the AddUnitForm component
 import PropertyFinancialSummary from '@/components/property/PropertyFinancialSummary'; // Import the financial summary component
 import PropertyLocationMap from '@/components/property/PropertyLocationMap'; // Import the location map component
+import { getTenantById } from '@/api/services/tenantService';
 
 // Import Dialog components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -28,6 +29,9 @@ export default function PropertyDetailsPage() {
     const [error, setError] = useState<string | null>(null);
     const [addUnitDialogOpen, setAddUnitDialogOpen] = useState(false); // State for dialog visibility
     const [addingUnit, setAddingUnit] = useState(false); // Loading state for unit creation
+    const [unitTenants, setUnitTenants] = useState<{ [unitId: string]: Tenant | null }>({});
+    const [tenantsLoading, setTenantsLoading] = useState(false);
+    const [tenantsError, setTenantsError] = useState<string | null>(null);
 
     const { openDialog: openEditPropertyDialog } = usePropertyDialog();
 
@@ -85,6 +89,37 @@ export default function PropertyDetailsPage() {
         fetchPropertyDetails();
         fetchDocuments(); // Fetch documents when component mounts or propertyId changes
     }, [propertyId]);
+
+    useEffect(() => {
+        if (!property || !property.units) return;
+        const fetchTenants = async () => {
+            setTenantsLoading(true);
+            setTenantsError(null);
+            const tenantsMap: { [unitId: string]: Tenant | null } = {};
+            try {
+                await Promise.all(
+                    property.units.map(async (unit) => {
+                        if (unit.current_tenant_id) {
+                            try {
+                                const response = await getTenantById(unit.current_tenant_id);
+                                tenantsMap[unit.id] = response.tenant || null;
+                            } catch (err) {
+                                tenantsMap[unit.id] = null;
+                            }
+                        } else {
+                            tenantsMap[unit.id] = null;
+                        }
+                    })
+                );
+                setUnitTenants(tenantsMap);
+            } catch (err) {
+                setTenantsError('Failed to load tenant details for units.');
+            } finally {
+                setTenantsLoading(false);
+            }
+        };
+        fetchTenants();
+    }, [property]);
 
     const handleEditClick = () => {
         if (!property) return;
@@ -322,16 +357,20 @@ export default function PropertyDetailsPage() {
             {/* Units Section - Full Width */}
             <div>
                 <div className="text-xl font-semibold mb-4">Units</div>
+                {tenantsLoading && <p className="text-muted-foreground text-sm">Loading tenant details...</p>}
+                {tenantsError && <p className="text-destructive text-sm">{tenantsError}</p>}
                 <div className="space-y-4">
-                {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm">No units added yet.</p>}
-                {property?.units?.map(unit => (
-                    <UnitCard
-                        key={unit.id}
-                        unit={unit}
-                        propertyId={property.id}
-                        onUpdate={fetchPropertyDetails}
-                    />
-                ))}
+                    {(property?.units?.length ?? 0) === 0 && <p className="text-muted-foreground text-sm">No units added yet.</p>}
+                    {property?.units?.map(unit => (
+                        <UnitCard
+                            key={unit.id}
+                            unit={unit}
+                            propertyId={property.id}
+                            tenant={unitTenants[unit.id] || null}
+                            onUpdate={fetchPropertyDetails}
+                        />
+                    ))}
+                </div>
             </div>
 
             {/* REMOVED: Old Unit Details Tabs Section */}

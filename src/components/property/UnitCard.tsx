@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { UnitDetails } from "../../api/types";
+import { UnitDetails, Tenant } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
@@ -16,9 +16,10 @@ interface UnitCardProps {
   propertyId: string;
   onUpdate?: () => void;
   className?: string;
+  tenant?: Tenant | null;
 }
 
-export default function UnitCard({ unit, onUpdate, className }: UnitCardProps) {
+export default function UnitCard({ unit, onUpdate, className, tenant }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showAssignTenant, setShowAssignTenant] = useState(false);
     
@@ -92,7 +93,7 @@ export default function UnitCard({ unit, onUpdate, className }: UnitCardProps) {
                                   ✓ This unit has an active tenant assigned
                                 </p>
                               </div>
-                              <TenantInfoTab tenantId={unit.current_tenant_id || ''} />
+                              <TenantInfoTab tenantId={unit.current_tenant_id || ''} tenant={tenant} />
                             </div>
                         ) : (
                             <div className="space-y-4 text-center p-4">

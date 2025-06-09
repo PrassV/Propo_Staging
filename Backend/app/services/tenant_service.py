@@ -465,19 +465,23 @@ async def assign_tenant_to_unit(
                               detail="Failed to create tenant assignment")
 
         # 8. Update unit status to occupied and set current tenant
+        from ..constants.status import UNIT_STATUS_OCCUPIED
         unit_update = {
-            "status": "occupied",
+            "status": UNIT_STATUS_OCCUPIED,  # Changed from "occupied" to "Occupied" via constants
             "current_tenant_id": str(tenant_id),
             "updated_at": datetime.utcnow().isoformat()
         }
         unit_updated = await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
         if not unit_updated:
-            logger.warning(f"Created lease but failed to update unit {unit_id} status")
+            logger.error(f"Failed to update unit {unit_id} status to {UNIT_STATUS_OCCUPIED}")
+            # Consider implementing proper transaction handling or retry mechanism
+            # For now, we'll log the error but not fail the whole operation
 
         # 9. Update tenant status to active
         tenant_status_updated = await tenants_db.update_tenant_status(tenant_id, 'active')
         if not tenant_status_updated:
-            logger.warning(f"Created lease but failed to update tenant {tenant_id} status")
+            logger.error(f"Failed to update tenant {tenant_id} status to active")
+            # Consider implementing proper transaction handling in a future update
 
         logger.info(f"Successfully assigned tenant {tenant_id} to unit {unit_id}")
         return tenant
@@ -1157,14 +1161,17 @@ async def link_tenant_to_property(
 
         # 8. Update unit status if unit assignment
         if unit_id:
+            from ..constants.status import UNIT_STATUS_OCCUPIED
             unit_update = {
-                "status": "occupied",
+                "status": UNIT_STATUS_OCCUPIED,  # Changed from "occupied" to "Occupied" via constants
                 "current_tenant_id": str(tenant_id),
                 "updated_at": datetime.utcnow().isoformat()
             }
             unit_updated = await properties_db.update_unit_db(db_client, str(unit_id), unit_update)
             if not unit_updated:
-                logger.warning(f"Created link but failed to update unit {unit_id} status")
+                logger.error(f"Failed to update unit {unit_id} status to {UNIT_STATUS_OCCUPIED}")
+                # Consider implementing proper transaction handling or retry mechanism
+                # For now, we'll log the error but not fail the whole operation
 
         logger.info(f"Successfully linked tenant {tenant_id} to property {property_id}" + 
                    (f" unit {unit_number}" if unit_number else ""))
