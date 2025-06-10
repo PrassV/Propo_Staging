@@ -164,15 +164,12 @@ async def create_maintenance_request(
             unit_details = await property_service.get_unit_details(supabase_client, request_data.unit_id, user_id)
             if not unit_details:
                 raise HTTPException(status_code=404, detail="Unit not found")
-            request_data_dict = request_data.model_dump()
-            request_data_dict["property_id"] = unit_details.get("property_id")
-        else:
-            request_data_dict = request_data.model_dump()
+            request_data.property_id = unit_details.get("property_id")
 
         # Set the tenant_id if the user is a tenant
         user_type = current_user.get("user_type") or "owner"  # Default to owner if not specified
         if user_type == "tenant":
-            request_data_dict["tenant_id"] = user_id
+            request_data.tenant_id = user_id
             
             # Check if tenant is associated with this unit
             tenant_info = await tenant_service.get_current_tenant_for_unit(request_data.unit_id)
@@ -187,11 +184,11 @@ async def create_maintenance_request(
             raise HTTPException(status_code=403, detail="Not authorized to create maintenance request for this unit")
 
         # Add created_by field
-        request_data_dict["created_by"] = user_id
+        request_data.created_by = user_id
 
         # Create the request
         created_request = await maintenance_service.create_maintenance_request(
-            request_data=request_data_dict,
+            request_data=request_data,
             user_id=user_id,
             user_type=user_type
         )
