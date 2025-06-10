@@ -159,11 +159,12 @@ async def get_maintenance_request_by_id(request_id: str) -> Optional[Dict[str, A
         logger.error(f"Failed to get maintenance request {request_id}: {str(e)}")
         return None
 
-async def create_maintenance_request(request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def create_maintenance_request(db_client: create_client, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Create a new maintenance request in Supabase.
     
     Args:
+        db_client: The Supabase client
         request_data: The maintenance request data to insert
         
     Returns:
@@ -175,10 +176,10 @@ async def create_maintenance_request(request_data: Dict[str, Any]) -> Optional[D
         if 'vendor_details' in insert_data:
             del insert_data['vendor_details']
             
-        response = supabase_client.table('maintenance_requests').insert(insert_data).execute()
+        response = await db_client.table('maintenance_requests').insert(insert_data).execute()
         
-        if "error" in response and response["error"]:
-            logger.error(f"Error creating maintenance request: {response['error']}")
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Failed to create maintenance request: {response.error.message}")
             return None
         
         created_request = response.data[0] if response.data else None
