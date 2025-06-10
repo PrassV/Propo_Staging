@@ -36,7 +36,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
     };
 
     // Enhanced logic to determine if unit has an active tenant
-    const hasActiveTenant = !!unit.tenant_id && !!unit.tenants;
+    const hasActiveTenant = !!unit.tenant_id && !!unit.tenant;
 
   return (
     <>
@@ -91,7 +91,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                                   ✓ This unit has an active tenant assigned
                                 </p>
                               </div>
-                              <TenantInfoTab tenant={unit.tenants} />
+                              <TenantInfoTab tenant={unit.tenant} />
                             </div>
                         ) : (
                             <div className="space-y-4 text-center p-4">
