@@ -188,6 +188,7 @@ async def create_maintenance_request(
 
         # Create the request
         created_request = await maintenance_service.create_maintenance_request(
+            db_client=supabase_client,
             request_data=request_data,
             user_id=user_id,
             user_type=user_type
