@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { UnitDetails, Tenant } from "../../api/types";
+import { UnitDetails } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
@@ -15,12 +15,10 @@ interface UnitCardProps {
   unit: UnitDetails;
   onUpdate?: () => void;
   className?: string;
-  tenant?: Tenant | null;
-  isLoading?: boolean;
   propertyId: string;
 }
 
-export default function UnitCard({ unit, onUpdate, className, tenant, isLoading, propertyId }: UnitCardProps) {
+export default function UnitCard({ unit, onUpdate, className, propertyId }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showAssignTenant, setShowAssignTenant] = useState(false);
     
@@ -38,8 +36,7 @@ export default function UnitCard({ unit, onUpdate, className, tenant, isLoading,
     };
 
     // Enhanced logic to determine if unit has an active tenant
-    const hasActiveTenant = unit.current_tenant_id && 
-                           (unit.status?.toLowerCase() === 'occupied');
+    const hasActiveTenant = !!unit.tenant_id && !!unit.tenants;
 
   return (
     <>
@@ -87,16 +84,14 @@ export default function UnitCard({ unit, onUpdate, className, tenant, isLoading,
                         <TabsTrigger value="payments">Payments</TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
-                        {isLoading ? (
-                            <div className="text-center p-4 text-muted-foreground">Loading tenant details...</div>
-                        ) : hasActiveTenant ? (
+                        {hasActiveTenant ? (
                             <div className="space-y-4">
                               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                                 <p className="text-sm text-green-700 font-medium">
                                   ✓ This unit has an active tenant assigned
                                 </p>
                               </div>
-                              <TenantInfoTab tenantId={unit.current_tenant_id || ''} tenant={tenant} />
+                              <TenantInfoTab tenant={unit.tenants} />
                             </div>
                         ) : (
                             <div className="space-y-4 text-center p-4">
@@ -122,7 +117,7 @@ export default function UnitCard({ unit, onUpdate, className, tenant, isLoading,
                         <MaintenanceListTab unitId={unit.id} /> 
                     </TabsContent>
                     <TabsContent value="payments">
-                        <PaymentListTab unitId={unit.id} tenantId={unit.current_tenant_id} propertyId={propertyId} />
+                        <PaymentListTab unitId={unit.id} tenantId={unit.tenant_id} propertyId={propertyId} />
                     </TabsContent>
                 </Tabs>
             </CardContent>

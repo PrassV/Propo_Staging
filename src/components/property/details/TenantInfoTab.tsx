@@ -1,57 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Tenant } from '@/api/types';
-import { getTenantById } from '@/api/services/tenantService'; // Import service function
-import LoadingSpinner from '@/components/common/LoadingSpinner';
-// import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'; // Not used
 import { Link } from 'react-router-dom';
 
 interface TenantInfoTabProps {
-  tenantId: string;
-  tenant?: Tenant | null;
+  tenant: Tenant | null | undefined;
 }
 
-export default function TenantInfoTab({ tenantId, tenant: propTenant }: TenantInfoTabProps) {
-  const [tenant, setTenant] = useState<Tenant | null>(propTenant || null);
-  const [loading, setLoading] = useState(!propTenant);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (propTenant) {
-      setTenant(propTenant);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    const fetchTenant = async () => {
-      if (!tenantId) {
-        setError('No Tenant ID provided.');
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        // Use the imported service function
-        const response = await getTenantById(tenantId);
-        if (response && response.tenant) {
-            setTenant(response.tenant);
-        } else {
-            // Handle case where response or tenant is missing
-            throw new Error('Tenant data not found in API response.');
-        }
-      } catch (err) { // Capture error
-        console.error("Error fetching tenant:", err);
-        setError(err instanceof Error ? err.message : 'Failed to load tenant details.');
-        setTenant(null); // Clear tenant data on error
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTenant();
-  }, [tenantId, propTenant]);
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <p className="text-sm text-destructive">Error: {error}</p>;
+export default function TenantInfoTab({ tenant }: TenantInfoTabProps) {
   if (!tenant) return <p className="text-sm text-muted-foreground">Tenant details not available.</p>;
 
   return (

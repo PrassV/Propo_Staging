@@ -279,7 +279,7 @@ async def get_units_for_property(db_client: Client, property_id: str) -> List[Di
     try:
         # Remove await from execute() based on TypeError
         response = db_client.table('units')\
-                          .select('*')\
+                          .select('*, tenants(*)')\
                           .eq('property_id', property_id)\
                           .execute()
         if response.data:
