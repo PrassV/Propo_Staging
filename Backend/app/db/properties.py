@@ -1206,7 +1206,7 @@ async def get_unit(db_client: Client, unit_id: str) -> Optional[Dict[str, Any]]:
     Get a single unit by its ID.
     """
     try:
-        response = await db_client.table('units').select('*').eq('id', unit_id).single().execute()
+        response = db_client.table('units').select('*').eq('id', unit_id).single().execute()
         
         if hasattr(response, 'error') and response.error:
             if "PGRST116" in str(response.error): # Not found
