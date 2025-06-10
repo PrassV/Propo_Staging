@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Optional
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from ..config.database import supabase_client
 import uuid
 
@@ -160,11 +160,13 @@ async def create_payment(payment_data: Dict[str, Any]) -> Optional[Dict[str, Any
         Created payment data or None if creation failed
     """
     try:
-        # Prepare data for insertion, converting UUIDs to strings
+        # Prepare data for insertion, converting UUIDs and dates to strings
         insert_data = {}
         for key, value in payment_data.items():
             if isinstance(value, uuid.UUID):
                 insert_data[key] = str(value)
+            elif isinstance(value, (datetime, date)):
+                insert_data[key] = value.isoformat()
             else:
                 insert_data[key] = value
 
