@@ -176,7 +176,7 @@ async def create_maintenance_request(db_client: create_client, request_data: Dic
         if 'vendor_details' in insert_data:
             del insert_data['vendor_details']
             
-        response = await db_client.table('maintenance_requests').insert(insert_data).execute()
+        response = db_client.table('maintenance_requests').insert(insert_data).execute()
         
         if hasattr(response, 'error') and response.error:
             logger.error(f"Failed to create maintenance request: {response.error.message}")
