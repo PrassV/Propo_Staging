@@ -340,10 +340,15 @@ export interface PaymentCreate extends Omit<SupabasePaymentInsert, 'lease_id' | 
   payment_type: 'rent' | 'deposit' | 'maintenance' | 'other';
 }
 
-export interface PaymentUpdate extends SupabasePaymentUpdate {
-  // Add other updatable fields if needed, e.g., description
-  description?: string;
-  // Note: payment_date is NOT part of the Payment model, so cannot be updated here
+export interface PaymentUpdate {
+    amount?: number;
+    status?: 'pending' | 'paid' | 'overdue' | 'partially_paid' | 'cancelled';
+    payment_method?: 'cash' | 'bank_transfer' | 'credit_card' | 'upi' | 'check' | 'online_platform' | 'other';
+    payment_date?: string;
+    description?: string;
+    due_date?: string;
+    notes?: string;
+    amount_paid?: number;
 }
 
 // Maintenance types - aligned with Supabase schema

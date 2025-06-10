@@ -49,7 +49,8 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
     amount: '',
     due_date: new Date(),
     payment_type: 'rent',
-    description: ''
+    description: '',
+    status: 'pending'
   });
 
   useEffect(() => {
@@ -92,7 +93,8 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
       amount: payment.amount.toString(),
       due_date: new Date(payment.due_date),
       payment_type: payment.payment_type,
-      description: payment.description || ''
+      description: payment.description || '',
+      status: payment.status
     });
     setEditDialogOpen(true);
   };
@@ -224,8 +226,8 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
       await updatePayment(selectedPayment.id, {
         amount: parseFloat(editFormData.amount),
         due_date: editFormData.due_date.toISOString().split('T')[0],
-        payment_type: editFormData.payment_type,
-        description: editFormData.description
+        description: editFormData.description,
+        status: editFormData.status as 'pending' | 'paid' | 'overdue' | 'partially_paid' | 'cancelled'
       });
 
       toast({
@@ -363,13 +365,8 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
             <Card key={pay.id} className="p-3">
               <div className="flex justify-between items-start gap-2">
                 <div>
-                  <p className="font-medium">${pay.amount.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {pay.payment_date ?
-                      `Paid: ${new Date(pay.payment_date).toLocaleDateString()}` :
-                      `Due: ${new Date(pay.due_date).toLocaleDateString()}`
-                    }
-                  </p>
+                  <p className="font-semibold text-lg">${pay.amount.toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Due: {new Date(pay.due_date).toLocaleDateString()}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge variant={getStatusVariant(pay.status)} className="text-xs">{pay.status}</Badge>
@@ -460,7 +457,7 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
           <div className="space-y-4">
             <div>
               <Label htmlFor="edit_amount">Amount</Label>
-              <Input id="edit_amount" name="amount" value={editFormData.amount} onChange={(e) => handleRecordInputChange(e, 'edit')} type="number" />
+              <Input id="edit_amount" name="amount" value={editFormData.amount} onChange={handleRecordInputChange} type="number" />
             </div>
             <div>
               <Label htmlFor="edit_due_date">Due Date</Label>
@@ -483,8 +480,23 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
               </Select>
             </div>
             <div>
+              <Label htmlFor="edit_status">Status</Label>
+              <Select name="status" value={editFormData.status} onValueChange={(value) => handleSelectChange('status', value, 'edit')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label htmlFor="edit_description">Description</Label>
-              <Textarea id="edit_description" name="description" value={editFormData.description} onChange={(e) => handleRecordInputChange(e, 'edit')} />
+              <Textarea id="edit_description" name="description" value={editFormData.description} onChange={handleRecordInputChange} />
             </div>
           </div>
           <DialogFooter>

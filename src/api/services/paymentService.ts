@@ -1,5 +1,5 @@
 import apiClient from '../client';
-import { Payment, PaymentCreate, RecentPayment } from '../types';
+import { Payment, PaymentCreate, RecentPayment, PaymentUpdate } from '../types';
 
 /**
  * Get all payments with optional filters
@@ -107,7 +107,7 @@ export const createPayment = async (data: PaymentCreate): Promise<Payment> => {
  * Update a payment
  * Calls PUT /payments/{id}
  */
-export const updatePayment = async (id: string, data: Partial<PaymentCreate>): Promise<Payment> => {
+export const updatePayment = async (id: string, data: Partial<PaymentUpdate>): Promise<Payment> => {
   try {
     const response = await apiClient.put<Payment>(`/payments/${id}`, data);
     return response.data;

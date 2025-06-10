@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import { 
   MaintenanceRequest, 
   MaintenanceRequestCreate, 
   MaintenanceRequestUpdate 
-} from '../api/services/maintenanceService';
+} from '../api/types';
 
 export function useMaintenanceApi(filters?: {
   property_id?: string;
@@ -18,15 +18,15 @@ export function useMaintenanceApi(filters?: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     if (!user) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const requestsData = await api.maintenance.getMaintenanceRequests(filters);
-      setRequests(requestsData);
+      const response = await api.maintenance.getMaintenanceRequests(filters);
+      setRequests(response.items || []);
     } catch (error: unknown) {
       console.error('Error fetching maintenance requests:', error);
       let errorMessage = 'Failed to fetch maintenance requests';
@@ -39,7 +39,7 @@ export function useMaintenanceApi(filters?: {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, JSON.stringify(filters)]);
 
   // Create a new maintenance request
   const createRequest = async (requestData: MaintenanceRequestCreate) => {
@@ -97,24 +97,6 @@ export function useMaintenanceApi(filters?: {
     }
   };
 
-  // Upload images for a maintenance request
-  const uploadImages = async (requestId: string, images: File[]) => {
-    try {
-      const updatedRequest = await api.maintenance.uploadMaintenanceImages(requestId, images);
-      setRequests(prev => prev.map(r => r.id === requestId ? updatedRequest : r));
-      return { success: true, request: updatedRequest };
-    } catch (error: unknown) {
-      console.error('Error uploading images:', error);
-      let errorMessage = 'Failed to upload images';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null && 'formattedMessage' in error) {
-        errorMessage = (error as { formattedMessage: string }).formattedMessage;
-      }
-      return { success: false, error: errorMessage };
-    }
-  };
-
   // Assign a maintenance request to a vendor
   const assignRequest = async (requestId: string, vendorId: string) => {
     try {
@@ -134,10 +116,8 @@ export function useMaintenanceApi(filters?: {
   };
 
   useEffect(() => {
-    if (user) {
-      fetchRequests();
-    }
-  }, [user, JSON.stringify(filters)]);
+    fetchRequests();
+  }, [fetchRequests]);
 
   return {
     requests,
@@ -147,7 +127,6 @@ export function useMaintenanceApi(filters?: {
     createRequest,
     updateRequest,
     deleteRequest,
-    uploadImages,
     assignRequest
   };
 } 
