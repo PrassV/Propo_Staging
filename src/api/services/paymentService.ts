@@ -277,7 +277,6 @@ export const createPaymentRequest = async (data: {
   tenant_id: string;
   lease_id: string;
   amount: number;
-  amount_due: number;
   due_date: string;
   payment_type: string;
   description: string;

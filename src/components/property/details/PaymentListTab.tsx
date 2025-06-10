@@ -150,8 +150,7 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
         property_id: propertyId,
         tenant_id: tenantId,
         unit_id: unitId,
-        lease_id: tenantId, 
-        amount_due: parseFloat(createFormData.amount)
+        lease_id: tenantId,
       });
 
       toast({

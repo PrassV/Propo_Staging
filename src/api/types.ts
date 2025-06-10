@@ -267,7 +267,7 @@ export interface DashboardSummary extends SupabaseDashboardSummary {
 export interface RecentPayment {
   id: string;
   amount: number;
-  status: 'paid' | 'due' | 'overdue' | 'pending';
+  status: 'paid' | 'due' | 'overdue' | 'pending' | 'partially_paid';
   due_date: string;
   paid_at: string | null;
   tenant_name: string;

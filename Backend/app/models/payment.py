@@ -33,7 +33,7 @@ class PaymentBase(BaseModel):
     unit_id: uuid.UUID  # Required unit_id field
     lease_id: uuid.UUID  # Required lease_id field
     tenant_id: uuid.UUID
-    amount_due: float = Field(..., gt=0)
+    amount: float = Field(..., gt=0)
     due_date: date
     payment_type: PaymentType = PaymentType.RENT
     description: Optional[str] = None
@@ -44,7 +44,7 @@ class PaymentCreate(PaymentBase):
     pass
 
 class PaymentUpdate(BaseModel):
-    amount_due: Optional[float] = Field(None, gt=0)
+    amount: Optional[float] = Field(None, gt=0)
     status: Optional[PaymentStatus] = None
     payment_method: Optional[PaymentMethod] = None
     payment_date: Optional[date] = None
