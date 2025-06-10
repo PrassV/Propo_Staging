@@ -386,68 +386,43 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
       <Dialog open={recordDialogOpen} onOpenChange={setRecordDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>Record Payment for Invoice #{selectedPayment?.id.substring(0, 8)}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {selectedPayment && (
-              <div className="bg-muted p-3 rounded-md">
-                <p className="font-medium">Payment Details</p>
-                <p className="text-sm">Amount Due: ${selectedPayment.amount.toFixed(2)}</p>
-                <p className="text-sm">Status: {selectedPayment.status}</p>
-              </div>
-            )}
-            <div className="grid gap-2">
+          <div className="space-y-4">
+            <div>
               <Label htmlFor="amount_paid">Amount Paid</Label>
-              <Input
-                id="amount_paid"
-                name="amount_paid"
-                type="number"
-                value={recordFormData.amount_paid}
-                onChange={handleRecordInputChange}
-                placeholder="0.00"
-              />
+              <Input id="amount_paid" name="amount_paid" value={recordFormData.amount_paid} onChange={handleRecordInputChange} type="number" />
             </div>
-            <div className="grid gap-2">
+            <div>
               <Label htmlFor="payment_date">Payment Date</Label>
-              <DatePicker
-                date={recordFormData.payment_date}
-                onSelect={(date) => handleDateChange(date, 'payment_date', 'record')}
-              />
+              <DatePicker date={recordFormData.payment_date} onSelect={(date: Date | undefined) => handleDateChange(date, 'payment_date', 'record')} />
             </div>
-            <div className="grid gap-2">
+            <div>
               <Label htmlFor="payment_method">Payment Method</Label>
-              <Select
-                value={recordFormData.payment_method}
-                onValueChange={(value) => handleSelectChange('payment_method', value, 'record')}
-              >
+              <Select name="payment_method" value={recordFormData.payment_method} onValueChange={(value) => handleSelectChange('payment_method', value, 'record')}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select payment method" />
+                  <SelectValue placeholder="Select method" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="check">Check</SelectItem>
                   <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                   <SelectItem value="credit_card">Credit Card</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="online_platform">Online Platform</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                value={recordFormData.notes}
-                onChange={handleRecordInputChange}
-                placeholder="Payment notes"
-                rows={2}
-              />
+            <div>
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea id="notes" name="notes" value={recordFormData.notes} onChange={handleRecordInputChange} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRecordDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleRecordSubmit} disabled={submitting}>
-              {submitting ? 'Recording...' : 'Record Payment'}
+              {submitting ? <LoadingSpinner /> : 'Record Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>
