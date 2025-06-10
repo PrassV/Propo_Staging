@@ -17,9 +17,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 interface PaymentListTabProps {
   unitId: string;
   tenantId?: string | null; // Optional tenant ID for filtering
+  propertyId: string;
 }
 
-export default function PaymentListTab({ unitId, tenantId }: PaymentListTabProps) {
+export default function PaymentListTab({ unitId, tenantId, propertyId }: PaymentListTabProps) {
   const [payments, setPayments] = useState<RecentPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,9 +147,11 @@ export default function PaymentListTab({ unitId, tenantId }: PaymentListTabProps
         due_date: createFormData.due_date.toISOString().split('T')[0],
         payment_type: createFormData.payment_type,
         description: createFormData.description,
-        property_id: '', // Will be filled by backend based on unit
+        property_id: propertyId,
         tenant_id: tenantId,
-        unit_number: unitId
+        unit_id: unitId,
+        lease_id: tenantId, 
+        amount_due: parseFloat(createFormData.amount)
       });
 
       toast({

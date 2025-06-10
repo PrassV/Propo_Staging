@@ -17,9 +17,10 @@ interface UnitCardProps {
   className?: string;
   tenant?: Tenant | null;
   isLoading?: boolean;
+  propertyId: string;
 }
 
-export default function UnitCard({ unit, onUpdate, className, tenant, isLoading }: UnitCardProps) {
+export default function UnitCard({ unit, onUpdate, className, tenant, isLoading, propertyId }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showAssignTenant, setShowAssignTenant] = useState(false);
     
@@ -121,7 +122,7 @@ export default function UnitCard({ unit, onUpdate, className, tenant, isLoading 
                         <MaintenanceListTab unitId={unit.id} /> 
                     </TabsContent>
                     <TabsContent value="payments">
-                        <PaymentListTab unitId={unit.id} tenantId={unit.current_tenant_id} />
+                        <PaymentListTab unitId={unit.id} tenantId={unit.current_tenant_id} propertyId={propertyId} />
                     </TabsContent>
                 </Tabs>
             </CardContent>

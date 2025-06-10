@@ -273,8 +273,11 @@ export async function getPaymentHistory(tenantId: string, type: 'rent') : Promis
  */
 export const createPaymentRequest = async (data: {
   property_id: string;
+  unit_id: string;
   tenant_id: string;
+  lease_id: string;
   amount: number;
+  amount_due: number;
   due_date: string;
   payment_type: string;
   description: string;

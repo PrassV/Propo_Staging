@@ -275,13 +275,14 @@ export default function PropertyDetailsPage() {
                         <CardContent>
                             {property.units && property.units.length > 0 ? (
                                 <div className="space-y-4">
-                                    {property.units.map(unit => (
-                                        <UnitCard
-                                            key={unit.id}
-                                            unit={unit}
-                                            tenant={unitTenants[unit.id] || null}
+                                    {property.units.map((unit) => (
+                                        <UnitCard 
+                                            key={unit.id} 
+                                            unit={unit} 
+                                            tenant={unitTenants[unit.id]}
                                             isLoading={tenantsLoading}
                                             onUpdate={fetchPropertyDetails}
+                                            propertyId={property.id}
                                         />
                                     ))}
                                 </div>
