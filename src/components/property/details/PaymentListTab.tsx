@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RecentPayment } from '@/api/types';
-import { getPaymentsByUnitId, createPaymentRequest, recordManualPayment } from '@/api/services/paymentService';
+import { getPaymentsByUnitId, createPaymentRequest, recordManualPayment, updatePayment } from '@/api/services/paymentService';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
   const [error, setError] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<RecentPayment | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
@@ -42,6 +43,13 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
     payment_date: new Date(),
     payment_method: 'cash',
     notes: ''
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    amount: '',
+    due_date: new Date(),
+    payment_type: 'rent',
+    description: ''
   });
 
   useEffect(() => {
@@ -78,6 +86,17 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
     return 'secondary';
   };
 
+  const handleEditPayment = (payment: RecentPayment) => {
+    setSelectedPayment(payment);
+    setEditFormData({
+      amount: payment.amount.toString(),
+      due_date: new Date(payment.due_date),
+      payment_type: payment.payment_type,
+      description: payment.description || ''
+    });
+    setEditDialogOpen(true);
+  };
+
   const handleCreatePayment = () => {
     setCreateDialogOpen(true);
   };
@@ -103,21 +122,25 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
     setRecordFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSelectChange = (name: string, value: string, formType: 'create' | 'record') => {
+  const handleSelectChange = (name: string, value: string, formType: 'create' | 'record' | 'edit') => {
     if (formType === 'create') {
       setCreateFormData(prev => ({ ...prev, [name]: value }));
-    } else {
+    } else if (formType === 'record') {
       setRecordFormData(prev => ({ ...prev, [name]: value }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleDateChange = (date: Date | undefined, name: string, formType: 'create' | 'record') => {
+  const handleDateChange = (date: Date | undefined, name: string, formType: 'create' | 'record' | 'edit') => {
     if (!date) return;
 
     if (formType === 'create') {
       setCreateFormData(prev => ({ ...prev, [name]: date }));
-    } else {
+    } else if (formType === 'record') {
       setRecordFormData(prev => ({ ...prev, [name]: date }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: date }));
     }
   };
 
@@ -179,6 +202,51 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : 'Failed to create payment request',
+        variant: "destructive"
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!selectedPayment || !editFormData.amount || !editFormData.due_date) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await updatePayment(selectedPayment.id, {
+        amount: parseFloat(editFormData.amount),
+        due_date: editFormData.due_date.toISOString().split('T')[0],
+        payment_type: editFormData.payment_type,
+        description: editFormData.description
+      });
+
+      toast({
+        title: "Success",
+        description: "Payment updated successfully"
+      });
+
+      setEditDialogOpen(false);
+      setSelectedPayment(null);
+
+      const params: { tenantId?: string } = {};
+      if (tenantId) {
+        params.tenantId = tenantId;
+      }
+      const data = await getPaymentsByUnitId(unitId, params);
+      setPayments(data || []);
+    } catch (err) {
+      console.error("Error updating payment:", err);
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : 'Failed to update payment',
         variant: "destructive"
       });
     } finally {
@@ -305,11 +373,14 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge variant={getStatusVariant(pay.status)} className="text-xs">{pay.status}</Badge>
-                  {(pay.status === 'pending' || pay.status === 'partially_paid') && (
-                    <Button size="sm" variant="outline" onClick={() => handleRecordPayment(pay)}>
-                      <Receipt className="mr-2 h-3 w-3" /> Record
+                  <div className="mt-2 flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => handleEditPayment(pay)}>
+                      Edit
                     </Button>
-                  )}
+                    <Button variant="outline" size="sm" onClick={() => handleRecordPayment(pay)}>
+                      <Receipt className="mr-2 h-4 w-4" /> Record
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -344,19 +415,17 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
             </div>
             <div className="grid gap-2">
               <Label htmlFor="payment_type">Payment Type</Label>
-              <Select
-                value={createFormData.payment_type}
-                onValueChange={(value) => handleSelectChange('payment_type', value, 'create')}
-              >
+              <Select name="payment_type" value={createFormData.payment_type} onValueChange={(value) => handleSelectChange('payment_type', value, 'create')}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select payment type" />
+                  <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="rent">Rent</SelectItem>
-                  <SelectItem value="deposit">Security Deposit</SelectItem>
-                  <SelectItem value="fee">Fee</SelectItem>
-                  <SelectItem value="utility">Utility</SelectItem>
+                  <SelectItem value="security_deposit">Security Deposit</SelectItem>
                   <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="utility">Utility</SelectItem>
+                  <SelectItem value="late_fee">Late Fee</SelectItem>
+                  <SelectItem value="fee">Fee</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -377,6 +446,51 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateSubmit} disabled={submitting}>
               {submitting ? 'Creating...' : 'Create Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Payment Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit_amount">Amount</Label>
+              <Input id="edit_amount" name="amount" value={editFormData.amount} onChange={(e) => handleRecordInputChange(e, 'edit')} type="number" />
+            </div>
+            <div>
+              <Label htmlFor="edit_due_date">Due Date</Label>
+              <DatePicker date={editFormData.due_date} onSelect={(date: Date | undefined) => handleDateChange(date, 'due_date', 'edit')} />
+            </div>
+            <div>
+              <Label htmlFor="edit_payment_type">Payment Type</Label>
+              <Select name="payment_type" value={editFormData.payment_type} onValueChange={(value) => handleSelectChange('payment_type', value, 'edit')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="security_deposit">Security Deposit</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="utility">Utility</SelectItem>
+                  <SelectItem value="late_fee">Late Fee</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit_description">Description</Label>
+              <Textarea id="edit_description" name="description" value={editFormData.description} onChange={(e) => handleRecordInputChange(e, 'edit')} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleEditSubmit} disabled={submitting}>
+              {submitting ? <LoadingSpinner /> : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

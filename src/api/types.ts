@@ -272,8 +272,8 @@ export interface RecentPayment {
   paid_at: string | null;
   tenant_name: string;
   unit_number: string;
-  payment_date: string;
-  property_name: string;
+  payment_type: string;
+  description: string | null;
 }
 
 export interface MaintenanceIssue {
