@@ -152,7 +152,8 @@ export interface PropertyFormData {
 
 // Represents the detailed data for a single Unit within a Property - aligned with Supabase
 export interface UnitDetails extends SupabaseUnit {
-  current_tenant_id?: string | null;
+  tenant_id?: string | null;
+  tenants?: Tenant | null;
   current_lease_id?: string | null;
 }
 

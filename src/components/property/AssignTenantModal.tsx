@@ -77,8 +77,8 @@ export default function AssignTenantModal({
   const checkCurrentTenant = async () => {
     try {
       const unitDetails = await getUnitDetails(unitId);
-      if (unitDetails?.current_tenant_id) {
-        const tenantDetails = await getTenantById(unitDetails.current_tenant_id);
+      if (unitDetails?.tenant_id) {
+        const tenantDetails = await getTenantById(unitDetails.tenant_id);
         if (tenantDetails) {
           setCurrentTenant(tenantDetails.tenant);
           setShowWarning(true);

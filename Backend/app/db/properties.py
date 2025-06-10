@@ -900,7 +900,7 @@ async def get_unit_by_id_db(
     """Fetch a single unit by its ID."""
     try:
         response = db_client.table('units')\
-                          .select('*')\
+                          .select('*, tenants(*)')\
                           .eq('id', unit_id)\
                           .maybe_single()\
                           .execute()
