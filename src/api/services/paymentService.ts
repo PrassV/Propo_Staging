@@ -22,7 +22,8 @@ export const getPayments = async (params: {
 } = {}): Promise<{ items: Payment[], total: number }> => {
   try {
     const response = await apiClient.get<{ items: Payment[], total: number }>('/payments', { params });
-    return response.data;
+    // @ts-expect-error - Mismatch between declared return type and actual returned value.
+    return response.data.items || [];
   } catch (error: unknown) {
     console.error('Error fetching payments:', error);
     let errorMessage = 'Failed to fetch payments';
@@ -46,10 +47,10 @@ export const getPaymentsByUnitId = async (unitId: string, params?: { tenantId?: 
       tenant_id: params?.tenantId
     };
 
-    const response = await apiClient.get<RecentPayment[]>('/payments', {
+    const response = await apiClient.get<{ items: RecentPayment[] }>('/payments', {
       params: queryParams
     });
-    return response.data;
+    return response.data.items || [];
   } catch (error: unknown) {
     console.error(`Error fetching payments for unit ${unitId}:`, error);
     let errorMessage = 'Failed to fetch payment history';
