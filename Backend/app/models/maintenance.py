@@ -47,7 +47,6 @@ class MaintenanceBase(BaseModel):
     description: str
     category: MaintenanceCategory
     priority: MaintenancePriority = MaintenancePriority.MEDIUM
-    access_instructions: Optional[str] = None
 
 class MaintenanceCreate(MaintenanceBase):
     status: Optional[MaintenanceStatus] = MaintenanceStatus.NEW
