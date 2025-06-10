@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import api from '@/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { FinancialSummary } from '@/api/types';
 
 interface PropertyFinancialSummaryProps {
@@ -25,8 +25,6 @@ interface BackendFinancialResponse {
     profit_margin: number;
   };
   occupancy_rate?: number;
-  income_breakdown?: Array<{ category: string; amount: number }>;
-  expense_breakdown?: Array<{ category: string; amount: number }>;
   trend_data?: Array<{ 
     month: string; 
     revenue: number; 
@@ -82,7 +80,6 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
               occupancy_rate: backendResponse.occupancy_rate || 0,
               rent_collection_rate: backendResponse.summary?.profit_margin || 85,
               payment_history: backendResponse.trend_data || [],
-              expense_breakdown: backendResponse.expense_breakdown || []
             };
             setFinancialData(transformedData);
           }
@@ -114,14 +111,6 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
         net_income: Math.round(Math.random() * 3000) + 500
       }));
       
-      const expenseBreakdown = [
-        { category: 'Maintenance', amount: expenses * 0.4 },
-        { category: 'Utilities', amount: expenses * 0.25 },
-        { category: 'Insurance', amount: expenses * 0.15 },
-        { category: 'Property Tax', amount: expenses * 0.1 },
-        { category: 'Other', amount: expenses * 0.1 }
-      ];
-      
       setFinancialData({
         total_revenue: revenue,
         total_expenses: expenses,
@@ -129,7 +118,6 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
         occupancy_rate: 85,
         rent_collection_rate: 92,
         payment_history: paymentHistory,
-        expense_breakdown: expenseBreakdown
       });
     };
     
@@ -171,8 +159,6 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
 
   if (!financialData) return null;
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
-
   return (
     <Card>
       <CardHeader>
@@ -207,46 +193,18 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <CardDescription className="mb-2">Revenue vs Expenses</CardDescription>
+            <CardDescription className="mb-2">Monthly Performance</CardDescription>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={financialData.payment_history || []}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
+                <BarChart data={financialData.payment_history}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`$${formatCurrency(Number(value))}`, '']} />
-                  <Bar dataKey="revenue" name="Revenue" fill="#8884d8" />
-                  <Bar dataKey="expenses" name="Expenses" fill="#82ca9d" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="revenue" fill="#82ca9d" name="Income" />
+                  <Bar dataKey="expenses" fill="#ff6b6b" name="Expenses" />
                 </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          <div>
-            <CardDescription className="mb-2">Expense Breakdown</CardDescription>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={financialData.expense_breakdown || []}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${formatPercentage(percent * 100)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="amount"
-                    nameKey="category"
-                  >
-                    {(financialData.expense_breakdown || []).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`$${formatCurrency(Number(value))}`, '']} />
-                </PieChart>
               </ResponsiveContainer>
             </div>
           </div>

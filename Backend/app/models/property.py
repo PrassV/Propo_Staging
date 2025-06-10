@@ -125,9 +125,8 @@ class UnitCreate(UnitBase):
 class UnitDetails(UnitBase):
     id: uuid.UUID
     property_id: uuid.UUID
-    current_tenant_id: Optional[uuid.UUID] = None
-    # Potentially add tenant info if joining later
-    # current_tenant: Optional[Tenant] = None 
+    tenant_id: Optional[uuid.UUID] = None
+    tenant: Optional[Tenant] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

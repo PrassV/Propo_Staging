@@ -618,7 +618,7 @@ async def get_property_income(db_client: Client, property_id: uuid.UUID, start_d
     """
     try:
         response = db_client.table('payments')\
-            .select('id, amount, payment_date, category, description')\
+            .select('id, amount, payment_date, description')\
             .eq('property_id', str(property_id))\
             .gte('payment_date', start_date.isoformat())\
             .lte('payment_date', end_date.isoformat())\
@@ -651,7 +651,7 @@ async def get_property_expenses(db_client: Client, property_id: uuid.UUID, start
     """
     try:
         response = db_client.table('payments')\
-            .select('id, amount, payment_date, category, description')\
+            .select('id, amount, payment_date, description')\
             .eq('property_id', str(property_id))\
             .gte('payment_date', start_date.isoformat())\
             .lte('payment_date', end_date.isoformat())\

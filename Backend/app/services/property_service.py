@@ -417,38 +417,6 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
         total_expenses = sum(item.get("amount", 0) for item in expense_data)
         net_income = total_income - total_expenses
         
-        # Create income breakdown by category
-        income_breakdown = []
-        income_categories = {}
-        for item in income_data:
-            category = item.get("category", "Other")
-            if category not in income_categories:
-                income_categories[category] = 0
-            income_categories[category] += item.get("amount", 0)
-        
-        for category, amount in income_categories.items():
-            income_breakdown.append({
-                "name": category,
-                "value": amount,
-                "percentage": round((amount / total_income) * 100, 2) if total_income > 0 else 0
-            })
-        
-        # Create expense breakdown by category
-        expense_breakdown = []
-        expense_categories = {}
-        for item in expense_data:
-            category = item.get("category", "Other")
-            if category not in expense_categories:
-                expense_categories[category] = 0
-            expense_categories[category] += item.get("amount", 0)
-        
-        for category, amount in expense_categories.items():
-            expense_breakdown.append({
-                "name": category,
-                "value": amount,
-                "percentage": round((amount / total_expenses) * 100, 2) if total_expenses > 0 else 0
-            })
-        
         # Get monthly trend data for the past 12 months
         trend_data = []
         for i in range(12, 0, -1):
@@ -486,8 +454,6 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
                 "profit_margin": round((net_income / total_income) * 100, 2) if total_income > 0 else 0
             },
             "occupancy_rate": occupancy_rate,
-            "income_breakdown": income_breakdown,
-            "expense_breakdown": expense_breakdown,
             "trend_data": trend_data
         }
     except Exception as e:
@@ -498,8 +464,6 @@ async def get_financial_summary(property_id: uuid.UUID, period: str = "month") -
             "date_range": {"start_date": "", "end_date": ""},
             "summary": {"total_income": 0, "total_expenses": 0, "net_income": 0, "profit_margin": 0},
             "occupancy_rate": 0,
-            "income_breakdown": [],
-            "expense_breakdown": [],
             "trend_data": []
         }
 

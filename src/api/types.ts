@@ -675,16 +675,7 @@ export interface FinancialSummary {
   net_income: number;
   occupancy_rate: number;
   rent_collection_rate: number;
-  payment_history: {
-    month: string;
-    revenue: number;
-    expenses: number;
-    net_income: number;
-  }[];
-  expense_breakdown: {
-    category: string;
-    amount: number;
-  }[];
+  payment_history: Array<{ month: string; revenue: number; expenses: number; net_income: number; }>;
 }
 
 export interface PropertyTax {
