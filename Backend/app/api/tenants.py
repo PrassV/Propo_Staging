@@ -149,8 +149,7 @@ async def get_tenants(
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to retrieve"),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get a tenant by ID. Access is restricted to:
@@ -165,7 +164,7 @@ async def get_tenant(
 
         if not tenant_data:
             # If service returns None, check if tenant exists at all to differentiate 403 from 404
-            raw_tenant = await tenants_db.get_tenant_by_id(db_client, tenant_id_obj)
+            raw_tenant = await tenants_db.get_tenant_by_id(tenant_id_obj)
             if raw_tenant:
                 # Tenant exists, but user cannot access it
                 raise HTTPException(
