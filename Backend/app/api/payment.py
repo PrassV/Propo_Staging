@@ -91,7 +91,7 @@ async def get_payment(
             
         user_type = current_user.get("user_type") or current_user.get("role")
 
-        payment = await payment_service.get_payment_by_id(payment_id)
+        payment = await payment_service.get_payment(payment_id)
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
 
@@ -175,7 +175,7 @@ async def update_payment(
         if user_type != 'owner':
             raise HTTPException(status_code=403, detail="Only owners can update payments")
             
-        payment = await payment_service.get_payment_by_id(payment_id)
+        payment = await payment_service.get_payment(payment_id)
         
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
@@ -285,7 +285,7 @@ async def add_receipt(
         user_id = current_user.get("id")
         user_type = current_user.get("user_type") or current_user.get("role")
         
-        payment = await payment_service.get_payment_by_id(payment_id)
+        payment = await payment_service.get_payment(payment_id)
         
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
@@ -330,7 +330,7 @@ async def send_reminder(
         if user_type != 'owner':
             raise HTTPException(status_code=403, detail="Only property owners can send payment reminders")
             
-        payment = await payment_service.get_payment_by_id(payment_id)
+        payment = await payment_service.get_payment(payment_id)
         
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
