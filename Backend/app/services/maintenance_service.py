@@ -70,53 +70,16 @@ async def create_maintenance_request(db_client: Client, request_data: Maintenanc
         Created maintenance request data or None if creation failed
     """
     try:
-        logger.info(f"Creating maintenance request with data: {request_data} for user: {user_id}")
-        # Prepare request data
-        insert_data = request_data.dict()
+        # Prepare data for insertion
+        insert_data = request_data.model_dump()
+        insert_data['created_by'] = user_id
         
-        # Set created_at timestamp
-        insert_data['created_at'] = datetime.utcnow().isoformat()
-        insert_data['updated_at'] = insert_data['created_at']
-        
-        # Generate unique ID if not provided
-        if 'id' not in insert_data:
-            insert_data['id'] = str(uuid.uuid4())
-        
-        # Set status to new if not provided
-        if 'status' not in insert_data or not insert_data['status']:
-            insert_data['status'] = MaintenanceStatus.NEW.value
-        
-        # Ensure created_by is set
-        if 'created_by' not in insert_data:
-            insert_data['created_by'] = user_id
-            
-        # If user is a tenant, get their current unit and property
-        if user_type == 'tenant':
-            # This function does not exist, so I am removing it to prevent further errors.
-            # tenant_assignment = await tenant_db.get_current_tenant_assignment(db_client, user_id)
-            # if tenant_assignment:
-            #     insert_data['unit_id'] = tenant_assignment.get('unit_id')
-            #     insert_data['property_id'] = tenant_assignment.get('property_id')
-            # else:
-            #     logger.error(f"Tenant {user_id} has no active unit assignment")
-            #     return None
-            pass
-            
-        # Get property owner if property_id is provided
-        if 'property_id' in insert_data and insert_data['property_id']:
-            property_data = await property_db.get_property_by_id(db_client, insert_data['property_id'])
-            if property_data:
-                insert_data['owner_id'] = property_data.get('owner_id')
-        
-        logger.info(f"Inserting maintenance request data: {insert_data}")
-        # Create the maintenance request
-        created_request = await maintenance_db.create_maintenance_request(insert_data)
-        
-        # Trigger notification if creation successful
-        if created_request:
-            logger.info(f"Maintenance request {created_request['id']} created, triggering notification.")
-            await notification_service.notify_new_maintenance_request(created_request)
-        else:
+        logger.info(f"Creating maintenance request with data: {insert_data} for user: {user_id}")
+
+        # Create maintenance request in DB
+        created_request = await maintenance_db.create_maintenance_request(db_client, insert_data)
+
+        if not created_request:
             logger.error("Failed to create maintenance request in DB, notification not sent.")
         
         return created_request
