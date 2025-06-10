@@ -21,13 +21,16 @@ logger = logging.getLogger(__name__)
 # --- Helper for Access Control ---
 # This logic might need refinement based on specific roles (owner, manager, tenant)
 async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> bool:
+    # Convert requesting user ID to string for comparison
+    user_id_str = str(requesting_user_id)
+
     # Option 1: Tenant accessing their own profile (assuming tenant.user_id links to auth.users.id)
     tenant_profile = await tenants_db.get_tenant_by_id(tenant_id)
-    if tenant_profile and tenant_profile.get("user_id") == requesting_user_id:
+    if tenant_profile and tenant_profile.get("user_id") == user_id_str:
         return True
 
     # Option 2: Is the requesting user the owner who created this tenant?
-    if tenant_profile and tenant_profile.get("owner_id") == requesting_user_id:
+    if tenant_profile and tenant_profile.get("owner_id") == user_id_str:
         return True
 
     # Option 3: Property owner/manager accessing a tenant linked to their property
@@ -35,7 +38,7 @@ async def _can_access_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID
     for link in linked_properties:
         from ..config.database import supabase_client as db_client
         property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
-        if property_owner == requesting_user_id:
+        if property_owner == user_id_str:
             return True # User owns a property this tenant is linked to
 
     logger.warning(f"User {requesting_user_id} denied access to tenant {tenant_id}")
@@ -221,7 +224,7 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         for link in linked_properties:
             from ..config.database import supabase_client as db_client
             property_owner = await properties_db.get_property_owner(db_client, link["property_id"])
-            if property_owner == requesting_user_id:
+            if property_owner == str(requesting_user_id):
                 can_delete = True
                 owned_property_links.append(link["id"])
 
