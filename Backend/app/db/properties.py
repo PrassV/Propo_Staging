@@ -1200,3 +1200,22 @@ async def db_delete_unit_tax(db_client: Client, tax_id: uuid.UUID) -> bool:
         return False
 
 # --- End Unit Tax DB Functions --- #
+
+async def get_unit(db_client: Client, unit_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a single unit by its ID.
+    """
+    try:
+        response = await db_client.table('units').select('*').eq('id', unit_id).single().execute()
+        
+        if hasattr(response, 'error') and response.error:
+            if "PGRST116" in str(response.error): # Not found
+                logger.info(f"Unit {unit_id} not found.")
+            else:
+                logger.error(f"Error fetching unit {unit_id}: {response.error.message}")
+            return None
+            
+        return response.data
+    except Exception as e:
+        logger.error(f"Failed to get unit {unit_id}: {str(e)}", exc_info=True)
+        return None
