@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 async def get_payments(
     owner_id: str = None,
     property_id: str = None,
+    unit_id: str = None,
     tenant_id: str = None,
     status: str = None,
     payment_type: str = None,
@@ -25,6 +26,7 @@ async def get_payments(
     Args:
         owner_id: Optional owner ID to filter by
         property_id: Optional property ID to filter by
+        unit_id: Optional unit ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         payment_type: Optional payment type to filter by
@@ -43,6 +45,9 @@ async def get_payments(
 
         if property_id:
             count_query = count_query.eq('property_id', property_id)
+
+        if unit_id:
+            count_query = count_query.eq('unit_id', unit_id)
 
         if tenant_id:
             count_query = count_query.eq('tenant_id', tenant_id)
@@ -75,6 +80,9 @@ async def get_payments(
 
         if property_id:
             query = query.eq('property_id', property_id)
+
+        if unit_id:
+            query = query.eq('unit_id', unit_id)
 
         if tenant_id:
             query = query.eq('tenant_id', tenant_id)

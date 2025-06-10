@@ -64,6 +64,7 @@ async def get_requests_for_unit_db(
 async def get_maintenance_requests(
     property_id: str = None, 
     owner_id: str = None, 
+    unit_id: str = None,
     tenant_id: str = None,
     status: str = None,
     start_date: Optional[str] = None,
@@ -75,6 +76,7 @@ async def get_maintenance_requests(
     Args:
         property_id: Optional property ID to filter by
         owner_id: Optional owner ID to filter by (filters via property ownership)
+        unit_id: Optional unit ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         start_date: Optional start date (YYYY-MM-DD) to filter by created_at
@@ -95,6 +97,9 @@ async def get_maintenance_requests(
         
         if property_id:
             query = query.eq('property_id', property_id)
+        
+        if unit_id:
+            query = query.eq('unit_id', unit_id)
         
         if tenant_id:
             query = query.eq('tenant_id', tenant_id)

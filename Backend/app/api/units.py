@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Path, Query, Body, Response
 from typing import List, Dict, Any, Optional
 import uuid
 import logging
@@ -208,45 +208,44 @@ async def list_units_endpoint(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="An error occurred while listing units.")
 
-# Add DELETE /units/{unit_id} endpoint
-@router.delete("/{unit_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Unit")
-async def delete_unit_endpoint(
+@router.delete(
+    "/{unit_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a unit",
+    description="Deletes a specific unit by its ID after verifying ownership of the parent property.",
+)
+async def delete_unit(
     unit_id: uuid.UUID = Path(..., description="The ID of the unit to delete"),
     current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
+    db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """
-    Delete a specific unit by its ID.
-    Requires authentication and authorization (user must own the parent property).
-    Returns 204 No Content on successful deletion.
+    Delete a unit.
+    - Verifies that the user requesting deletion is the owner of the property to which the unit belongs.
+    - If successful, returns a 204 No Content response.
     """
-    logger.info(f"Endpoint: Attempting to delete unit {unit_id}")
-    user_id = current_user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
-
     try:
-        deleted = await property_service.delete_unit(
+        success = await property_service.delete_unit(
             db_client=db_client,
-            unit_id=str(unit_id),
-            user_id=user_id
+            unit_id=unit_id,
+            owner_id=current_user["id"],
         )
-        
-        if not deleted:
-            # Service returns False if unit not found OR user not authorized
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail="Unit not found or user not authorized to delete it")
-                                
-        # No content to return on success
-        return None 
-        
+        if not success:
+            # The service layer handles logging and distinguishing between not found and not authorized
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Unit not found or user does not have permission to delete it.",
+            )
+        # On success, return 204 No Content, so no response body is needed.
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except HTTPException as http_exc:
-        # Re-raise 404, 500 or other specific http errors from service
         raise http_exc
     except Exception as e:
-        logger.error(f"Endpoint error deleting unit {unit_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="An unexpected error occurred while deleting the unit.")
+        logger.error(f"API error deleting unit {unit_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected server error occurred.",
+        )
 
 # --- Unit Maintenance Requests Endpoints --- #
 @router.post("/{unit_id}/maintenance_requests", response_model=MaintenanceRequest, status_code=status.HTTP_201_CREATED, summary="Create Maintenance Request for Unit")

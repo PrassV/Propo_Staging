@@ -46,6 +46,7 @@ async def get_maintenance_requests(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     property_id: Optional[uuid.UUID] = Query(None),
+    unit_id: Optional[uuid.UUID] = Query(None),
     status: Optional[MaintenanceStatus] = Query(None),
     priority: Optional[MaintenancePriority] = Query(None),
     sort_by: str = Query("created_at"),
@@ -73,6 +74,7 @@ async def get_maintenance_requests(
             requests = await maintenance_service.get_maintenance_requests(
                 owner_id=user_id,
                 property_id=str(property_id) if property_id else None,
+                unit_id=str(unit_id) if unit_id else None,
                 status=status.value if status else None
             )
         else:
@@ -80,6 +82,7 @@ async def get_maintenance_requests(
             requests = await maintenance_service.get_maintenance_requests(
                 tenant_id=user_id,
                 property_id=str(property_id) if property_id else None,
+                unit_id=str(unit_id) if unit_id else None,
                 status=status.value if status else None
             )
 

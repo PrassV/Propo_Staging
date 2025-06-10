@@ -3,13 +3,31 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreVertical } from "lucide-react";
 import { UnitDetails } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
 import PaymentListTab from './details/PaymentListTab';
 import AssignTenantModal from './AssignTenantModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteUnit } from '@/api/services/unitService';
+import { toast } from 'sonner';
 
 interface UnitCardProps {
   unit: UnitDetails;
@@ -21,7 +39,21 @@ interface UnitCardProps {
 export default function UnitCard({ unit, onUpdate, className, propertyId }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showAssignTenant, setShowAssignTenant] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     
+    const handleDelete = async () => {
+      try {
+        await deleteUnit(unit.id);
+        toast.success(`Unit ${unit.unit_number} has been deleted.`);
+        onUpdate?.();
+      } catch (error) {
+        toast.error("Failed to delete unit. Please try again.");
+        console.error("Delete unit error:", error);
+      } finally {
+        setShowDeleteConfirm(false);
+      }
+    };
+
     const getStatusVariant = (status: UnitDetails['status']): "default" | "secondary" | "outline" | "destructive" => {
         switch (status?.toLowerCase()) {
             case 'vacant':
@@ -65,6 +97,18 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                       <p className="text-green-600 font-medium">Occupied</p>
                     )}
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button onClick={(e) => e.stopPropagation()} className="p-1 rounded-full hover:bg-gray-200">
+                        <MoreVertical size={20} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onSelect={() => setShowDeleteConfirm(true)} className="text-red-600">
+                        Delete Unit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                 </div>
               </div>
@@ -138,6 +182,23 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           }}
         />
       )}
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this unit?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete Unit {unit.unit_number}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 } 

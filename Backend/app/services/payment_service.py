@@ -17,6 +17,7 @@ async def get_payments(
     user_id: str = None,
     user_type: str = None,
     property_id: str = None,
+    unit_id: str = None,
     tenant_id: str = None,
     status: str = None,
     payment_type: str = None,
@@ -34,6 +35,7 @@ async def get_payments(
         user_id: The ID of the current user
         user_type: The type of the current user (owner or tenant)
         property_id: Optional property ID to filter by
+        unit_id: Optional unit ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         payment_type: Optional payment type to filter by
@@ -57,6 +59,7 @@ async def get_payments(
     return await payment_db.get_payments(
         owner_id=owner_id,
         property_id=property_id,
+        unit_id=unit_id,
         tenant_id=tenant_id,
         status=status,
         payment_type=payment_type,

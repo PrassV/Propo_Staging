@@ -817,49 +817,36 @@ async def update_unit_details(
         # Raise 500 for other unexpected errors
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while updating the unit.") 
 
-async def delete_unit(
-    db_client: Client, 
-    unit_id: str, 
-    user_id: str
-) -> bool:
-    """Deletes a specific unit, ensuring user owns parent property."""
-    logger.info(f"Service: Deleting unit {unit_id} by user {user_id}")
+async def delete_unit(db_client: Client, unit_id: uuid.UUID, owner_id: str) -> bool:
+    """
+    Delete a unit after verifying ownership.
+    
+    Args:
+        db_client: Database client
+        unit_id: The unit ID to delete
+        owner_id: The ID of the user requesting deletion
+        
+    Returns:
+        True if deletion was successful, False otherwise
+    """
     try:
-        # 1. Fetch unit first to get parent property_id for auth check
-        unit_data_db = await property_db.get_unit_by_id_db(db_client, unit_id)
-        if not unit_data_db:
-            logger.warning(f"Service: Unit {unit_id} not found for deletion.")
-            return False # Unit not found, treat as non-failure? Or raise 404?
-            
-        parent_property_id = unit_data_db.get('property_id')
+        # Step 1: Verify the user owns the property this unit belongs to
+        parent_property_id = await property_db.get_parent_property_id_for_unit(unit_id)
         if not parent_property_id:
-            logger.error(f"Service: Unit {unit_id} is missing parent property_id for auth check.")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unit data integrity issue.")
-            
-        # 2. Check ownership of parent property
-        has_access = await check_property_access(uuid.UUID(parent_property_id), user_id)
-        if not has_access:
-            logger.warning(f"Service: User {user_id} does not have access to property {parent_property_id} to delete unit {unit_id}.")
-            return False # Authorization failed
-            
-        # 3. Call DB delete function
-        deleted = await property_db.delete_unit_db(db_client, unit_id)
-        
-        if not deleted:
-             # DB function returns False if delete failed
-             logger.error(f"Service: DB delete failed for unit {unit_id}.")
-             # Raise 500 as auth passed, failure is unexpected
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete unit from database.")
-             
-        logger.info(f"Service: Successfully deleted unit {unit_id}.")
-        return True
-        
-    except HTTPException as http_exc:
-         raise http_exc # Re-raise specific errors
+            logger.warning(f"Delete failed: Unit {unit_id} not found or has no parent property.")
+            return False
+
+        property_owner = await property_db.get_property_owner(db_client, str(parent_property_id))
+        if not property_owner or property_owner != owner_id:
+            logger.warning(f"Delete forbidden: User {owner_id} does not own property {parent_property_id}.")
+            return False
+
+        # Step 2: Proceed with deletion
+        success = await property_db.delete_unit_db(db_client, str(unit_id))
+        return success
     except Exception as e:
-        logger.error(f"Service error deleting unit {unit_id}: {e}", exc_info=True)
-        # Raise 500 for other unexpected errors
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while deleting the unit.") 
+        logger.error(f"Error deleting unit {unit_id}: {str(e)}", exc_info=True)
+        return False
 
 # --- Unit Amenity Service Functions --- #
 

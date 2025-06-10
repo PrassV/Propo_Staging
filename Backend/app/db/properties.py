@@ -921,26 +921,21 @@ async def delete_unit_db(
     db_client: Client,
     unit_id: str
 ) -> bool:
-    """Delete a specific unit by its ID. Returns True if successful."""
+    """Deletes a unit from the database."""
     try:
-        response = db_client.table('units')\
-                          .delete()\
-                          .eq('id', unit_id)\
-                          .execute()
-                          
-        # Check if delete was successful (usually response.data is empty but no error)
+        response = await db_client.table('units').delete().eq('id', unit_id).execute()
+        
         if hasattr(response, 'error') and response.error:
             logger.error(f"[db.delete_unit_db] Error deleting unit {unit_id}: {response.error.message}")
             return False
-        elif response.data is not None: # Should typically be empty list on successful delete
-             logger.info(f"[db.delete_unit_db] Unit {unit_id} deleted successfully.")
-             return True
-        else:
-             logger.warning(f"[db.delete_unit_db] Delete for unit {unit_id} returned no data and no error. Might not have existed or RLS prevented.")
-             # Consider if this should be True or False depending on desired behaviour for deleting non-existent ID
-             return False # Treat as failure if unit wasn't confirmed deleted
+            
+        if not response.data:
+            logger.warning(f"[db.delete_unit_db] Unit {unit_id} not found or already deleted.")
+            return False # Or True depending on desired behavior for not-found cases
+            
+        return True
     except Exception as e:
-        logger.error(f"[db.delete_unit_db] Failed: {e}", exc_info=True)
+        logger.error(f"[db.delete_unit_db] Failed to delete unit {unit_id}: {e}", exc_info=True)
         return False
 
 async def update_unit_db(
@@ -967,7 +962,7 @@ async def update_unit_db(
         logger.info(f"[db.update_unit_db] Unit {unit_id} updated successfully")
         return response.data[0]
     except Exception as e:
-        logger.error(f"[db.update_unit_db] Failed: {e}", exc_info=True)
+        logger.error(f"[db.update_unit_db] Failed to update unit {unit_id}: {e}", exc_info=True)
         return None
 
 async def get_parent_property_id_for_unit(unit_id: uuid.UUID) -> Optional[uuid.UUID]:

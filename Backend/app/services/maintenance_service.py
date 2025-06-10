@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def get_maintenance_requests(
     owner_id: str = None,
     property_id: str = None,
+    unit_id: str = None,
     tenant_id: str = None,
     status: str = None
 ) -> List[Dict[str, Any]]:
@@ -31,6 +32,7 @@ async def get_maintenance_requests(
     Args:
         owner_id: Optional owner ID to filter by
         property_id: Optional property ID to filter by
+        unit_id: Optional unit ID to filter by
         tenant_id: Optional tenant ID to filter by
         status: Optional status to filter by
         
@@ -40,6 +42,7 @@ async def get_maintenance_requests(
     return await maintenance_db.get_maintenance_requests(
         owner_id=owner_id,
         property_id=property_id,
+        unit_id=unit_id,
         tenant_id=tenant_id,
         status=status
     )
