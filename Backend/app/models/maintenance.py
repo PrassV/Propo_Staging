@@ -50,8 +50,10 @@ class MaintenanceBase(BaseModel):
     access_instructions: Optional[str] = None
 
 class MaintenanceCreate(MaintenanceBase):
-    tenant_id: Optional[str] = None
     status: Optional[MaintenanceStatus] = MaintenanceStatus.NEW
+    created_by: Optional[str] = None
+    tenant_id: Optional[str] = None
+    property_id: Optional[str] = None
 
 class MaintenanceUpdate(BaseModel):
     title: Optional[str] = None
