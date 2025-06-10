@@ -204,8 +204,14 @@ async def update_payment(payment_id: str, payment_data: Dict[str, Any]) -> Optio
         Updated payment data or None if update failed
     """
     try:
-        # Prepare data for update
-        update_data = {**payment_data}
+        # Prepare data for update, converting dates to strings
+        update_data = {}
+        for key, value in payment_data.items():
+            if isinstance(value, (datetime, date)):
+                update_data[key] = value.isoformat()
+            else:
+                update_data[key] = value
+
         if 'property_details' in update_data:
             del update_data['property_details']
         if 'tenant_details' in update_data:
