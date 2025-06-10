@@ -147,7 +147,7 @@ async def get_property_by_id(db_client: Client, property_id: str) -> Optional[Di
     try:
         # Select property columns and all columns from the related 'units' table
         response = db_client.table('properties')\
-            .select('*, units:units(*, tenant:tenants(*))')\
+            .select('*, units:units(*, tenant:tenants!units_tenant_id_fkey(*))')\
             .eq('id', property_id)\
             .single()\
             .execute()
