@@ -43,7 +43,6 @@ class PropertyBase(BaseModel):
     pincode: str
     country: Optional[str] = None
     property_type: PropertyType
-    category: Optional[PropertyCategory] = None # Added based on schema
     number_of_units: Optional[int] = Field(None, ge=0)
     size_sqft: Optional[int] = Field(None, ge=0)
     bedrooms: Optional[int] = Field(None, ge=0)
@@ -53,12 +52,8 @@ class PropertyBase(BaseModel):
     garage_size: Optional[int] = Field(None, ge=0)
     year_built: Optional[int] = Field(None, ge=1900) # Reasonable lower bound
     floors: Optional[int] = Field(None, ge=0)
-    description: Optional[str] = None
     amenities: Optional[List[str]] = None
     image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
-    # image_paths: Optional[List[str]] = None # Decide if needed alongside URLs
-    listed_in: Optional[str] = None # E.g., Zillow, Realtor.com
-    price: Optional[float] = Field(None, ge=0) # Purchase price or market value?
     yearly_tax_rate: Optional[float] = Field(None, ge=0)
     survey_number: str # Make required
     door_number: Optional[str] = None
@@ -77,7 +72,6 @@ class PropertyUpdate(BaseModel):
     pincode: Optional[str] = None
     country: Optional[str] = None
     property_type: Optional[PropertyType] = None
-    category: Optional[PropertyCategory] = None
     number_of_units: Optional[int] = Field(None, ge=0)
     size_sqft: Optional[int] = Field(None, ge=0)
     bedrooms: Optional[int] = Field(None, ge=0)
@@ -87,11 +81,8 @@ class PropertyUpdate(BaseModel):
     garage_size: Optional[int] = Field(None, ge=0)
     year_built: Optional[int] = Field(None, ge=1900)
     floors: Optional[int] = Field(None, ge=0)
-    description: Optional[str] = None
     amenities: Optional[List[str]] = None
     image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
-    listed_in: Optional[str] = None
-    price: Optional[float] = Field(None, ge=0)
     yearly_tax_rate: Optional[float] = Field(None, ge=0)
     survey_number: Optional[str] = None
     door_number: Optional[str] = None

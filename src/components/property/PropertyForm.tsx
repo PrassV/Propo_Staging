@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { PropertyFormData } from '@/api/types';
 import toast from 'react-hot-toast';
@@ -56,11 +55,7 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     state: initialData?.state || '',
     pincode: initialData?.pincode || '',
     country: initialData?.country || '',
-    description: initialData?.description || '',
     numberOfUnits: initialData?.numberOfUnits || 1,
-    category: initialData?.category || '',
-    listedIn: initialData?.listedIn || '',
-    price: initialData?.price || 0,
     yearlyTaxRate: initialData?.yearlyTaxRate || 0,
     sizeSqft: initialData?.sizeSqft || 0,
     bedrooms: initialData?.bedrooms || 0,
@@ -73,7 +68,6 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
     amenities: initialData?.amenities || [],
     surveyNumber: initialData?.surveyNumber || '',
     doorNumber: initialData?.doorNumber || '',
-    status: initialData?.status || '',
   }));
   
   const [newImages, setNewImages] = useState<File[]>([]);
@@ -273,61 +267,6 @@ export default function PropertyForm({ initialData, onSubmit, onCancel }: Proper
                      <Label htmlFor="doorNumber">Door Number</Label>
                      <Input id="doorNumber" name="doorNumber" value={formData.doorNumber} onChange={handleInputChange} disabled={loading} />
                  </div>
-             </div>
-
-             {/* Listing Section */}
-             <h3 className="text-lg font-semibold border-b pb-2">Listing Details</h3>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="space-y-1.5">
-                     <Label htmlFor="category">Category</Label>
-                     <Select name="category" value={formData.category} onValueChange={handleSelectChange('category')} disabled={loading}>
-                         <SelectTrigger id="category">
-                             <SelectValue placeholder="Select category" />
-                         </SelectTrigger>
-                         <SelectContent>
-                             <SelectItem value="Apartment">Apartment</SelectItem>
-                             <SelectItem value="House">House</SelectItem>
-                             <SelectItem value="Condo">Condo</SelectItem>
-                             <SelectItem value="Townhouse">Townhouse</SelectItem>
-                             <SelectItem value="Villa">Villa</SelectItem>
-                             {/* Add more categories as needed */}
-                         </SelectContent>
-                     </Select>
-                 </div>
-                 <div className="space-y-1.5">
-                     <Label htmlFor="listedIn">Listed In</Label>
-                     <Select name="listedIn" value={formData.listedIn} onValueChange={handleSelectChange('listedIn')} disabled={loading}>
-                         <SelectTrigger id="listedIn">
-                             <SelectValue placeholder="Select listing type" />
-                         </SelectTrigger>
-                         <SelectContent>
-                             <SelectItem value="For Sale">For Sale</SelectItem>
-                             <SelectItem value="For Rent">For Rent</SelectItem>
-                         </SelectContent>
-                     </Select>
-                 </div>
-                 <div className="space-y-1.5">
-                     <Label htmlFor="status">Status</Label>
-                      <Select name="status" value={formData.status} onValueChange={handleSelectChange('status')} disabled={loading}>
-                         <SelectTrigger id="status">
-                             <SelectValue placeholder="Select status" />
-                         </SelectTrigger>
-                         <SelectContent>
-                             <SelectItem value="Active">Active</SelectItem>
-                             <SelectItem value="Inactive">Inactive</SelectItem>
-                             <SelectItem value="Sold">Sold</SelectItem>
-                             <SelectItem value="Rented">Rented</SelectItem>
-                         </SelectContent>
-                     </Select>
-                 </div>
-             </div>
-             <div className="space-y-1.5">
-                 <Label htmlFor="price">Price ($)</Label>
-                 <Input id="price" name="price" type="number" value={formData.price} onChange={handleInputChange} disabled={loading} min={0} step="0.01"/>
-             </div>
-             <div className="space-y-1.5">
-                 <Label htmlFor="description">Description</Label>
-                 <Textarea id="description" name="description" value={formData.description} onChange={handleInputChange} disabled={loading} placeholder="Enter property description..." rows={5}/>
              </div>
 
              {/* Amenities Section */}

@@ -130,12 +130,12 @@ export interface PropertyFormData {
   pincode: string; 
   country: string;
   // Fields from sub-components (add as needed, verify names)
-  description: string;
+  description?: string;
   numberOfUnits?: number; // From BasicDetails?
-  category: string;
-  listedIn: string;
-  status: string;
-  price: number;
+  category?: string;
+  listedIn?: string;
+  status?: string;
+  price?: number;
   yearlyTaxRate?: number; // From ListingDetails?
   sizeSqft?: number; // From OverviewSection?
   bedrooms?: number; // From OverviewSection?
