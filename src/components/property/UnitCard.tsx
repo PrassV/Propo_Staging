@@ -3,13 +3,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, MoreVertical } from "lucide-react";
-import { UnitDetails } from "../../api/types";
+import { ChevronDown, ChevronRight, MoreVertical, User, DollarSign, KeyRound, Plus } from "lucide-react";
+import { UnitLeaseDetail } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
 import PaymentListTab from './details/PaymentListTab';
-import AssignTenantModal from './AssignTenantModal';
+import CreateLeaseModal from './CreateLeaseModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,9 +28,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteUnit } from '@/api/services/unitService';
 import { toast } from 'sonner';
+import { Button } from "@/components/ui/button";
+
+const getLeaseProgress = (startDate: string, endDate: string): number => {
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+    const now = new Date().getTime();
+    if (now < start) return 0;
+    if (now > end) return 100;
+    const totalDuration = end - start;
+    if (totalDuration <= 0) return 100;
+    const elapsed = now - start;
+    return (elapsed / totalDuration) * 100;
+};
 
 interface UnitCardProps {
-  unit: UnitDetails;
+  unit: UnitLeaseDetail;
   onUpdate?: () => void;
   className?: string;
   propertyId: string;
@@ -38,7 +51,7 @@ interface UnitCardProps {
 
 export default function UnitCard({ unit, onUpdate, className, propertyId }: UnitCardProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [showAssignTenant, setShowAssignTenant] = useState(false);
+    const [showCreateLeaseModal, setShowCreateLeaseModal] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     
     const handleDelete = async () => {
@@ -54,103 +67,120 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
       }
     };
 
-    const getStatusVariant = (status: UnitDetails['status']): "default" | "secondary" | "outline" | "destructive" => {
-        switch (status?.toLowerCase()) {
-            case 'vacant':
-                return 'outline';
-            case 'occupied':
-                return 'default';
-            case 'maintenance':
-                return 'secondary';
-            default:
-                return 'outline';
-        }
-    };
-
-    // Enhanced logic to determine if unit has an active tenant
-    const hasActiveTenant = !!unit.tenant_id && !!unit.tenant;
+    const isOccupied = unit.is_occupied;
+    const lease = unit.lease;
+    const leaseProgress = lease ? getLeaseProgress(lease.start_date, lease.end_date) : 0;
 
   return (
     <>
       <Collapsible open={isOpen} onOpenChange={setIsOpen} className={className}>
-        <Card className="w-full">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-gray-50">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center space-x-3">
-                  <span>Unit: {unit.unit_number}</span>
-                  <Badge variant={getStatusVariant(unit.status)}>
-                    {unit.status || 'Unknown'}
-                  </Badge>
-                  {hasActiveTenant && (
-                    <Badge variant="default" className="bg-green-100 text-green-800">
-                      Tenant Assigned
+        <Card className="w-full transition-all hover:shadow-md">
+          <CardHeader className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center space-x-3 cursor-pointer">
+                    {isOpen ? <ChevronDown size={24} className="text-gray-500"/> : <ChevronRight size={24} className="text-gray-500"/>}
+                    <CardTitle>Unit {unit.unit_number}</CardTitle>
+                    <Badge variant={isOccupied ? 'default' : 'outline'} className="text-sm">
+                      {isOccupied ? 'Occupied' : 'Vacant'}
                     </Badge>
-                  )}
-                </CardTitle>
-                
-                <div className="flex items-center space-x-4">
-                  <div className="text-right text-sm text-gray-600">
-                    <p>Currently {unit.status}</p>
-                    <p>Rent: ${unit.rent || 0}</p>
-                    {hasActiveTenant && (
-                      <p className="text-green-600 font-medium">Occupied</p>
-                    )}
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button onClick={(e) => e.stopPropagation()} className="p-1 rounded-full hover:bg-gray-200">
-                        <MoreVertical size={20} />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuItem onSelect={() => setShowDeleteConfirm(true)} className="text-red-600">
-                        Delete Unit
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                </CollapsibleTrigger>
+                {isOccupied && lease && (
+                  <div className="pl-9 space-y-3 text-sm text-gray-700">
+                    <div className="flex items-center space-x-2">
+                      <User size={16} className="text-gray-500"/>
+                      <span>{lease.tenant.full_name}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign size={16} className="text-gray-500"/>
+                      <span>${lease.rent_amount} / month</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+                      <MoreVertical size={20} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onSelect={() => setShowDeleteConfirm(true)} className="text-red-600">
+                      Delete Unit
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4 pt-0">
+            {isOccupied && lease ? (
+              <div className="pl-9 space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Lease Start: {new Date(lease.start_date).toLocaleDateString()}</span>
+                    <span>Lease End: {new Date(lease.end_date).toLocaleDateString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full" 
+                      style={{ width: `${leaseProgress}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
-            </CardHeader>
-          </CollapsibleTrigger>
+            ) : (
+              <div className="pl-9 text-center border-2 border-dashed rounded-lg p-6">
+                <KeyRound className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">This unit is vacant</h3>
+                <p className="mt-1 text-sm text-gray-500">Ready for a new tenant.</p>
+                <div className="mt-6">
+                  <Button onClick={() => setShowCreateLeaseModal(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Lease
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
 
           <CollapsibleContent>
-            {/* Tabs content inside the collapsible area */}
-            <CardContent className="p-4">
+            <CardContent className="p-4 border-t">
                 <Tabs defaultValue="tenant" className="w-full">
                     <TabsList className="grid w-full grid-cols-4 mb-4"> 
                         <TabsTrigger value="tenant">
-                          Tenant {hasActiveTenant && <span className="ml-1 text-xs">●</span>}
+                          Tenant {isOccupied && <span className="ml-1 text-xs text-green-500">●</span>}
                         </TabsTrigger>
                         <TabsTrigger value="lease">Lease</TabsTrigger>
                         <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
                         <TabsTrigger value="payments">Payments</TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
-                        {hasActiveTenant ? (
+                        {isOccupied && lease ? (
                             <div className="space-y-4">
                               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                                 <p className="text-sm text-green-700 font-medium">
-                                  ✓ This unit has an active tenant assigned
+                                  ✓ This unit is occupied with an active lease.
                                 </p>
                               </div>
-                              <TenantInfoTab tenant={unit.tenant} />
+                              <TenantInfoTab tenant={lease.tenant} />
                             </div>
                         ) : (
                             <div className="space-y-4 text-center p-4">
                                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                                   <p className="text-muted-foreground mb-2">This unit is vacant</p>
                                   <p className="text-sm text-gray-500">
-                                    No tenant is currently assigned to this unit
+                                    No active lease is assigned to this unit.
                                   </p>
                                 </div>
-                                <button 
-                                    onClick={() => setShowAssignTenant(true)}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                >
-                                    Assign Tenant
-                                </button>
+                                <Button onClick={() => setShowCreateLeaseModal(true)}>
+                                    Create Lease
+                                </Button>
                             </div>
                         )}
                     </TabsContent>
@@ -161,7 +191,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                         <MaintenanceListTab unitId={unit.id} /> 
                     </TabsContent>
                     <TabsContent value="payments">
-                        <PaymentListTab unitId={unit.id} tenantId={unit.tenant_id} propertyId={propertyId} />
+                        <PaymentListTab unitId={unit.id} tenantId={lease?.tenant.id} propertyId={propertyId} />
                     </TabsContent>
                 </Tabs>
             </CardContent>
@@ -169,15 +199,14 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
         </Card>
       </Collapsible>
 
-      {/* Assign Tenant Modal */}
-      {showAssignTenant && (
-        <AssignTenantModal
-          isOpen={showAssignTenant}
-          onClose={() => setShowAssignTenant(false)}
+      {showCreateLeaseModal && (
+        <CreateLeaseModal
+          isOpen={showCreateLeaseModal}
+          onClose={() => setShowCreateLeaseModal(false)}
           unitId={unit.id}
           unitNumber={unit.unit_number}
           onSuccess={() => {
-            setShowAssignTenant(false);
+            setShowCreateLeaseModal(false);
             onUpdate?.();
           }}
         />

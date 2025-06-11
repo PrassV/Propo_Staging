@@ -1,6 +1,6 @@
 import apiClient from '../client';
 // Import PropertiesListResponse and remove ApiResponse if no longer needed elsewhere
-import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse, PropertyTax, PropertyTaxCreate, TenantAssignment } from '../types';
+import { Property, PropertyCreate, PropertyUpdate, PropertiesListResponse, PropertyDetails, UnitDetails, UnitCreate, UnitResponse, PropertyTax, PropertyTaxCreate, TenantAssignment, PropertyLeaseDetailResponse } from '../types';
 import axios from 'axios';
 
 // Define Unit type (adjust based on actual API response)
@@ -422,4 +422,24 @@ export const getUnitDetails = async (unitId: string): Promise<UnitDetails> => {
     }
     throw new Error(errorMessage);
   }
+};
+
+/**
+ * Phase 3: Get a single property with full lease-centric details.
+ * Calls GET /properties/{id}/details
+ */
+export const getPropertyDetails = async (id: string): Promise<PropertyLeaseDetailResponse> => {
+    try {
+        const response = await apiClient.get<PropertyLeaseDetailResponse>(`/properties/${id}/details`);
+        return response.data;
+    } catch (error: unknown) {
+        console.error(`Error fetching lease-centric details for property ${id}:`, error);
+        let errorMessage = 'Failed to fetch property lease details';
+        if (axios.isAxiosError(error)) {
+            errorMessage = error.response?.data?.detail || error.message;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new Error(errorMessage);
+    }
 };

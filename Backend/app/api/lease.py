@@ -4,15 +4,19 @@ from pydantic import BaseModel
 import uuid
 import logging
 from datetime import date
+from supabase import Client
 
 from app.models.tenant import PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate
-from app.services import tenant_service
+from app.services import tenant_service, lease_service
 from app.config.auth import get_current_user
+from app.config.database import get_supabase_client_authenticated
+from app.schemas.lease import Lease, LeaseCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/leases",
-    tags=["Leases"]
+    tags=["Leases"],
+    responses={404: {"description": "Not found"}},
 )
 
 # Response Models
@@ -86,40 +90,34 @@ async def get_lease(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve lease: {str(e)}")
 
 # Create a new lease
-@router.post("/", response_model=LeaseResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Lease, status_code=status.HTTP_201_CREATED)
 async def create_lease(
-    lease_data: PropertyTenantLinkCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    lease_data: LeaseCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """
-    Create a new lease (typically by property owner/admin).
-    Also updates tenant status to "active".
+    Create a new lease for a unit.
+    This process is atomic and will also mark the unit as occupied.
     """
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token")
+
     try:
-        owner_id = current_user.get("id")
-        if not owner_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
-
-        # Check if user is owner of the property
-        property_owner = await tenant_service.get_property_owner(lease_data.property_id)
-        if property_owner != owner_id:
-            raise HTTPException(status_code=403, detail="Not authorized to create lease for this property")
-
-        # Create lease
-        lease = await tenant_service.create_lease(lease_data)
-        if not lease:
-            raise HTTPException(status_code=400, detail="Lease creation failed")
-            
-        # Update tenant status to active
-        tenant_id = lease_data.tenant_id
-        await tenant_service.update_tenant_status(tenant_id, "active")
-        
-        return LeaseResponse(lease=lease, message="Lease created successfully")
-    except HTTPException as http_exc:
-        raise http_exc
+        new_lease = await lease_service.create_lease(
+            db_client=db_client,
+            lease_data=lease_data,
+            owner_id=user_id
+        )
+        return new_lease
+    except HTTPException as e:
+        # The service layer raises specific HTTP exceptions for different errors
+        # (e.g., 403 for auth, 409 for conflict), so we just re-raise them.
+        raise e
     except Exception as e:
-        logger.error(f"Error creating lease: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create lease: {str(e)}")
+        logger.error(f"Unexpected error in create_lease endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An internal error occurred.")
 
 # Update a lease
 @router.put("/{lease_id}", response_model=LeaseResponse)
@@ -181,53 +179,28 @@ async def delete_lease(
         raise HTTPException(status_code=500, detail=f"Failed to delete lease: {str(e)}")
 
 # Add lease termination endpoint
-@router.put("/{lease_id}/terminate", response_model=LeaseResponse)
+@router.put("/{lease_id}/terminate", status_code=status.HTTP_204_NO_CONTENT)
 async def terminate_lease(
     lease_id: uuid.UUID,
-    termination: dict = Body(..., 
-                         example={
-                             "termination_date": "2023-12-31", 
-                             "reason": "Tenant requested early termination"
-                         }),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """
-    Terminate a lease early.
-    Also updates tenant status to "inactive".
+    Terminates a lease and vacates the associated unit.
     """
-    try:
-        requesting_user_id = current_user.get("id")
-        if not requesting_user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token")
 
-        # Check authorization
-        can_access = await tenant_service.can_access_lease(lease_id, requesting_user_id)
-        if not can_access:
-            raise HTTPException(status_code=403, detail="Not authorized to terminate this lease")
-            
-        # Get current lease to extract tenant_id
-        current_lease = await tenant_service.get_lease_by_id(lease_id)
-        if not current_lease:
-            raise HTTPException(status_code=404, detail="Lease not found")
-            
-        # Update lease end date to termination date
-        update_data = {
-            "end_date": termination.get("termination_date"),
-            "status": "terminated"
-        }
-        
-        updated_lease = await tenant_service.update_lease(lease_id, update_data)
-        if not updated_lease:
-            raise HTTPException(status_code=404, detail="Lease not found or update failed")
-            
-        # Update tenant status to inactive
-        tenant_id = current_lease.get("tenant_id")
-        if tenant_id:
-            await tenant_service.update_tenant_status(tenant_id, "inactive")
-            
-        return LeaseResponse(lease=updated_lease, message="Lease terminated successfully")
-    except HTTPException as http_exc:
-        raise http_exc
+    try:
+        await lease_service.terminate_lease(
+            db_client=db_client,
+            lease_id=lease_id,
+            owner_id=user_id
+        )
+        # On success, a 204 No Content response is automatically returned.
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        logger.error(f"Error terminating lease {lease_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to terminate lease: {str(e)}")
+        logger.error(f"Unexpected error in terminate_lease endpoint for lease {lease_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred while terminating the lease.")

@@ -14,6 +14,7 @@ from ..models.property import (
     Amenity, AmenityCreate, AmenityUpdate, # Added Amenity models
     UnitTax, UnitTaxCreate, UnitTaxUpdate # Added UnitTax models
 )
+from ..schemas.property import PropertyDetailResponse
 from ..db import properties as property_db
 from ..config.settings import settings # Import settings for bucket name
 # Import other necessary services if needed for cross-service calls
@@ -1012,3 +1013,36 @@ async def delete_unit_tax(db_client: Client, unit_id: uuid.UUID, tax_id: uuid.UU
     return None # Success
 
 # --- End Unit Tax Service Functions --- # 
+
+# Phase 2: New service function to get lease-centric property details
+async def fetch_property_details_by_lease(db_client: Client, property_id: str, owner_id: str) -> Optional[PropertyDetailResponse]:
+    """
+    Fetches the comprehensive, lease-centric details for a single property,
+    verifies ownership, and parses the data into a structured Pydantic model.
+    """
+    # First, verify the owner has access to this property.
+    # We can use an existing lightweight DB call for this.
+    property_owner = await property_db.get_property_owner(db_client, property_id)
+    if not property_owner or property_owner != owner_id:
+        logger.warning(f"Unauthorized attempt to access property {property_id} by user {owner_id}.")
+        # Return None for not found or unauthorized, the API layer will handle the HTTP response.
+        return None
+
+    # If authorized, call the new DB function to get the detailed data
+    details_data = await property_db.get_property_details(db_client, property_id)
+
+    if not details_data:
+        logger.warning(f"No details found for property {property_id}, though access was authorized.")
+        return None
+    
+    try:
+        # Parse the raw dict into our Pydantic model.
+        # This will validate the structure, types, etc.
+        return PropertyDetailResponse.parse_obj(details_data)
+    except Exception as e:
+        logger.error(f"Failed to parse property details for {property_id} into Pydantic model: {e}", exc_info=True)
+        # If parsing fails, it's an internal server error.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process property data."
+        ) 

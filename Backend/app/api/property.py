@@ -19,6 +19,8 @@ from app.models.property import (
     UnitDetails,
     PropertyDetails
 )
+# Phase 2: Import the new response schema
+from app.schemas.property import PropertyDetailResponse
 # Assuming tenant, maintenance, payment models exist elsewhere
 from app.models.tenant import Tenant # Placeholder
 from app.models.maintenance import MaintenanceRequest # Placeholder
@@ -609,3 +611,30 @@ async def delete_unit_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while deleting the image"
         )
+
+# Phase 2: New endpoint for lease-centric property details
+@router.get("/{property_id}/details", response_model=PropertyDetailResponse)
+async def get_property_details_by_lease(
+    property_id: uuid.UUID = Path(..., description="The property ID"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated),
+):
+    """
+    Get comprehensive, lease-centric details for a specific property.
+    This new endpoint provides a structured view of a property, its units,
+    and their active leases with tenant information.
+    """
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token")
+
+    details = await property_service.fetch_property_details_by_lease(
+        db_client=db_client,
+        property_id=str(property_id),
+        owner_id=user_id
+    )
+
+    if not details:
+        raise HTTPException(status_code=404, detail="Property not found or you do not have access.")
+    
+    return details

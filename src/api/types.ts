@@ -157,6 +157,59 @@ export interface UnitDetails extends SupabaseUnit {
   current_lease_id?: string | null;
 }
 
+// Phase 3: New Types for the Lease-Centric Details Endpoint
+// These types match the structure of the `GET /properties/{id}/details` response.
+
+export interface TenantLeaseInfo {
+    id: string;
+    full_name: string;
+    email: string;
+}
+
+export interface LeaseInfo {
+    id: string;
+    start_date: string;
+    end_date: string;
+    rent_amount: number;
+    status: string;
+    tenant: TenantLeaseInfo;
+}
+
+export interface UnitLeaseDetail {
+    id: string;
+    unit_number: string;
+    is_occupied: boolean;
+    lease: LeaseInfo | null;
+}
+
+export interface PropertyLeaseDetailResponse {
+    id: string;
+    name: string;
+    address: string;
+    units: UnitLeaseDetail[];
+}
+// End of Phase 3 New Types
+
+// Phase 4: Types for Lease Creation and Management
+export interface LeaseCreate {
+    unit_id: string;
+    tenant_id: string;
+    start_date: string;
+    end_date: string;
+    rent_amount: number;
+    deposit_amount?: number;
+    notes?: string;
+}
+
+export interface Lease extends LeaseCreate {
+    id: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+}
+
+// End of Phase 4 New Types
+
 // Represents the detailed data returned for a single property view
 export interface PropertyDetails {
   id: string;

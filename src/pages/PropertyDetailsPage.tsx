@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
-import { PropertyDetails, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types'; // Add ApiDocument, remove PropertyFormData if not used in edit flow anymore
+import { PropertyLeaseDetailResponse, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types';
 import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 export default function PropertyDetailsPage() {
     const { id: propertyId } = useParams<{ id: string }>();
     // const navigate = useNavigate(); // Removed unused
-    const [property, setProperty] = useState<PropertyDetails | null>(null);
+    const [property, setProperty] = useState<PropertyLeaseDetailResponse | null>(null);
     const [documents, setDocuments] = useState<ApiDocument[]>([]); // State for documents
     const [documentsLoading, setDocumentsLoading] = useState(true); // Loading state for documents
     const [documentsError, setDocumentsError] = useState<string | null>(null); // Error state for documents
@@ -40,16 +40,8 @@ export default function PropertyDetailsPage() {
         setLoading(true);
         setError(null);
         try {
-            // Replace placeholder with actual (placeholder) API call
-            const fetchedProperty = await api.property.getPropertyById(propertyId);
+            const fetchedProperty = await api.property.getPropertyDetails(propertyId);
             setProperty(fetchedProperty);
-
-            // **** Remove Placeholder Data ****
-            // console.warn("Using placeholder data for PropertyDetailsPage");
-            // await new Promise(resolve => setTimeout(resolve, 500));
-            // const placeholder: PropertyDetails = { /* ... placeholder object ... */ };
-            // setProperty(placeholder);
-            // **** End Placeholder Data Removal ****
 
         } catch (err: unknown) {
             console.error("Error fetching property details:", err);
@@ -91,34 +83,32 @@ export default function PropertyDetailsPage() {
         // Define formData type explicitly
         const formData: Partial<PropertyFormData> & { id: string } = {
             id: property.id,
-            propertyName: property.property_name,
-            propertyType: property.property_type ?? '',
-            addressLine1: property.address_line1,
-            addressLine2: property.address_line2 ?? undefined,
-            city: property.city,
-            state: property.state,
-            pincode: property.pincode,
-            country: property.country,
-            description: property.description ?? '',
-            bedrooms: property.bedrooms ?? undefined,
-            bathrooms: property.bathrooms ?? undefined,
-            // Convert null to undefined for sizeSqft and yearBuilt
-            sizeSqft: property.area ?? undefined,
-            yearBuilt: property.year_built ?? undefined,
-            category: '', // Placeholder
-            listedIn: '', // Placeholder
-            status: property.status, // Assuming PropertyDetails has status
-            price: 0, // Placeholder
-            // Ensure all required fields from PropertyFormData are present or handle optionality
-            amenities: [], // Example: Add default or existing if available
-            doorNumber: '', // Example
-            floors: undefined, // Example
-            garageSize: undefined, // Example
-            garages: undefined, // Example
-            kitchens: undefined, // Example
-            numberOfUnits: property.units?.length, // Example: Infer from units
-            surveyNumber: '', // Example
-            yearlyTaxRate: undefined, // Example
+            propertyName: property.name,
+            propertyType: '' as 'residential',
+            addressLine1: property.address,
+            addressLine2: undefined,
+            city: '',
+            state: '',
+            pincode: '',
+            country: '',
+            description: '',
+            bedrooms: undefined,
+            bathrooms: undefined,
+            sizeSqft: undefined,
+            yearBuilt: undefined,
+            category: '',
+            listedIn: '',
+            status: 'active',
+            price: 0,
+            amenities: [],
+            doorNumber: '',
+            floors: undefined,
+            garageSize: undefined,
+            garages: undefined,
+            kitchens: undefined,
+            numberOfUnits: property.units?.length,
+            surveyNumber: '',
+            yearlyTaxRate: undefined,
         };
         openEditPropertyDialog(formData, fetchPropertyDetails);
     };
@@ -174,14 +164,14 @@ export default function PropertyDetailsPage() {
                     {/* Property Header & Image Gallery */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-3xl">{property.property_name}</CardTitle>
-                            <CardDescription>{`${property.address_line1}, ${property.city}, ${property.state}`}</CardDescription>
+                            <CardTitle className="text-3xl">{property.name}</CardTitle>
+                            <CardDescription>{property.address}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             {/* Use the EnhancedImageGallery component */}
                             <EnhancedImageGallery
                                 propertyId={property.id}
-                                propertyName={property.property_name}
+                                propertyName={property.name}
                                 className="mb-6" // Add margin if needed
                             />
                         </CardContent>
@@ -193,34 +183,9 @@ export default function PropertyDetailsPage() {
                             <CardTitle>Overview & Amenities</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                {/* Display overview details if they exist */}
-                                {property.area && <div><span className="font-semibold">Size:</span> {property.area} sqft</div>}
-                                {typeof property.bedrooms === 'number' && <div><span className="font-semibold">Bedrooms:</span> {property.bedrooms}</div>}
-                                {typeof property.bathrooms === 'number' && <div><span className="font-semibold">Bathrooms:</span> {property.bathrooms}</div>}
-                                {property.year_built && <div><span className="font-semibold">Year Built:</span> {property.year_built}</div>}
-                                {/* Add other fields like floors, kitchens, garages if available in PropertyDetails type */}
-                            </div>
-                            {/* Display amenities if they exist */}
-                            {property.amenities && property.amenities.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold mb-2 text-sm">Amenities:</h4>
-                                    <div className="flex flex-wrap gap-2">
-                                        {property.amenities.map((amenity) => (
-                                            <span key={amenity} className="bg-secondary text-secondary-foreground text-xs font-medium px-2.5 py-0.5 rounded">
-                                                {amenity}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {/* Display description if it exists */}
-                            {property.description && (
-                                <div>
-                                    <h4 className="font-semibold mb-2 text-sm">Description:</h4>
-                                    <p className="text-sm text-muted-foreground">{property.description}</p>
-                                </div>
-                            )}
+                            <p className="text-sm text-muted-foreground">
+                                Detailed property attributes can be managed via the 'Edit Property' dialog.
+                            </p>
                         </CardContent>
                     </Card>
 
@@ -242,7 +207,7 @@ export default function PropertyDetailsPage() {
                                     {property.units.map((unit) => (
                                         <UnitCard 
                                             key={unit.id} 
-                                            unit={unit} 
+                                            unit={unit as any}
                                             onUpdate={fetchPropertyDetails}
                                             propertyId={property.id}
                                         />
@@ -266,10 +231,10 @@ export default function PropertyDetailsPage() {
                 <div className="lg:col-span-1 space-y-6">
                     {/* Location Card */}
                     <PropertyLocationMap
-                        address={property.address_line1}
-                        city={property.city}
-                        state={property.state}
-                        pincode={property.pincode}
+                        address={property.address}
+                        city={""}
+                        state={""}
+                        pincode={""}
                     />
 
                     {/* Documents Card */}
@@ -308,7 +273,7 @@ export default function PropertyDetailsPage() {
                     <DialogHeader>
                         <DialogTitle>Add New Unit</DialogTitle>
                         <DialogDescription>
-                            Enter the details for the new unit in "{property.property_name}".
+                            Enter the details for the new unit in "{property.name}".
                         </DialogDescription>
                     </DialogHeader>
                     <AddUnitForm

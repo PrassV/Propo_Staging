@@ -173,6 +173,50 @@ async def get_property_by_id(db_client: Client, property_id: str) -> Optional[Di
         logger.error(f"Failed to get property {property_id} with units: {str(e)}", exc_info=True)
         return None
 
+# Phase 2: New DB function to get lease-centric property details
+async def get_property_details(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a property and its full lease-centric details by calling the
+    get_property_lease_details RPC function.
+    """
+    try:
+        rpc_params = {'p_property_id': property_id}
+        response = db_client.rpc('get_property_lease_details', rpc_params).execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error calling RPC for property details {property_id}: {response.error.message}")
+            return None
+        
+        if not hasattr(response, 'data') or not response.data:
+            logger.warning(f"No data returned from RPC for property details {property_id}.")
+            return None
+            
+        return response.data
+    except Exception as e:
+        logger.error(f"Failed to get property details for {property_id}: {str(e)}", exc_info=True)
+        return None
+
+async def get_property_owner_for_unit(db_client: Client, unit_id: uuid.UUID) -> Optional[str]:
+    """
+    Given a unit_id, finds the owner_id of the parent property.
+    """
+    try:
+        # This RPC call is simpler than a multi-level join in Python client code.
+        response = db_client.rpc('get_owner_for_unit', {'p_unit_id': str(unit_id)}).execute()
+
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error calling RPC for unit owner {unit_id}: {response.error.message}")
+            return None
+        
+        # The RPC is expected to return the owner_id directly or null.
+        if not hasattr(response, 'data') or not response.data:
+            return None
+            
+        return response.data
+    except Exception as e:
+        logger.error(f"Failed to get property owner for unit {unit_id}: {str(e)}", exc_info=True)
+        return None
+
 async def create_property(db_client: Client, property_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Create a new property in Supabase by calling the 'create_my_property' RPC function.
