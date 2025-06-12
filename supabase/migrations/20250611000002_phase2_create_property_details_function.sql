@@ -10,8 +10,8 @@ BEGIN
     SELECT
         jsonb_build_object(
             'id', p.id,
-            'name', p.name,
-            'address', p.address,
+            'name', p.property_name,
+            'address', p.address_line1 || ', ' || p.city || ', ' || p.state || ' ' || p.pincode,
             'units', COALESCE(
                 (
                     SELECT jsonb_agg(

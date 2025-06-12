@@ -105,14 +105,19 @@ async def create_property(db_client: Client, property_data: PropertyCreate, owne
     try:
         # Prepare data dictionary from Pydantic model
         insert_data = property_data.dict(exclude_unset=True) # Use exclude_unset
-        # No need to add owner_id, id, timestamps here - RPC function handles them
-        # insert_data["id"] = str(uuid.uuid4())
-        # insert_data["owner_id"] = owner_id 
-        # insert_data["created_at"] = datetime.utcnow().isoformat()
-        # insert_data["updated_at"] = insert_data["created_at"]
         
-        # Call the DB layer function (which calls RPC)
-        return await property_db.create_property(db_client, insert_data) 
+        # Call the DB layer function (which calls RPC and returns the new property ID)
+        new_property_id = await property_db.create_property(db_client, insert_data)
+        
+        if not new_property_id:
+            logger.warning(f"property_service.create_property: property_db.create_property did not return an ID for owner {owner_id}")
+            return None
+
+        # After creating, fetch the full property object to return it.
+        # This ensures the response matches the `Property` response_model in the API layer.
+        logger.info(f"Property created with ID: {new_property_id}. Fetching full property object.")
+        return await get_property(db_client, str(new_property_id))
+
     except Exception as e:
         logger.error(f"Error in property_service.create_property: {str(e)}", exc_info=True) 
         return None
