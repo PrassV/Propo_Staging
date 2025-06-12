@@ -18,7 +18,7 @@ BEGIN
                         jsonb_build_object(
                             'id', u.id,
                             'unit_number', u.unit_number,
-                            'is_occupied', u.is_occupied,
+                            'is_occupied', (u.status <> 'Vacant'),
                             'lease', (
                                 SELECT jsonb_build_object(
                                     'id', l.id,
