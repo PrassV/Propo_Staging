@@ -29,7 +29,7 @@ BEGIN
                                     'tenant', (
                                         SELECT jsonb_build_object(
                                             'id', t.id,
-                                            'full_name', t.full_name,
+                                            'name', t.name,
                                             'email', t.email
                                         )
                                         FROM tenants t
