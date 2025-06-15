@@ -22,6 +22,9 @@ const TenantsPage = lazy(() => import('../pages/dashboard/TenantsPage'));
 const TenantProfilePage = lazy(() => import('../pages/dashboard/TenantProfilePage'));
 const MaintenanceDashboard = lazy(() => import('../pages/maintenance/MaintenanceDashboard'));
 const RequestDetails = lazy(() => import('../components/maintenance/RequestDetails'));
+const AutomationPage = lazy(() => import('../pages/dashboard/AutomationPage'));
+const ReportsPage = lazy(() => import('../pages/dashboard/ReportsPage'));
+const TaxPaymentsPage = lazy(() => import('../pages/dashboard/TaxPaymentsPage'));
 
 const withSuspense = (Component: React.ComponentType) => (
   <Suspense fallback={<LoadingSpinner />}>
@@ -167,6 +170,30 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth requireProfile>
         {withSuspense(TenantProfilePage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/automation',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(AutomationPage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/reports',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(ReportsPage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/tax-payments',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(TaxPaymentsPage)}
       </RouteGuard>
     )
   }
