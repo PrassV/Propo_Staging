@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, MoreVertical, User, DollarSign, KeyRound, Plus, Zap, BarChart3 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  ChevronDown, 
+  ChevronRight, 
+  MoreVertical, 
+  User, 
+  DollarSign, 
+  KeyRound, 
+  Plus, 
+  Clock, 
+  Wrench
+} from "lucide-react";
+
 import { UnitLeaseDetail } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
+import LeaseHistoryTab from './details/LeaseHistoryTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
 import PaymentListTab from './details/PaymentListTab';
-import LeaseHistoryTab from './details/LeaseHistoryTab';
-import CreateLeaseModal from './CreateLeaseModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteUnit } from '@/api/services/unitService';
 import { toast } from 'sonner';
-import { Button } from "@/components/ui/button";
-import UnitAnalyticsTab from './UnitAnalyticsTab';
-import UnitAutomationControls from './UnitAutomationControls';
-import { triggerUnitAutomationEvent, getUnitAutomationStatus } from '@/api/services/automationService';
+import CreateLeaseModal from './CreateLeaseModal';
 
 const getLeaseProgress = (startDate: string, endDate: string): number => {
     const start = new Date(startDate).getTime();
@@ -156,21 +164,26 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           <CollapsibleContent>
             <CardContent className="p-4 border-t">
                 <Tabs defaultValue="tenant" className="w-full">
-                    <TabsList className="grid w-full grid-cols-7 mb-4"> 
-                        <TabsTrigger value="tenant">
-                          Tenant {isOccupied && <span className="ml-1 text-xs text-green-500">●</span>}
+                    <TabsList className="grid w-full grid-cols-5">
+                        <TabsTrigger value="tenant" className="flex items-center gap-1">
+                          <User className="w-4 h-4" />
+                          Tenant
                         </TabsTrigger>
-                        <TabsTrigger value="lease">Lease</TabsTrigger>
-                        <TabsTrigger value="history">History</TabsTrigger>
-                        <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-                        <TabsTrigger value="payments">Payments</TabsTrigger>
-                        <TabsTrigger value="analytics">
-                          <BarChart3 className="h-4 w-4 mr-1" />
-                          Analytics
+                        <TabsTrigger value="lease" className="flex items-center gap-1">
+                          <KeyRound className="w-4 h-4" />
+                          Lease
                         </TabsTrigger>
-                        <TabsTrigger value="automation">
-                          <Zap className="h-4 w-4 mr-1" />
-                          Automation
+                        <TabsTrigger value="history" className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          History
+                        </TabsTrigger>
+                        <TabsTrigger value="maintenance" className="flex items-center gap-1">
+                          <Wrench className="w-4 h-4" />
+                          Maintenance
+                        </TabsTrigger>
+                        <TabsTrigger value="payments" className="flex items-center gap-1">
+                          <DollarSign className="w-4 h-4" />
+                          Payments
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
@@ -226,19 +239,6 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </TabsContent>
                     <TabsContent value="payments">
                         <PaymentListTab unitId={unit.id} tenantId={lease?.tenant.id} propertyId={propertyId} />
-                    </TabsContent>
-                    <TabsContent value="analytics">
-                        <UnitAnalyticsTab 
-                          unitId={unit.id} 
-                          propertyId={propertyId} 
-                          unitNumber={unit.unit_number} 
-                        />
-                    </TabsContent>
-                    <TabsContent value="automation">
-                        <UnitAutomationControls 
-                          unitId={unit.id} 
-                          unitNumber={unit.unit_number} 
-                        />
                     </TabsContent>
                 </Tabs>
             </CardContent>
