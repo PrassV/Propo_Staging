@@ -12,8 +12,8 @@ import { toast } from 'sonner';
 import { Plus, User, Mail, Phone } from 'lucide-react';
 
 import api from '@/api';
-import { Tenant, TenantCreate } from '@/api/types';
-import { createLease } from '@/api/services/leaseService';
+import { Tenant, TenantCreate, Lease } from '@/api/types';
+import { createLease, getLeases } from '@/api/services/leaseService';
 import { createTenant } from '@/api/services/tenantService';
 
 const leaseSchema = z.object({
@@ -47,6 +47,7 @@ interface CreateLeaseModalProps {
 
 export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, unitNumber }: CreateLeaseModalProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [activeLeaseTenantIds, setActiveLeaseTenantIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
@@ -64,6 +65,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
   useEffect(() => {
     if (isOpen) {
       fetchTenants();
+      fetchActiveLeaseTenants();
     }
   }, [isOpen]);
 
@@ -75,6 +77,25 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
     } catch (error) {
       console.error("Failed to fetch tenants", error);
       toast.error("Failed to load available tenants.");
+    }
+  };
+
+  const fetchActiveLeaseTenants = async () => {
+    try {
+      // Fetch all leases to determine which tenants are already assigned to active leases
+      const leaseResponse = await getLeases({ active_only: true, limit: 1000 });
+      const activeTenantIds = new Set<string>(
+        (leaseResponse.items || [])
+          .filter((lease: Lease) => {
+            // Consider a lease active if it has no end date or end date is in the future
+            return !lease.end_date || new Date(lease.end_date) > new Date();
+          })
+          .map((lease: Lease) => lease.tenant_id)
+      );
+      setActiveLeaseTenantIds(activeTenantIds);
+    } catch (error) {
+      console.error("Failed to fetch active leases", error);
+      // Don't show error toast for this as it's not critical - we'll just show all tenants
     }
   };
 
@@ -143,7 +164,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
 
   // Get available tenants (filter out those already assigned to active leases)
   const availableTenants = tenants.filter(tenant => 
-    tenant.status === 'unassigned' || tenant.status === 'inactive'
+    !activeLeaseTenantIds.has(tenant.id)
   );
 
   return (
