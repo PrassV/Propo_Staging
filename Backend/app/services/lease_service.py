@@ -74,7 +74,7 @@ async def get_lease_by_id(db_client: Client, lease_id: uuid.UUID, owner_id: str)
     Get a specific lease by ID with ownership verification.
     """
     try:
-        response = await db_client.table('leases').select('*').eq('id', str(lease_id)).single().execute()
+        response = db_client.table('leases').select('*').eq('id', str(lease_id)).maybe_single().execute()
         
         if not response.data:
             return None
@@ -105,7 +105,7 @@ async def get_lease_by_unit(db_client: Client, unit_id: uuid.UUID, owner_id: str
             raise HTTPException(status_code=403, detail="Not authorized to access this unit")
         
         # Get active lease for the unit
-        response = await db_client.table('leases').select('*').eq('unit_id', str(unit_id)).eq('status', 'active').single().execute()
+        response = db_client.table('leases').select('*').eq('unit_id', str(unit_id)).eq('status', 'active').maybe_single().execute()
         
         if not response.data:
             return None
@@ -217,7 +217,7 @@ async def terminate_lease(db_client: Client, lease_id: uuid.UUID, owner_id: str)
     try:
         # Step 1: Get the unit_id from the lease, then find the property owner.
         # This is a critical authorization step.
-        lease_response = await db_client.table('leases').select('unit_id').eq('id', lease_id).single().execute()
+        lease_response = db_client.table('leases').select('unit_id').eq('id', str(lease_id)).maybe_single().execute()
         if not hasattr(lease_response, 'data') or not lease_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lease not found.")
         
