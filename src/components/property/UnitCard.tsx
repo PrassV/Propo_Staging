@@ -43,15 +43,58 @@ import { toast } from 'sonner';
 import CreateLeaseModal from './CreateLeaseModal';
 
 const getLeaseProgress = (startDate: string, endDate: string): number => {
-    const start = new Date(startDate).getTime();
-    const end = new Date(endDate).getTime();
-    const now = new Date().getTime();
-    if (now < start) return 0;
-    if (now > end) return 100;
-    const totalDuration = end - start;
-    if (totalDuration <= 0) return 100;
-    const elapsed = now - start;
-    return (elapsed / totalDuration) * 100;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const now = new Date();
+  
+  if (now < start) return 0; // Lease hasn't started yet
+  if (now > end) return 100; // Lease has ended
+  
+  const total = end.getTime() - start.getTime();
+  const elapsed = now.getTime() - start.getTime();
+  return Math.round((elapsed / total) * 100);
+};
+
+// Helper function to get unit display status
+const getUnitDisplayStatus = (unit: UnitLeaseDetail) => {
+  // Check if unit has a status field (from API)
+  if (unit.status) {
+    switch (unit.status.toLowerCase()) {
+      case 'occupied':
+        return { 
+          label: 'Occupied', 
+          variant: 'default' as const, 
+          isOccupied: true,
+          description: 'This unit is currently occupied with an active lease.'
+        };
+      case 'upcoming':
+        return { 
+          label: 'Upcoming Lease', 
+          variant: 'secondary' as const, 
+          isOccupied: false,
+          description: 'This unit has an upcoming lease but is currently vacant.'
+        };
+      case 'vacant':
+      default:
+        return { 
+          label: 'Vacant', 
+          variant: 'outline' as const, 
+          isOccupied: false,
+          description: 'This unit is available for new tenant assignment.'
+        };
+    }
+  }
+  
+  // Fallback to is_occupied field
+  const isOccupied = unit.is_occupied || false;
+  return {
+    label: isOccupied ? 'Occupied' : 'Vacant',
+    variant: (isOccupied ? 'default' : 'outline') as const,
+    isOccupied,
+    description: isOccupied 
+      ? 'This unit is currently occupied with an active lease.'
+      : 'This unit is available for new tenant assignment.'
+  };
 };
 
 interface UnitCardProps {
@@ -79,9 +122,9 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
       }
     };
 
-    const isOccupied = unit.is_occupied;
     const lease = unit.lease;
     const leaseProgress = lease ? getLeaseProgress(lease.start_date, lease.end_date) : 0;
+    const unitStatus = getUnitDisplayStatus(unit);
 
   return (
     <>
@@ -94,13 +137,13 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                   <div className="flex items-center space-x-3 cursor-pointer">
                     {isOpen ? <ChevronDown size={24} className="text-gray-500"/> : <ChevronRight size={24} className="text-gray-500"/>}
                     <CardTitle>Unit {unit.unit_number}</CardTitle>
-                    <Badge variant={isOccupied ? 'default' : 'outline'} className="text-sm">
-                      {isOccupied ? 'Occupied' : 'Vacant'}
+                    <Badge variant={unitStatus.variant} className="text-sm">
+                      {unitStatus.label}
                     </Badge>
                   </div>
                 </CollapsibleTrigger>
-                {/* Enhanced condition to show tenant info */}
-                {isOccupied && lease && lease.tenant && (
+                {/* Show tenant info for occupied units */}
+                {unitStatus.isOccupied && lease && lease.tenant && (
                   <div className="pl-9 space-y-3 text-sm text-gray-700">
                     <div className="flex items-center space-x-2">
                       <User size={16} className="text-gray-500"/>
@@ -112,8 +155,24 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </div>
                   </div>
                 )}
-                {/* Show debug info when unit is occupied but no lease/tenant data */}
-                {isOccupied && (!lease || !lease.tenant) && (
+                {/* Show upcoming lease info */}
+                {unit.status === 'upcoming' && lease && lease.tenant && (
+                  <div className="pl-9 space-y-3 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <Clock size={16} className="text-blue-500"/>
+                      <span className="font-medium">Upcoming: {lease.tenant.name}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign size={16} className="text-blue-500"/>
+                      <span>${lease.rent_amount} / month</span>
+                    </div>
+                    <div className="text-xs text-blue-600">
+                      Lease starts: {new Date(lease.start_date).toLocaleDateString()}
+                    </div>
+                  </div>
+                )}
+                {/* Show debug info when unit status doesn't match lease data */}
+                {unitStatus.isOccupied && (!lease || !lease.tenant) && (
                   <div className="pl-9 text-sm text-amber-600">
                     <p>⚠️ Unit marked as occupied but missing lease/tenant data</p>
                     {!lease && <p className="text-xs">No lease information found</p>}
@@ -140,7 +199,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           </CardHeader>
 
           <CardContent className="p-4 pt-0">
-            {isOccupied && lease && lease.tenant ? (
+            {(unitStatus.isOccupied || unit.status === 'upcoming') && lease && lease.tenant ? (
               <div className="pl-9 space-y-4">
                 <div>
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -149,25 +208,30 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full" 
+                      className={`h-2 rounded-full ${unit.status === 'upcoming' ? 'bg-blue-500' : 'bg-blue-600'}`}
                       style={{ width: `${leaseProgress}%` }}
                     ></div>
                   </div>
+                  {unit.status === 'upcoming' && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      Lease starts in {Math.ceil((new Date(lease.start_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="pl-9 text-center border-2 border-dashed rounded-lg p-6">
                 <KeyRound className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">
-                  {isOccupied ? "Occupied unit - missing lease data" : "This unit is vacant"}
+                  {unitStatus.isOccupied ? "Occupied unit - missing lease data" : "This unit is vacant"}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  {isOccupied ? "Please check lease and tenant information." : "Ready for a new tenant."}
+                  {unitStatus.description}
                 </p>
                 <div className="mt-6">
                   <Button onClick={() => setShowCreateLeaseModal(true)}>
                     <Plus className="mr-2 h-4 w-4" />
-                    {isOccupied ? "Fix Lease" : "Create Lease"}
+                    {unitStatus.isOccupied ? "Fix Lease" : "Create Lease"}
                   </Button>
                 </div>
               </div>
@@ -200,11 +264,21 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
-                        {isOccupied && lease ? (
+                        {(unitStatus.isOccupied || unit.status === 'upcoming') && lease ? (
                             <div className="space-y-4">
-                              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                                <p className="text-sm text-green-700 font-medium">
-                                  ✓ This unit is occupied with an active lease.
+                              <div className={`border rounded-lg p-3 mb-4 ${
+                                unit.status === 'upcoming' 
+                                  ? 'bg-blue-50 border-blue-200' 
+                                  : 'bg-green-50 border-green-200'
+                              }`}>
+                                <p className={`text-sm font-medium ${
+                                  unit.status === 'upcoming' 
+                                    ? 'text-blue-700' 
+                                    : 'text-green-700'
+                                }`}>
+                                  {unit.status === 'upcoming' 
+                                    ? '🗓️ This unit has an upcoming lease.' 
+                                    : '✓ This unit is occupied with an active lease.'}
                                 </p>
                               </div>
                               <TenantInfoTab tenant={lease.tenant} />
@@ -280,12 +354,12 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
               This will permanently delete Unit {unit.unit_number}. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <div className="flex justify-end space-x-2">
+            <AlertDialogCancel onClick={() => setShowDeleteConfirm(false)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
+              Delete Unit
             </AlertDialogAction>
-          </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </>

@@ -2,6 +2,7 @@ import React from 'react';
 import { TenantLeaseInfo } from '@/api/types';
 import { Link } from 'react-router-dom';
 import { User, Mail, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TenantInfoTabProps {
   tenant: TenantLeaseInfo | null | undefined;
@@ -9,6 +10,33 @@ interface TenantInfoTabProps {
 
 export default function TenantInfoTab({ tenant }: TenantInfoTabProps) {
   if (!tenant) return <p className="text-sm text-muted-foreground">Tenant details not available.</p>;
+
+  const handleSendEmail = () => {
+    try {
+      // Try to open mailto link
+      const mailtoLink = `mailto:${tenant.email}`;
+      window.open(mailtoLink, '_blank');
+      
+      // Show success toast
+      toast.success(`Opening email client to send message to ${tenant.name}`, {
+        description: `Email: ${tenant.email}`,
+        duration: 3000,
+      });
+    } catch {
+      // Fallback: copy email to clipboard
+      navigator.clipboard.writeText(tenant.email).then(() => {
+        toast.success(`Email copied to clipboard: ${tenant.email}`, {
+          description: 'You can now paste it in your email client',
+          duration: 4000,
+        });
+      }).catch(() => {
+        toast.info(`Tenant email: ${tenant.email}`, {
+          description: 'Please copy this email address manually',
+          duration: 5000,
+        });
+      });
+    }
+  };
 
   return (
     <div className="space-y-4 p-2">
@@ -29,7 +57,7 @@ export default function TenantInfoTab({ tenant }: TenantInfoTabProps) {
         
         <div className="flex space-x-3 pt-2">
           <Link 
-              to={`/tenants/${tenant.id}`} 
+              to={`/dashboard/tenants/${tenant.id}`} 
               className="flex-1 inline-flex items-center justify-center text-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
           >
               View Full Profile
@@ -37,7 +65,7 @@ export default function TenantInfoTab({ tenant }: TenantInfoTabProps) {
           </Link>
           <button 
             className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium"
-            onClick={() => window.open(`mailto:${tenant.email}`, '_blank')}
+            onClick={handleSendEmail}
           >
             Send Email
           </button>

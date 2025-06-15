@@ -179,6 +179,7 @@ export interface UnitLeaseDetail {
     id: string;
     unit_number: string;
     is_occupied: boolean;
+    status?: string;
     lease: LeaseInfo | null;
 }
 
