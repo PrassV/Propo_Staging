@@ -3,16 +3,17 @@ import { X } from 'lucide-react';
 import InputField from '../auth/InputField';
 import toast from 'react-hot-toast';
 import api from '../../api'; // Import our API object
-import { TenantCreate, DocumentCreate, TenantResponse, DocumentResponse } from '../../api/types'; // Import necessary types
+import { TenantCreate, TenantResponse } from '../../api/types'; // Import necessary types
+import { useAuth } from '../../contexts/AuthContext';
 
 interface TenantFormProps {
   propertyId: string;
-  unitId: string;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-const TenantForm = ({ propertyId, unitId, onSubmit, onCancel }: TenantFormProps) => {
+const TenantForm = ({ propertyId, onSubmit, onCancel }: TenantFormProps) => {
+  const { user, session } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -42,109 +43,61 @@ const TenantForm = ({ propertyId, unitId, onSubmit, onCancel }: TenantFormProps)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check authentication first
+    if (!user || !session) {
+      toast.error('You must be logged in to add a tenant. Please log in and try again.');
+      return;
+    }
+
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast.error('Name and Email are required fields.');
+      return;
+    }
+
     setLoading(true);
 
-    let createdTenantId: string | null = null;
-    let createdDocumentId: string | undefined = undefined;
-
     try {
-      // 1. Upload ID Proof
-      let idProofUrl: string | undefined = undefined;
-      if (formData.idProof) {
-        toast.loading('Uploading ID proof...');
-        try {
-          const uploadResponse = await api.property.uploadPropertyImages([formData.idProof]); 
-          toast.dismiss();
-          if (uploadResponse?.imageUrls?.[0]) {
-            idProofUrl = uploadResponse.imageUrls[0];
-            toast.success('ID Proof uploaded.');
-          } else {
-            console.warn("ID Proof upload response missing URL:", uploadResponse);
-            toast.error('Failed to get URL after ID proof upload.');
-            setLoading(false); 
-            return; 
-          }
-        } catch (uploadError) {
-          toast.dismiss();
-          console.error("ID Proof Upload Error:", uploadError);
-          toast.error('Failed to upload ID proof.');
-          setLoading(false); 
-          return;
-        }
-      }
-      
-      // 2. Create Document Record using the obtained URL
-      if (idProofUrl && formData.idProof) {
-          toast.loading('Linking ID proof...');
-          try {
-              const docData: DocumentCreate = {
-                  title: `ID Proof - ${formData.name} - ${formData.idProof.name}`,
-                  document_name: formData.idProof.name,
-                  property_id: propertyId, 
-                  tenant_id: undefined,
-                  file_url: idProofUrl,
-                  file_name: formData.idProof.name,
-                  mime_type: formData.idProof.type,
-                  file_extension: formData.idProof.name.split('.').pop(),
-                  file_size: formData.idProof.size,
-                  document_type: 'id_proof',
-                  access_level: 'private',
-              };
-              const docResponse: DocumentResponse = await api.document.createDocument(docData);
-              createdDocumentId = docResponse.document?.id;
-              toast.dismiss();
-              if (!createdDocumentId) {
-                  console.warn("Document link response missing ID:", docResponse);
-                  toast.error('Failed to confirm ID proof link.');
-              } else {
-                  toast.success('ID Proof linked.');
-              }
-          } catch (linkError) {
-              toast.dismiss();
-              console.error("Error linking ID Proof document:", linkError);
-              toast.error('Failed to link uploaded ID proof.');
-          }
-      }
-
-      // 3. Create Tenant using Tenant Service
+      // Create Tenant using Tenant Service
       toast.loading('Creating tenant record...');
+      
       const tenantData: TenantCreate = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim() || '',
         tenant_type: 'individual',
         property_id: propertyId,
       };
 
+      console.log('Attempting to create tenant with data:', tenantData);
+      console.log('User authenticated:', !!user);
+      console.log('Session exists:', !!session);
+
       const response: TenantResponse = await api.tenant.createTenant(tenantData);
+      
       if (!response?.tenant?.id) {
           throw new Error("Tenant creation response did not include a tenant ID.");
       }
-      createdTenantId = response.tenant.id;
-      toast.dismiss();
       
-      // 4. Optional: Update Document with Tenant ID if needed
-      if (createdDocumentId && createdTenantId) {
-           try {
-               await api.document.updateDocument(createdDocumentId, { tenant_id: createdTenantId });
-           } catch (docUpdateError) {
-               console.warn("Failed to update document with tenant ID:", docUpdateError);
-           }
-      }
-
-      // 5. Link Tenant to Unit (if needed)
-      if (createdTenantId && unitId) {
-         toast.loading('Linking tenant to unit...');
-         console.log(`Simulating linking Tenant ${createdTenantId} to Unit ${unitId}`);
-         toast.dismiss();
-      }
-
+      toast.dismiss();
       toast.success('Tenant added successfully!');
       onSubmit(); // Call the success callback
     } catch (error) {
       toast.dismiss(); // Dismiss any loading toasts
       console.error('Error adding tenant:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to add tenant');
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('authentication') || error.message.includes('token')) {
+          toast.error('Authentication failed. Please log out and log back in.');
+        } else if (error.message.includes('property_id')) {
+          toast.error('Invalid property ID. Please try again.');
+        } else {
+          toast.error(`Failed to add tenant: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to add tenant. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
