@@ -1043,7 +1043,7 @@ async def fetch_property_details_by_lease(db_client: Client, property_id: str, o
     try:
         # Parse the raw dict into our Pydantic model.
         # This will validate the structure, types, etc.
-        return PropertyDetailResponse.parse_obj(details_data)
+        return PropertyDetailResponse.model_validate(details_data)
     except Exception as e:
         logger.error(f"Failed to parse property details for {property_id} into Pydantic model: {e}", exc_info=True)
         # If parsing fails, it's an internal server error.

@@ -13,7 +13,7 @@ class TenantLeaseDetail(BaseModel):
     email: EmailStr
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Represents the core details of an active lease agreement.
 class LeaseDetail(BaseModel):
@@ -25,7 +25,7 @@ class LeaseDetail(BaseModel):
     tenant: TenantLeaseDetail
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Represents a single unit within a property, including its active lease if one exists.
 class UnitDetail(BaseModel):
@@ -35,7 +35,7 @@ class UnitDetail(BaseModel):
     lease: Optional[LeaseDetail] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # This is the main response model for the new /properties/{property_id}/details endpoint.
 # It provides a comprehensive, lease-centric overview of a single property.
@@ -46,4 +46,4 @@ class PropertyDetailResponse(BaseModel):
     units: List[UnitDetail] = []
 
     class Config:
-        orm_mode = True 
+        from_attributes = True 

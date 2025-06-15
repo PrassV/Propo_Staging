@@ -1,7 +1,7 @@
 import uuid
 from pydantic import BaseModel, validator
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 
 class LeaseCreate(BaseModel):
     unit_id: uuid.UUID
@@ -34,6 +34,7 @@ class LeaseUpdate(BaseModel):
 
 class Lease(BaseModel):
     id: uuid.UUID
+    property_id: uuid.UUID
     unit_id: uuid.UUID
     tenant_id: uuid.UUID
     start_date: date
@@ -41,9 +42,9 @@ class Lease(BaseModel):
     rent_amount: float
     deposit_amount: Optional[float]
     status: str
-    notes: Optional[str]
-    created_at: date
-    updated_at: date
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
-        orm_mode = True 
+        from_attributes = True 

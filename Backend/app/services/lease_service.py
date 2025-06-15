@@ -34,7 +34,7 @@ async def create_lease(db_client: Client, lease_data: LeaseCreate, owner_id: str
                 detail="Failed to create lease in the database."
             )
         
-        return Lease.parse_obj(new_lease_data)
+        return Lease.model_validate(new_lease_data)
 
     except ValueError as e:
         # This catches the specific "Unit is already occupied" error

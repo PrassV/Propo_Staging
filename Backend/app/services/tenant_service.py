@@ -124,7 +124,7 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
             tenant_dict = tenant_data.model_dump(exclude_unset=True)
         else:
             # Pydantic v1 compatibility
-            tenant_dict = tenant_data.dict(exclude_unset=True)
+            tenant_dict = tenant_data.model_dump(exclude_unset=True)
         
         tenant_id = uuid.uuid4()
         
@@ -186,7 +186,7 @@ async def update_tenant(tenant_id: uuid.UUID, tenant_data: TenantUpdate, request
             update_dict = tenant_data.model_dump(exclude_unset=True)
         else:
             # Pydantic v1 compatibility
-            update_dict = tenant_data.dict(exclude_unset=True)
+            update_dict = tenant_data.model_dump(exclude_unset=True)
             
         if not update_dict:
             logger.warning("Update tenant called with no data to update.")
@@ -775,7 +775,7 @@ async def update_lease(lease_id: uuid.UUID, lease_data: PropertyTenantLinkUpdate
             update_data = lease_data.model_dump(exclude_unset=True)
         else:
             # Pydantic v1 compatibility
-            update_data = lease_data.dict(exclude_unset=True)
+            update_data = lease_data.model_dump(exclude_unset=True)
             
         update_data["updated_at"] = datetime.now(datetime.timezone.utc)
 

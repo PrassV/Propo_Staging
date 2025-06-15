@@ -92,7 +92,7 @@ class Document(BaseModel):
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DocumentVersionCreate(BaseModel):
     document_id: str
@@ -112,7 +112,7 @@ class DocumentVersion(BaseModel):
     created_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DocumentShareCreate(BaseModel):
     document_id: str
@@ -132,7 +132,7 @@ class DocumentShare(BaseModel):
     created_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DocumentCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -155,4 +155,4 @@ class DocumentCategory(BaseModel):
     updated_at: datetime
     
     class Config:
-        orm_mode = True 
+        from_attributes = True 
