@@ -8,6 +8,11 @@ import * as notificationService from '../../api/services/notificationService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { formatDate } from '@/utils/date';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BulkOperationsPanel from '../../components/tenant/BulkOperationsPanel';
@@ -32,11 +37,27 @@ export default function TenantsPage() {
   const [pageSize] = useState(10);
   const [activeTab, setActiveTab] = useState('list');
 
+  // Add Tenant Modal state
+  const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+  const [newTenantData, setNewTenantData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    tenant_type: 'individual' as 'individual' | 'company'
+  });
+
   // Fetch tenants
   const fetchTenants = async () => {
     try {
       setLoading(true);
       setError(null);
+
+      // Check authentication first
+      if (!user) {
+        setError('You must be logged in to view tenants.');
+        return;
+      }
 
       const params = {
         skip: (currentPage - 1) * pageSize,
@@ -47,13 +68,25 @@ export default function TenantsPage() {
         sort_order: 'desc' as const
       };
 
+      console.log('Fetching tenants with params:', params);
+      console.log('User authenticated:', !!user);
+
       const response = await tenantService.getTenants(params);
       setTenants(response.items);
       setTotalCount(response.total);
     } catch (err: unknown) {
       console.error('Error fetching tenants:', err);
-      const message = err instanceof Error ? err.message : 'Failed to load tenants';
+      let message = 'Failed to load tenants';
+      
+      if (err instanceof Error) {
+        message = err.message;
+        if (message.includes('authentication') || message.includes('token')) {
+          message = 'Authentication failed. Please log out and log back in.';
+        }
+      }
+      
       setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -79,7 +112,44 @@ export default function TenantsPage() {
   };
 
   const handleAddTenant = () => {
-    navigate('/dashboard/add-tenant');
+    setShowAddTenantModal(true);
+  };
+
+  const handleCreateTenant = async () => {
+    if (!newTenantData.name.trim() || !newTenantData.email.trim()) {
+      toast.error('Name and Email are required fields.');
+      return;
+    }
+
+    setIsCreatingTenant(true);
+    try {
+      const tenantData = {
+        name: newTenantData.name.trim(),
+        email: newTenantData.email.trim(),
+        phone: newTenantData.phone.trim() || '',
+        tenant_type: newTenantData.tenant_type,
+        property_id: '', // Will be set by backend or can be empty for standalone tenant
+      };
+
+      await tenantService.createTenant(tenantData);
+      toast.success('Tenant created successfully!');
+      setShowAddTenantModal(false);
+      setNewTenantData({ name: '', email: '', phone: '', tenant_type: 'individual' });
+      await fetchTenants(); // Refresh the list
+    } catch (error) {
+      console.error('Error creating tenant:', error);
+      if (error instanceof Error) {
+        if (error.message.includes('authentication') || error.message.includes('token')) {
+          toast.error('Authentication failed. Please log out and log back in.');
+        } else {
+          toast.error(`Failed to create tenant: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to create tenant. Please check your connection and try again.');
+      }
+    } finally {
+      setIsCreatingTenant(false);
+    }
   };
 
   const handleViewTenant = (tenantId: string) => {
@@ -473,6 +543,76 @@ export default function TenantsPage() {
           <TenantAnalytics tenants={tenants} />
         </TabsContent>
       </Tabs>
+
+      {/* Add Tenant Modal */}
+      <Dialog open={showAddTenantModal} onOpenChange={setShowAddTenantModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Tenant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tenant_name">Full Name *</Label>
+              <Input
+                id="tenant_name"
+                placeholder="Enter tenant's full name"
+                value={newTenantData.name}
+                onChange={(e) => setNewTenantData({ ...newTenantData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_email">Email Address *</Label>
+              <Input
+                id="tenant_email"
+                type="email"
+                placeholder="Enter tenant's email"
+                value={newTenantData.email}
+                onChange={(e) => setNewTenantData({ ...newTenantData, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_phone">Phone Number</Label>
+              <Input
+                id="tenant_phone"
+                type="tel"
+                placeholder="Enter tenant's phone number"
+                value={newTenantData.phone}
+                onChange={(e) => setNewTenantData({ ...newTenantData, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_type">Tenant Type</Label>
+              <Select
+                value={newTenantData.tenant_type}
+                onValueChange={(value) => setNewTenantData({ ...newTenantData, tenant_type: value as 'individual' | 'company' })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddTenantModal(false)}
+                disabled={isCreatingTenant}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateTenant}
+                disabled={isCreatingTenant}
+              >
+                {isCreatingTenant ? 'Creating...' : 'Create Tenant'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
