@@ -183,10 +183,10 @@ export default function PropertyDetailsPage() {
                             <CardTitle>Overview & Amenities</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {/* Basic Property Information */}
+                            {/* Property Overview Section */}
                             <div className="space-y-4">
-                                <h4 className="font-semibold text-lg">Property Information</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <h4 className="font-semibold text-lg">Property Details</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium text-muted-foreground">Property Name</p>
                                         <p className="text-sm">{property.name}</p>
@@ -195,6 +195,42 @@ export default function PropertyDetailsPage() {
                                         <p className="text-sm font-medium text-muted-foreground">Address</p>
                                         <p className="text-sm">{property.address}</p>
                                     </div>
+                                    {property.property_type && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Property Type</p>
+                                            <p className="text-sm capitalize">{property.property_type.replace('_', ' ')}</p>
+                                        </div>
+                                    )}
+                                    {property.size_sqft && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Size</p>
+                                            <p className="text-sm">{property.size_sqft} sqft</p>
+                                        </div>
+                                    )}
+                                    {property.bedrooms && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Bedrooms</p>
+                                            <p className="text-sm">{property.bedrooms}</p>
+                                        </div>
+                                    )}
+                                    {property.bathrooms && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Bathrooms</p>
+                                            <p className="text-sm">{property.bathrooms}</p>
+                                        </div>
+                                    )}
+                                    {property.year_built && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Year Built</p>
+                                            <p className="text-sm">{property.year_built}</p>
+                                        </div>
+                                    )}
+                                    {property.floors && (
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">Floors</p>
+                                            <p className="text-sm">{property.floors}</p>
+                                        </div>
+                                    )}
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium text-muted-foreground">Total Units</p>
                                         <p className="text-sm">{property.units?.length || 0}</p>
@@ -206,14 +242,41 @@ export default function PropertyDetailsPage() {
                                         </p>
                                     </div>
                                 </div>
+
+                                {/* Description */}
+                                {property.description && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-muted-foreground">Description</p>
+                                        <p className="text-sm text-gray-700">{property.description}</p>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Message about detailed information */}
+                            {/* Amenities Section */}
+                            {property.amenities && property.amenities.length > 0 && (
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold text-lg">Amenities</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {property.amenities.map((amenity, index) => (
+                                            <div key={index} className="flex items-center space-x-2">
+                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                <span className="text-sm capitalize">{amenity.replace(/_/g, ' ')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Message about editing property details */}
                             <div className="border-t pt-4">
-                                <div className="text-center py-6 bg-muted/30 rounded-lg">
+                                <div className="text-center py-4 bg-muted/30 rounded-lg">
                                     <p className="text-sm text-muted-foreground">
-                                        Detailed property information like bedrooms, bathrooms, amenities, and other specifications 
-                                        can be managed via the <strong>'Edit Property'</strong> button above.
+                                        {(!property.amenities || property.amenities.length === 0) && 
+                                         !property.size_sqft && !property.bedrooms && !property.bathrooms ? 
+                                            "No detailed property information available." : 
+                                            "You can update property details and amenities"}
+                                        <br />
+                                        <strong>Use the 'Edit Property' button above to add or modify details.</strong>
                                     </p>
                                     <Button 
                                         variant="outline" 

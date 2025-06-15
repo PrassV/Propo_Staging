@@ -186,6 +186,14 @@ export interface PropertyLeaseDetailResponse {
     id: string;
     name: string;
     address: string;
+    amenities?: string[] | null;
+    bedrooms?: number | null;
+    bathrooms?: number | null;
+    size_sqft?: number | null;
+    year_built?: number | null;
+    floors?: number | null;
+    property_type?: string | null;
+    description?: string | null;
     units: UnitLeaseDetail[];
 }
 // End of Phase 3 New Types
