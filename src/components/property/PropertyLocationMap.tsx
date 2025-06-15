@@ -21,15 +21,25 @@ export default function PropertyLocationMap({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address || !city || !state) {
-      setError("Incomplete address information");
+    // Create full address from available components
+    let fullAddress = address;
+    
+    // If city, state, pincode are provided separately, use them
+    if (city || state || pincode) {
+      const addressParts = [address, city, state, pincode].filter(Boolean);
+      fullAddress = addressParts.join(', ');
+    }
+    
+    // Fallback: if no structured address components, try to use the full address as-is
+    if (!fullAddress || fullAddress.trim() === '') {
+      setError("No address information available");
       setLoading(false);
       return;
     }
 
     try {
       // Create a Google Maps embed URL from the address
-      const formattedAddress = encodeURIComponent(`${address}, ${city}, ${state} ${pincode}`);
+      const formattedAddress = encodeURIComponent(fullAddress);
       
       // Note: In a production environment, you would want to use an API key
       // For this demo, we'll use the keyless embed which has usage limitations
@@ -44,6 +54,9 @@ export default function PropertyLocationMap({
       setLoading(false);
     }
   }, [address, city, state, pincode]);
+
+  // Create display address for description
+  const displayAddress = [address, city, state, pincode].filter(Boolean).join(', ') || address;
 
   if (loading) {
     return (
@@ -67,7 +80,10 @@ export default function PropertyLocationMap({
         <CardContent>
           <div className="h-64 w-full bg-muted rounded-md flex flex-col items-center justify-center text-destructive">
             <AlertTriangle className="w-8 h-8 mb-2" />
-            <p>{error}</p>
+            <p className="text-center">{error}</p>
+            {address && (
+              <p className="text-sm text-gray-500 mt-2 text-center">Address: {address}</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -78,7 +94,7 @@ export default function PropertyLocationMap({
     <Card>
       <CardHeader>
         <CardTitle>Location</CardTitle>
-        <CardDescription>{`${address}, ${city}, ${state} ${pincode}`}</CardDescription>
+        <CardDescription>{displayAddress}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-64 w-full rounded-md overflow-hidden">

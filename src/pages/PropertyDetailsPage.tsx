@@ -207,7 +207,7 @@ export default function PropertyDetailsPage() {
                                     {property.units.map((unit) => (
                                         <UnitCard 
                                             key={unit.id} 
-                                            unit={unit as any}
+                                            unit={unit}
                                             onUpdate={fetchPropertyDetails}
                                             propertyId={property.id}
                                         />
@@ -232,9 +232,9 @@ export default function PropertyDetailsPage() {
                     {/* Location Card */}
                     <PropertyLocationMap
                         address={property.address}
-                        city={""}
-                        state={""}
-                        pincode={""}
+                        city={property.address.split(',')[1]?.trim() || ""}
+                        state={property.address.split(',')[2]?.trim() || ""}
+                        pincode={property.address.split(',')[3]?.trim() || ""}
                     />
 
                     {/* Documents Card */}

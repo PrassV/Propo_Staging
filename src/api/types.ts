@@ -162,7 +162,7 @@ export interface UnitDetails extends SupabaseUnit {
 
 export interface TenantLeaseInfo {
     id: string;
-    full_name: string;
+    name: string;
     email: string;
 }
 

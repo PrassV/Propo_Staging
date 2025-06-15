@@ -9,7 +9,7 @@ import uuid
 # We only expose non-sensitive information.
 class TenantLeaseDetail(BaseModel):
     id: uuid.UUID
-    full_name: str
+    name: str
     email: EmailStr
 
     class Config:

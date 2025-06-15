@@ -18,31 +18,41 @@ BEGIN
                         jsonb_build_object(
                             'id', u.id,
                             'unit_number', u.unit_number,
-                            'is_occupied', (u.status <> 'Vacant'),
-                            'lease', (
-                                SELECT jsonb_build_object(
-                                    'id', l.id,
-                                    'start_date', l.start_date,
-                                    'end_date', l.end_date,
-                                    'rent_amount', l.rent_amount,
-                                    'status', l.status,
-                                    'tenant', (
-                                        SELECT jsonb_build_object(
-                                            'id', t.id,
-                                            'name', t.name,
-                                            'email', t.email
+                            'is_occupied', CASE 
+                                WHEN l.id IS NOT NULL THEN true 
+                                ELSE COALESCE(u.status <> 'Vacant', false)
+                            END,
+                            'lease', CASE 
+                                WHEN l.id IS NOT NULL THEN
+                                    jsonb_build_object(
+                                        'id', l.id,
+                                        'start_date', l.start_date,
+                                        'end_date', l.end_date,
+                                        'rent_amount', l.rent_amount,
+                                        'status', l.status,
+                                        'tenant', (
+                                            SELECT jsonb_build_object(
+                                                'id', t.id,
+                                                'name', t.name,
+                                                'email', t.email
+                                            )
+                                            FROM tenants t
+                                            WHERE t.id = l.tenant_id
                                         )
-                                        FROM tenants t
-                                        WHERE t.id = l.tenant_id
                                     )
-                                )
-                                FROM leases l
-                                WHERE l.unit_id = u.id AND l.status = 'active'
-                                LIMIT 1
-                            )
+                                ELSE NULL
+                            END
                         )
                     )
                     FROM units u
+                    LEFT JOIN (
+                        SELECT DISTINCT ON (unit_id) 
+                            id, unit_id, start_date, end_date, rent_amount, status, tenant_id
+                        FROM leases 
+                        WHERE status IN ('active', 'current') 
+                           OR (status IS NULL AND end_date >= CURRENT_DATE)
+                        ORDER BY unit_id, start_date DESC
+                    ) l ON l.unit_id = u.id
                     WHERE u.property_id = p.id
                 ),
                 '[]'::JSONB

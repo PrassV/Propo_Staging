@@ -99,16 +99,25 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </Badge>
                   </div>
                 </CollapsibleTrigger>
-                {isOccupied && lease && (
+                {/* Enhanced condition to show tenant info */}
+                {isOccupied && lease && lease.tenant && (
                   <div className="pl-9 space-y-3 text-sm text-gray-700">
                     <div className="flex items-center space-x-2">
                       <User size={16} className="text-gray-500"/>
-                      <span>{lease.tenant.full_name}</span>
+                      <span>{lease.tenant.name}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <DollarSign size={16} className="text-gray-500"/>
                       <span>${lease.rent_amount} / month</span>
                     </div>
+                  </div>
+                )}
+                {/* Show debug info when unit is occupied but no lease/tenant data */}
+                {isOccupied && (!lease || !lease.tenant) && (
+                  <div className="pl-9 text-sm text-amber-600">
+                    <p>⚠️ Unit marked as occupied but missing lease/tenant data</p>
+                    {!lease && <p className="text-xs">No lease information found</p>}
+                    {lease && !lease.tenant && <p className="text-xs">Lease exists but no tenant information</p>}
                   </div>
                 )}
               </div>
@@ -131,7 +140,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           </CardHeader>
 
           <CardContent className="p-4 pt-0">
-            {isOccupied && lease ? (
+            {isOccupied && lease && lease.tenant ? (
               <div className="pl-9 space-y-4">
                 <div>
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -149,12 +158,16 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
             ) : (
               <div className="pl-9 text-center border-2 border-dashed rounded-lg p-6">
                 <KeyRound className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">This unit is vacant</h3>
-                <p className="mt-1 text-sm text-gray-500">Ready for a new tenant.</p>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">
+                  {isOccupied ? "Occupied unit - missing lease data" : "This unit is vacant"}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {isOccupied ? "Please check lease and tenant information." : "Ready for a new tenant."}
+                </p>
                 <div className="mt-6">
                   <Button onClick={() => setShowCreateLeaseModal(true)}>
                     <Plus className="mr-2 h-4 w-4" />
-                    Create Lease
+                    {isOccupied ? "Fix Lease" : "Create Lease"}
                   </Button>
                 </div>
               </div>

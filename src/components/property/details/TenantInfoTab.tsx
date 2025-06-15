@@ -19,7 +19,7 @@ export default function TenantInfoTab({ tenant }: TenantInfoTabProps) {
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-medium text-gray-900 truncate">{tenant.full_name}</p>
+                          <p className="text-lg font-medium text-gray-900 truncate">{tenant.name}</p>
             <p className="text-sm text-gray-500 truncate flex items-center">
               <Mail className="mr-2 h-4 w-4"/>
               {tenant.email}
