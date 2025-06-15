@@ -176,7 +176,7 @@ class TenantAssignment(BaseModel):
     tenant_id: uuid.UUID
     notes: Optional[str] = None
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tenant_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
                 "notes": "Assigning tenant to the unit."

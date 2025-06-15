@@ -1,14 +1,171 @@
 import logging
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from supabase import Client
 from fastapi import HTTPException, status
 
-from ..schemas.lease import Lease, LeaseCreate
+# Updated imports to use the new models
+from app.models.property import Lease, LeaseCreate, LeaseUpdate
 from ..db import leases as lease_db
 from ..db import properties as property_db # To verify ownership
 
 logger = logging.getLogger(__name__)
+
+async def get_leases(
+    db_client: Client,
+    owner_id: str,
+    property_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    active_only: bool = False,
+    skip: int = 0,
+    limit: int = 10
+) -> Tuple[List[Lease], int]:
+    """
+    Get leases for the owner with optional filtering.
+    """
+    try:
+        # Build query filters
+        query = db_client.table('leases').select('*')
+        
+        # Filter by property ownership
+        if property_id:
+            # Verify owner has access to this property
+            property_owner = await property_db.get_property_owner(db_client, property_id)
+            if property_owner != owner_id:
+                raise HTTPException(status_code=403, detail="Not authorized to access this property")
+            query = query.eq('property_id', property_id)
+        else:
+            # Get all properties owned by this user and filter leases
+            properties_response = await db_client.table('properties').select('id').eq('owner_id', owner_id).execute()
+            if properties_response.data:
+                property_ids = [p['id'] for p in properties_response.data]
+                query = query.in_('property_id', property_ids)
+            else:
+                return [], 0  # No properties, no leases
+        
+        if tenant_id:
+            query = query.eq('tenant_id', tenant_id)
+            
+        if active_only:
+            query = query.eq('status', 'active')
+        
+        # Get total count
+        count_response = await query.execute()
+        total = len(count_response.data) if count_response.data else 0
+        
+        # Get paginated results
+        response = await query.range(skip, skip + limit - 1).execute()
+        
+        leases = []
+        if response.data:
+            for lease_data in response.data:
+                leases.append(Lease.model_validate(lease_data))
+        
+        return leases, total
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting leases: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve leases")
+
+async def get_lease_by_id(db_client: Client, lease_id: uuid.UUID, owner_id: str) -> Optional[Lease]:
+    """
+    Get a specific lease by ID with ownership verification.
+    """
+    try:
+        response = await db_client.table('leases').select('*').eq('id', str(lease_id)).single().execute()
+        
+        if not response.data:
+            return None
+            
+        lease_data = response.data
+        
+        # Verify ownership through property
+        property_owner = await property_db.get_property_owner(db_client, lease_data['property_id'])
+        if property_owner != owner_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this lease")
+        
+        return Lease.model_validate(lease_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting lease {lease_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve lease")
+
+async def get_lease_by_unit(db_client: Client, unit_id: uuid.UUID, owner_id: str) -> Optional[Lease]:
+    """
+    Get the current active lease for a unit.
+    """
+    try:
+        # First verify the owner has access to this unit
+        unit_property_owner = await property_db.get_property_owner_for_unit(db_client, str(unit_id))
+        if not unit_property_owner or unit_property_owner != owner_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this unit")
+        
+        # Get active lease for the unit
+        response = await db_client.table('leases').select('*').eq('unit_id', str(unit_id)).eq('status', 'active').single().execute()
+        
+        if not response.data:
+            return None
+            
+        return Lease.model_validate(response.data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting lease for unit {unit_id}: {e}", exc_info=True)
+        return None  # Return None instead of raising exception for this case
+
+async def update_lease(db_client: Client, lease_id: uuid.UUID, lease_data: LeaseUpdate, owner_id: str) -> Optional[Lease]:
+    """
+    Update a lease with ownership verification.
+    """
+    try:
+        # First verify ownership
+        existing_lease = await get_lease_by_id(db_client, lease_id, owner_id)
+        if not existing_lease:
+            return None
+        
+        # Update the lease
+        update_data = lease_data.model_dump(exclude_unset=True)
+        if not update_data:
+            return existing_lease  # No changes
+        
+        response = await db_client.table('leases').update(update_data).eq('id', str(lease_id)).execute()
+        
+        if not response.data:
+            return None
+            
+        return Lease.model_validate(response.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating lease {lease_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update lease")
+
+async def delete_lease(db_client: Client, lease_id: uuid.UUID, owner_id: str) -> bool:
+    """
+    Delete a lease with ownership verification.
+    """
+    try:
+        # First verify ownership
+        existing_lease = await get_lease_by_id(db_client, lease_id, owner_id)
+        if not existing_lease:
+            return False
+        
+        # Delete the lease
+        response = await db_client.table('leases').delete().eq('id', str(lease_id)).execute()
+        
+        return len(response.data) > 0
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting lease {lease_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete lease")
 
 async def create_lease(db_client: Client, lease_data: LeaseCreate, owner_id: str) -> Optional[Lease]:
     """

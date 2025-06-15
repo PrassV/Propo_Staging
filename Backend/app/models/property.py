@@ -271,6 +271,48 @@ class PropertyDetails(Property): # New/Updated PropertyDetails model
     class Config:
         from_attributes = True 
 
+# Add the missing PropertyWithUnits model
+class PropertyWithUnits(Property):
+    """Property model with units included - used for detailed property responses"""
+    units: List[UnitDetails] = []
+    total_units: Optional[int] = None
+    occupied_units: Optional[int] = None
+    vacant_units: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+# Add PropertyTax models that were referenced in the API
+class PropertyTaxBase(BaseModel):
+    tax_type: str = Field(..., description="Type of tax (e.g., property tax, municipal tax)")
+    amount: float = Field(..., gt=0, description="Amount of the tax")
+    year: int = Field(..., description="The year the tax applies to")
+    payment_date: Optional[date] = None
+    status: str = Field("due", description="Status of the tax payment (e.g., due, paid, overdue)")
+    description: Optional[str] = None
+
+class PropertyTaxCreate(PropertyTaxBase):
+    # property_id will be supplied by the path parameter
+    pass
+
+class PropertyTaxUpdate(BaseModel):
+    # All fields optional for update
+    tax_type: Optional[str] = None
+    amount: Optional[float] = Field(None, gt=0)
+    year: Optional[int] = None
+    payment_date: Optional[date] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+
+class PropertyTax(PropertyTaxBase):
+    id: uuid.UUID
+    property_id: uuid.UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 class UnitCreatePayload(UnitCreate):
     property_id: uuid.UUID # Add property_id needed for creation via this route
 

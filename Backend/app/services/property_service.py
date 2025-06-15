@@ -100,6 +100,53 @@ async def get_property(db_client: Client, property_id: str) -> Optional[Dict[str
 
     return property_data
 
+async def get_property_with_units(
+    db_client: Client, 
+    property_id: str, 
+    owner_id: str,
+    include_units: bool = True
+) -> Optional[Dict[str, Any]]:
+    """Get a specific property by ID with units included, with ownership verification."""
+    try:
+        # First get the basic property data
+        property_data = await get_property(db_client, property_id)
+        
+        if not property_data:
+            return None
+            
+        # Verify ownership
+        if property_data.get("owner_id") != owner_id:
+            logger.warning(f"User {owner_id} attempted to access property {property_id} owned by {property_data.get('owner_id')}")
+            return None
+        
+        # Add units if requested
+        if include_units:
+            try:
+                units = await get_units_for_property(db_client, property_id, owner_id)
+                property_data['units'] = units or []
+                
+                # Add unit statistics
+                total_units = len(units) if units else 0
+                occupied_units = len([u for u in units if u.get('status') == 'Occupied']) if units else 0
+                vacant_units = total_units - occupied_units
+                
+                property_data['total_units'] = total_units
+                property_data['occupied_units'] = occupied_units
+                property_data['vacant_units'] = vacant_units
+                
+            except Exception as e:
+                logger.warning(f"Could not fetch units for property {property_id}: {e}")
+                property_data['units'] = []
+                property_data['total_units'] = 0
+                property_data['occupied_units'] = 0
+                property_data['vacant_units'] = 0
+        
+        return property_data
+        
+    except Exception as e:
+        logger.error(f"Error getting property with units {property_id}: {e}", exc_info=True)
+        return None
+
 async def create_property(db_client: Client, property_data: PropertyCreate, owner_id: str) -> Optional[Dict[str, Any]]: # REMOVE headers parameter
     """Create a new property by calling the DB layer (which now uses RPC)."""
     try:

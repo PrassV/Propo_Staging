@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import uuid
 import logging
 
-from ..auth.dependencies import get_current_user
+from ..config.auth import get_current_user
 from ..config.database import get_supabase_client_authenticated
 from supabase import Client
 

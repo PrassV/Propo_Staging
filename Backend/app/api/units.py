@@ -8,7 +8,7 @@ from datetime import date
 
 # Import models (adjust paths as needed)
 # Assuming models are in app.models.property for now
-from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate, Unit, Lease  # Import new payload model and Unit base model
+from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate, Lease  # Import new payload model - removed Unit base model
 # Import Maintenance models
 from app.models.maintenance import MaintenanceRequest, MaintenanceCreate # Changed from MaintenanceRequestCreate
 # Import Tenant models
