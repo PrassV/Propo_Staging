@@ -9,6 +9,7 @@ import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
 import MaintenanceListTab from './details/MaintenanceListTab';
 import PaymentListTab from './details/PaymentListTab';
+import LeaseHistoryTab from './details/LeaseHistoryTab';
 import CreateLeaseModal from './CreateLeaseModal';
 import {
   DropdownMenu,
@@ -152,11 +153,12 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           <CollapsibleContent>
             <CardContent className="p-4 border-t">
                 <Tabs defaultValue="tenant" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 mb-4"> 
+                    <TabsList className="grid w-full grid-cols-5 mb-4"> 
                         <TabsTrigger value="tenant">
                           Tenant {isOccupied && <span className="ml-1 text-xs text-green-500">●</span>}
                         </TabsTrigger>
                         <TabsTrigger value="lease">Lease</TabsTrigger>
+                        <TabsTrigger value="history">History</TabsTrigger>
                         <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
                         <TabsTrigger value="payments">Payments</TabsTrigger>
                     </TabsList>
@@ -185,7 +187,28 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                         )}
                     </TabsContent>
                     <TabsContent value="lease">
-                        <LeaseInfoTab unitId={unit.id} /> 
+                        {lease ? (
+                          <LeaseInfoTab 
+                            lease={{
+                              ...lease,
+                              created_at: '',
+                              updated_at: '',
+                              unit_id: unit.id,
+                              tenant_id: lease.tenant.id,
+                              deposit_amount: 0,
+                              notes: ''
+                            }} 
+                            onUpdate={onUpdate || (() => {})} 
+                          />
+                        ) : (
+                          <div className="text-center p-6 bg-gray-50 rounded-lg">
+                            <h3 className="text-lg font-medium text-gray-800">No Active Lease</h3>
+                            <p className="text-sm text-gray-500 mt-1">This unit is currently vacant.</p>
+                          </div>
+                        )}
+                    </TabsContent>
+                    <TabsContent value="history">
+                        <LeaseHistoryTab unitId={unit.id} />
                     </TabsContent>
                     <TabsContent value="maintenance">
                         <MaintenanceListTab unitId={unit.id} /> 

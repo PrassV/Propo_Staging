@@ -699,6 +699,60 @@ export interface UnitResponse {
     message?: string;
 }
 
+// Unit History Types for Phase 3
+export interface HistoricalLease {
+  id: string;
+  tenant_id: string;
+  start_date: string;
+  end_date: string;
+  rent_amount: number;
+  deposit_amount?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HistoricalTenant {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  status: string;
+  created_at: string;
+}
+
+export interface HistoricalPayment {
+  id: string;
+  amount: number;
+  payment_type: string;
+  status: string;
+  due_date: string;
+  payment_date?: string;
+  description?: string;
+  created_at: string;
+}
+
+export interface HistoricalMaintenance {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  category: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface UnitHistory {
+  unit_id: string;
+  unit_number: string;
+  property_id: string;
+  tenants: HistoricalTenant[];
+  leases: HistoricalLease[];
+  payments: HistoricalPayment[];
+  maintenance_requests: HistoricalMaintenance[];
+}
+
 export interface RentAgreementFormData { 
     landlordName?: string;
     landlordAddress?: string;

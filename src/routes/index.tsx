@@ -18,6 +18,8 @@ const Profile = lazy(() => import('../pages/Profile'));
 const RentEstimationPage = lazy(() => import('../pages/RentEstimationPage'));
 const RentAgreement = lazy(() => import('../pages/RentAgreement'));
 const AddTenantPage = lazy(() => import('../pages/dashboard/AddTenantPage'));
+const TenantsPage = lazy(() => import('../pages/dashboard/TenantsPage'));
+const TenantProfilePage = lazy(() => import('../pages/dashboard/TenantProfilePage'));
 const MaintenanceDashboard = lazy(() => import('../pages/maintenance/MaintenanceDashboard'));
 const RequestDetails = lazy(() => import('../components/maintenance/RequestDetails'));
 
@@ -149,6 +151,22 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth>
         <OnboardingFlow />
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/tenants',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(TenantsPage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/tenants/:tenantId',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(TenantProfilePage)}
       </RouteGuard>
     )
   }

@@ -223,4 +223,131 @@ export const getCurrentTenantProfile = async (): Promise<Tenant> => { // Changed
     }
     throw new Error(errorMessage);
   }
+};
+
+/**
+ * Bulk update multiple tenants
+ */
+export const bulkUpdateTenants = async (
+  tenantIds: string[], 
+  updates: Record<string, unknown>
+): Promise<{ success: boolean; updated_count: number }> => {
+  try {
+    // In a real implementation, this would be a single API call
+    // For now, we'll update each tenant individually
+    const updatePromises = tenantIds.map(id => updateTenant(id, updates));
+    await Promise.all(updatePromises);
+    
+    return {
+      success: true,
+      updated_count: tenantIds.length
+    };
+  } catch (error: unknown) {
+    console.error("Error in bulk update:", error);
+    let errorMessage = 'Failed to bulk update tenants';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Export tenant data to CSV
+ */
+export const exportTenantData = async (
+  _tenantIds?: string[]
+): Promise<{ csv_data: string; filename: string }> => {
+  try {
+    // In a real implementation, this would call a backend export endpoint
+    // For now, we'll return a mock response
+    // const params = tenantIds ? { tenant_ids: tenantIds.join(',') } : {};
+    
+    // This would be replaced with actual API call
+    // const response = await apiClient.get<{ csv_data: string; filename: string }>('/tenants/export', { params });
+    
+    // Mock implementation
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `tenants_export_${timestamp}.csv`;
+    
+    return {
+      csv_data: 'Name,Email,Phone,Status\n', // Mock CSV header
+      filename
+    };
+  } catch (error: unknown) {
+    console.error("Error exporting tenant data:", error);
+    let errorMessage = 'Failed to export tenant data';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Get tenant analytics data
+ */
+export const getTenantAnalytics = async (): Promise<{
+  total_tenants: number;
+  active_tenants: number;
+  inactive_tenants: number;
+  occupancy_rate: number;
+  average_rent: number;
+  lease_expiring_soon: number;
+}> => {
+  try {
+    // In a real implementation, this would call a backend analytics endpoint
+    // const response = await apiClient.get<AnalyticsResponse>('/tenants/analytics');
+    
+    // Mock implementation for now
+    return {
+      total_tenants: 0,
+      active_tenants: 0,
+      inactive_tenants: 0,
+      occupancy_rate: 0,
+      average_rent: 0,
+      lease_expiring_soon: 0
+    };
+  } catch (error: unknown) {
+    console.error("Error fetching tenant analytics:", error);
+    let errorMessage = 'Failed to fetch tenant analytics';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Send bulk notification to tenants
+ */
+export const sendBulkNotification = async (
+  tenantIds: string[],
+  _notification: {
+    subject: string;
+    message: string;
+    type: 'email' | 'in_app' | 'both';
+    priority: 'low' | 'normal' | 'high';
+  }
+): Promise<{ success: boolean; sent_count: number }> => {
+  try {
+    // In a real implementation, this would call a backend notification endpoint
+    // const response = await apiClient.post<NotificationResponse>('/tenants/bulk-notify', {
+    //   tenant_ids: tenantIds,
+    //   notification
+    // });
+    
+    // Mock implementation
+    return {
+      success: true,
+      sent_count: tenantIds.length
+    };
+  } catch (error: unknown) {
+    console.error("Error sending bulk notification:", error);
+    let errorMessage = 'Failed to send bulk notification';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    throw new Error(errorMessage);
+  }
 }; 
