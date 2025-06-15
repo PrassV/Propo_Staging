@@ -53,10 +53,25 @@ class PropertyBase(BaseModel):
     year_built: Optional[int] = Field(None, ge=1900) # Reasonable lower bound
     floors: Optional[int] = Field(None, ge=0)
     amenities: Optional[List[str]] = None
-    image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
+    image_urls: Optional[List[str]] = None # Aligned with database
     yearly_tax_rate: Optional[float] = Field(None, ge=0)
     survey_number: str # Make required
     door_number: Optional[str] = None
+    # Frontend compatibility fields
+    description: Optional[str] = None
+    price: Optional[float] = Field(None, ge=0)
+    status: Optional[str] = Field("Vacant", description="Property status")
+
+    # Computed properties for frontend compatibility
+    @property
+    def zip_code(self) -> Optional[str]:
+        """Alias for pincode to match frontend expectations"""
+        return self.pincode
+    
+    @property
+    def image_url(self) -> Optional[str]:
+        """First image URL for frontend compatibility"""
+        return self.image_urls[0] if self.image_urls else None
 
 class PropertyCreate(PropertyBase):
     # owner_id will be added in the service layer from the authenticated user
@@ -82,10 +97,13 @@ class PropertyUpdate(BaseModel):
     year_built: Optional[int] = Field(None, ge=1900)
     floors: Optional[int] = Field(None, ge=0)
     amenities: Optional[List[str]] = None
-    image_urls: Optional[List[str]] = None # Changed from HttpUrl to str
+    image_urls: Optional[List[str]] = None
     yearly_tax_rate: Optional[float] = Field(None, ge=0)
     survey_number: Optional[str] = None
     door_number: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = Field(None, ge=0)
+    status: Optional[str] = None
 
 class Property(PropertyBase):
     id: uuid.UUID
@@ -108,6 +126,22 @@ class UnitBase(BaseModel):
     area_sqft: Optional[int] = Field(None, ge=0)
     rent: Optional[float] = Field(None, ge=0)
     deposit: Optional[float] = Field(None, ge=0)
+
+    # Frontend compatibility properties
+    @property
+    def size_sqft(self) -> Optional[int]:
+        """Alias for area_sqft to match frontend expectations"""
+        return self.area_sqft
+    
+    @property
+    def rent_amount(self) -> Optional[float]:
+        """Alias for rent to match frontend expectations"""
+        return self.rent
+    
+    @property
+    def is_occupied(self) -> bool:
+        """Calculate occupancy status based on status field"""
+        return self.status in ['Occupied', 'active']
 
 class UnitCreate(UnitBase):
     # property_id will be added by the endpoint/service
@@ -133,6 +167,40 @@ class UnitUpdate(UnitBase):
     area_sqft: Optional[int] = Field(None, ge=0)
     rent: Optional[float] = Field(None, ge=0)
     deposit: Optional[float] = Field(None, ge=0)
+
+# --- Lease Models ---
+class LeaseBase(BaseModel):
+    start_date: date
+    end_date: Optional[date] = None
+    rent_amount: Optional[float] = Field(None, ge=0)
+    deposit_amount: Optional[float] = Field(None, ge=0)
+    status: Optional[str] = "active"
+
+class LeaseCreate(LeaseBase):
+    property_id: uuid.UUID
+    unit_id: Optional[uuid.UUID] = None
+    tenant_id: uuid.UUID
+
+class LeaseUpdate(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    rent_amount: Optional[float] = Field(None, ge=0)
+    deposit_amount: Optional[float] = Field(None, ge=0)
+    status: Optional[str] = None
+
+class Lease(LeaseBase):
+    id: uuid.UUID
+    property_id: uuid.UUID
+    unit_id: Optional[uuid.UUID] = None
+    tenant_id: uuid.UUID
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    # Related objects
+    tenant: Optional[Tenant] = None
+
+    class Config:
+        from_attributes = True
 
 # --- Amenity Models --- #
 
@@ -198,16 +266,54 @@ class UnitTax(UnitTaxBase):
 
 class PropertyDetails(Property): # New/Updated PropertyDetails model
     # Inherits fields from Property
-    # image_urls type is inherited from Property, now List[str]
     units: List[UnitDetails] = [] # Add the units list
-    # Add other related details if needed, e.g., documents
-    # documents: List[PropertyDocument] = []
 
     class Config:
         from_attributes = True 
 
-# Model for creating a new unit via POST /units
 class UnitCreatePayload(UnitCreate):
     property_id: uuid.UUID # Add property_id needed for creation via this route
 
-# Define response model for list operations, potentially with pagination metadata 
+# --- Frontend Compatibility Models ---
+
+class UnitLeaseDetail(BaseModel):
+    """Model matching frontend UnitLeaseDetail expectations"""
+    id: uuid.UUID
+    unit_number: str
+    is_occupied: bool
+    lease: Optional["LeaseInfo"] = None
+
+class LeaseInfo(BaseModel):
+    """Model matching frontend LeaseInfo expectations"""
+    id: uuid.UUID
+    start_date: str  # ISO date string
+    end_date: str    # ISO date string
+    rent_amount: float
+    status: str
+    tenant: Optional["TenantLeaseInfo"] = None
+
+class TenantLeaseInfo(BaseModel):
+    """Model matching frontend TenantLeaseInfo expectations"""
+    id: uuid.UUID
+    name: str
+    email: str
+
+class PropertyLeaseDetailResponse(BaseModel):
+    """Model matching frontend PropertyLeaseDetailResponse expectations"""
+    id: uuid.UUID
+    name: str
+    address: str
+    amenities: Optional[List[str]] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[float] = None
+    size_sqft: Optional[int] = None
+    year_built: Optional[int] = None
+    floors: Optional[int] = None
+    property_type: Optional[str] = None
+    description: Optional[str] = None
+    units: List[UnitLeaseDetail] = []
+
+# Update forward references
+TenantLeaseInfo.model_rebuild()
+LeaseInfo.model_rebuild()
+UnitLeaseDetail.model_rebuild() 

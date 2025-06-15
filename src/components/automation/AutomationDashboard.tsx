@@ -18,6 +18,7 @@ import {
   BarChart3
 } from "lucide-react";
 import { formatDate } from '@/utils/date';
+import { API_ENDPOINTS, getAuthHeaders, buildUrl } from '@/config/api';
 
 interface AutomationRule {
   id: string;
@@ -67,118 +68,44 @@ export default function AutomationDashboard() {
   const loadAutomationData = async () => {
     try {
       setLoading(true);
-      // Mock data - in real implementation, this would fetch from API
-      const mockRules: AutomationRule[] = [
-        {
-          id: '1',
-          name: 'Monthly Rent Reminders',
-          type: 'rent_reminder',
-          status: 'active',
-          trigger: '3 days before due date',
-          action: 'Send email and in-app notification',
-          last_run: '2024-01-15T10:00:00Z',
-          next_run: '2024-02-12T10:00:00Z',
-          success_count: 45,
-          failure_count: 2
-        },
-        {
-          id: '2',
-          name: 'Lease Renewal Notifications',
-          type: 'lease_renewal',
-          status: 'active',
-          trigger: '60 days before expiry',
-          action: 'Generate renewal documents and notify tenant',
-          last_run: '2024-01-10T09:00:00Z',
-          next_run: '2024-02-10T09:00:00Z',
-          success_count: 12,
-          failure_count: 0
-        },
-        {
-          id: '3',
-          name: 'Maintenance Request Auto-Assignment',
-          type: 'maintenance',
-          status: 'active',
-          trigger: 'New maintenance request',
-          action: 'Auto-assign to available vendor',
-          last_run: '2024-01-16T14:30:00Z',
-          next_run: null,
-          success_count: 28,
-          failure_count: 3
-        },
-        {
-          id: '4',
-          name: 'Quarterly Property Inspections',
-          type: 'inspection',
-          status: 'paused',
-          trigger: 'Every 3 months',
-          action: 'Schedule inspection and notify tenant',
-          last_run: '2023-12-15T11:00:00Z',
-          next_run: '2024-03-15T11:00:00Z',
-          success_count: 8,
-          failure_count: 1
-        },
-        {
-          id: '5',
-          name: 'Document Expiry Alerts',
-          type: 'document_expiry',
-          status: 'active',
-          trigger: '30 days before expiry',
-          action: 'Alert property manager and tenant',
-          last_run: '2024-01-14T08:00:00Z',
-          next_run: '2024-02-14T08:00:00Z',
-          success_count: 15,
-          failure_count: 0
-        }
-      ];
+      
+      // Get user info to extract owner_id
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        console.error('No user found in localStorage');
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      const owner_id = user.id;
+      
+             // Fetch automation stats
+       const statsUrl = buildUrl(API_ENDPOINTS.automation.stats, { owner_id });
+       const statsResponse = await fetch(statsUrl, { headers: getAuthHeaders() });
+       
+       if (statsResponse.ok) {
+         const statsData = await statsResponse.json();
+         setStats(statsData);
+       }
 
-      const mockTasks: AutomationTask[] = [
-        {
-          id: '1',
-          rule_id: '1',
-          rule_name: 'Monthly Rent Reminders',
-          type: 'rent_reminder',
-          status: 'pending',
-          target_entity: 'Tenant: John Doe - Unit 101',
-          scheduled_at: '2024-01-17T10:00:00Z',
-          completed_at: null,
-          error_message: null
-        },
-        {
-          id: '2',
-          rule_id: '2',
-          rule_name: 'Lease Renewal Notifications',
-          type: 'lease_renewal',
-          status: 'pending',
-          target_entity: 'Lease: Unit 205 - Jane Smith',
-          scheduled_at: '2024-01-17T09:00:00Z',
-          completed_at: null,
-          error_message: null
-        },
-        {
-          id: '3',
-          rule_id: '3',
-          rule_name: 'Maintenance Request Auto-Assignment',
-          type: 'maintenance',
-          status: 'completed',
-          target_entity: 'Request: Plumbing Issue - Unit 303',
-          scheduled_at: '2024-01-16T14:30:00Z',
-          completed_at: '2024-01-16T14:35:00Z',
-          error_message: null
-        }
-      ];
+       // Fetch automation rules
+       const rulesUrl = buildUrl(API_ENDPOINTS.automation.rules, { owner_id });
+       const rulesResponse = await fetch(rulesUrl, { headers: getAuthHeaders() });
+       
+       if (rulesResponse.ok) {
+         const rulesData = await rulesResponse.json();
+         setAutomationRules(rulesData || []);
+       }
 
-      const mockStats: AutomationStats = {
-        total_rules: mockRules.length,
-        active_rules: mockRules.filter(r => r.status === 'active').length,
-        pending_tasks: mockTasks.filter(t => t.status === 'pending').length,
-        completed_today: 8,
-        failed_today: 1,
-        success_rate: 94.2
-      };
-
-      setAutomationRules(mockRules);
-      setPendingTasks(mockTasks);
-      setStats(mockStats);
+       // Fetch automation tasks
+       const tasksUrl = buildUrl(API_ENDPOINTS.automation.tasks, { owner_id, limit: 20 });
+       const tasksResponse = await fetch(tasksUrl, { headers: getAuthHeaders() });
+       
+       if (tasksResponse.ok) {
+         const tasksData = await tasksResponse.json();
+         setPendingTasks(tasksData || []);
+       }
+      
     } catch (error) {
       console.error('Error loading automation data:', error);
     } finally {
@@ -188,12 +115,27 @@ export default function AutomationDashboard() {
 
   const toggleRuleStatus = async (ruleId: string, newStatus: 'active' | 'paused') => {
     try {
-      setAutomationRules(prev => 
-        prev.map(rule => 
-          rule.id === ruleId ? { ...rule, status: newStatus } : rule
-        )
-      );
-      // In real implementation, this would call API
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return;
+      
+      const user = JSON.parse(userStr);
+      const owner_id = user.id;
+      
+      const action = newStatus === 'active' ? 'activate' : 'pause';
+      
+             const toggleUrl = buildUrl(`${API_ENDPOINTS.automation.toggleRule}/${ruleId}/toggle`, { action, owner_id });
+       const response = await fetch(toggleUrl, {
+         method: 'POST',
+         headers: getAuthHeaders(),
+       });
+      
+      if (response.ok) {
+        setAutomationRules(prev => 
+          prev.map(rule => 
+            rule.id === ruleId ? { ...rule, status: newStatus } : rule
+          )
+        );
+      }
     } catch (error) {
       console.error('Error updating rule status:', error);
     }

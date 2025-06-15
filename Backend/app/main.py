@@ -32,7 +32,9 @@ from .api import (
     notification,
     uploads,
     lease,
-    units
+    units,
+    reports,
+    automation
 )
 
 # Setup logging
@@ -140,7 +142,8 @@ app.include_router(vendor)
 app.include_router(payment)
 app.include_router(agreement)
 app.include_router(document, prefix="/documents", tags=["Documents"])
-app.include_router(reporting, prefix="/reports", tags=["Reports"])
+app.include_router(reports.router, prefix="/reports", tags=["Reports"])
+app.include_router(automation.router, prefix="/automation", tags=["Automation"])
 app.include_router(notification, prefix="/notifications", tags=["Notifications"])
 app.include_router(uploads)
 

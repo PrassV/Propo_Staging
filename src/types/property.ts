@@ -1,13 +1,27 @@
 export interface PropertyUnit {
   id: string;
   unit_number: string;
-  floor_number: number;
-  size_sqft: number;
-  bedrooms: number;
-  bathrooms: number;
-  rent_amount: number;
-  is_occupied: boolean;
+  floor_number?: number;
+  size_sqft?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  rent_amount?: number;
+  is_occupied?: boolean;
   tenant_id?: string;
+  unit_type?: string;
+  unit_status?: string;
+  monthly_rent?: number;
+  security_deposit?: number;
+  lease_start_date?: string;
+  lease_end_date?: string;
+  tenant_name?: string;
+  current_lease?: Lease;
+  current_tenant?: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 export interface Property {
@@ -19,7 +33,9 @@ export interface Property {
   city: string;
   state: string;
   zip_code?: string;
+  pincode?: string;
   image_url?: string;
+  image_urls?: string[];
   description?: string;
   category?: string;
   listed_in?: string;
@@ -41,6 +57,27 @@ export interface Property {
     email: string;
     phone: string;
   }>;
+  owner_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  purchase_price?: number;
+  market_value?: number;
+  property_tax?: number;
+  latitude?: number;
+  longitude?: number;
+  total_area?: number;
+  built_up_area?: number;
+  plot_area?: number;
+  facing_direction?: string;
+  construction_status?: string;
+  parking_spaces?: number;
+  balconies?: number;
+  survey_number?: string;
+  door_number?: string;
+  sub_registrar_office?: string;
+  village?: string;
+  taluk?: string;
+  district?: string;
 }
 
 export interface PropertyFormData {
@@ -70,4 +107,47 @@ export interface PropertyFormData {
   floors?: number;
   amenities: string[];
   units: PropertyUnit[];
+  purchasePrice?: number;
+  marketValue?: number;
+  propertyTax?: number;
+  latitude?: number;
+  longitude?: number;
+  totalArea?: number;
+  builtUpArea?: number;
+  plotArea?: number;
+  facingDirection?: string;
+  constructionStatus?: string;
+  parkingSpaces?: number;
+  balconies?: number;
+  subRegistrarOffice?: string;
+  village?: string;
+  taluk?: string;
+  district?: string;
+}
+
+export interface Lease {
+  id: string;
+  unit_id: string;
+  tenant_id: string;
+  start_date: string;
+  end_date: string;
+  monthly_rent: number;
+  security_deposit?: number;
+  lease_status: string;
+  lease_terms?: string;
+  created_at?: string;
+  updated_at?: string;
+  tenant_info?: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+  };
+}
+
+export interface PropertyWithUnits extends Property {
+  units: PropertyUnit[];
+  total_units?: number;
+  occupied_units?: number;
+  vacant_units?: number;
 }

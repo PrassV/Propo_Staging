@@ -6,11 +6,12 @@ import logging
 from datetime import date
 from supabase import Client
 
+# Updated imports to use the new models
+from app.models.property import Lease, LeaseCreate, LeaseUpdate, LeaseInfo, TenantLeaseInfo
 from app.models.tenant import PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate
 from app.services import tenant_service, lease_service
 from app.config.auth import get_current_user
 from app.config.database import get_supabase_client_authenticated
-from app.schemas.lease import Lease, LeaseCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -21,11 +22,11 @@ router = APIRouter(
 
 # Response Models
 class LeaseResponse(BaseModel):
-    lease: Dict[str, Any]
+    lease: Lease
     message: str = "Success"
 
 class LeasesListResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: List[Lease]
     total: int
 
 # Get all leases (with optional filters)
@@ -36,7 +37,8 @@ async def get_leases(
     property_id: Optional[uuid.UUID] = Query(None),
     tenant_id: Optional[uuid.UUID] = Query(None),
     active_only: bool = Query(False),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Get a list of leases (filtered for the current owner/admin).
@@ -46,7 +48,8 @@ async def get_leases(
         if not owner_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        leases, total = await tenant_service.get_leases(
+        leases, total = await lease_service.get_leases(
+            db_client=db_client,
             owner_id=owner_id,
             property_id=property_id,
             tenant_id=tenant_id,
@@ -63,7 +66,8 @@ async def get_leases(
 @router.get("/{lease_id}", response_model=LeaseResponse)
 async def get_lease(
     lease_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Get details for a specific lease.
@@ -73,14 +77,13 @@ async def get_lease(
         if not requesting_user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        lease = await tenant_service.get_lease_by_id(lease_id)
+        lease = await lease_service.get_lease_by_id(
+            db_client=db_client,
+            lease_id=lease_id,
+            owner_id=requesting_user_id
+        )
         if not lease:
             raise HTTPException(status_code=404, detail="Lease not found")
-
-        # Check authorization
-        can_access = await tenant_service.can_access_lease(lease_id, requesting_user_id)
-        if not can_access:
-            raise HTTPException(status_code=403, detail="Not authorized to view this lease")
 
         return LeaseResponse(lease=lease)
     except HTTPException as http_exc:
@@ -123,8 +126,9 @@ async def create_lease(
 @router.put("/{lease_id}", response_model=LeaseResponse)
 async def update_lease(
     lease_id: uuid.UUID,
-    lease_data: PropertyTenantLinkUpdate,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    lease_data: LeaseUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Update a lease's details.
@@ -134,12 +138,12 @@ async def update_lease(
         if not requesting_user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        # Check authorization
-        can_access = await tenant_service.can_access_lease(lease_id, requesting_user_id)
-        if not can_access:
-            raise HTTPException(status_code=403, detail="Not authorized to update this lease")
-
-        updated_lease = await tenant_service.update_lease(lease_id, lease_data)
+        updated_lease = await lease_service.update_lease(
+            db_client=db_client,
+            lease_id=lease_id, 
+            lease_data=lease_data,
+            owner_id=requesting_user_id
+        )
         if not updated_lease:
             raise HTTPException(status_code=404, detail="Lease not found or update failed")
         return LeaseResponse(lease=updated_lease, message="Lease updated successfully")
@@ -153,7 +157,8 @@ async def update_lease(
 @router.delete("/{lease_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_lease(
     lease_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Delete a lease.
@@ -163,12 +168,11 @@ async def delete_lease(
         if not requesting_user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
 
-        # Check authorization
-        can_access = await tenant_service.can_access_lease(lease_id, requesting_user_id)
-        if not can_access:
-            raise HTTPException(status_code=403, detail="Not authorized to delete this lease")
-
-        deleted = await tenant_service.delete_lease(lease_id)
+        deleted = await lease_service.delete_lease(
+            db_client=db_client,
+            lease_id=lease_id,
+            owner_id=requesting_user_id
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="Lease not found or deletion failed")
         return None
@@ -204,3 +208,34 @@ async def terminate_lease(
     except Exception as e:
         logger.error(f"Unexpected error in terminate_lease endpoint for lease {lease_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred while terminating the lease.")
+
+# Get lease by unit ID - for frontend compatibility
+@router.get("/unit/{unit_id}", response_model=Optional[LeaseResponse])
+async def get_lease_by_unit(
+    unit_id: uuid.UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Get the current lease for a specific unit.
+    """
+    try:
+        requesting_user_id = current_user.get("id")
+        if not requesting_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+
+        lease = await lease_service.get_lease_by_unit(
+            db_client=db_client,
+            unit_id=unit_id,
+            owner_id=requesting_user_id
+        )
+        
+        if not lease:
+            return None  # No active lease for this unit
+            
+        return LeaseResponse(lease=lease)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error getting lease for unit {unit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve lease: {str(e)}")

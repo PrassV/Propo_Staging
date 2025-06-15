@@ -20,6 +20,7 @@ import {
   Building
 } from "lucide-react";
 import { formatCurrency } from '@/utils/format';
+import { API_ENDPOINTS, getAuthHeaders, buildUrl } from '@/config/api';
 
 interface FinancialReport {
   period: string;
@@ -92,117 +93,59 @@ export default function AdvancedReports() {
     try {
       setLoading(true);
       
-      // Mock financial data
-      const mockFinancialData: FinancialReport[] = [
-        {
-          period: '2024-01',
-          total_income: 125000,
-          total_expenses: 45000,
-          net_profit: 80000,
-          occupancy_rate: 94.5,
-          rent_collected: 118000,
-          maintenance_costs: 15000,
-          vacancy_loss: 7000
-        },
-        {
-          period: '2023-12',
-          total_income: 120000,
-          total_expenses: 42000,
-          net_profit: 78000,
-          occupancy_rate: 92.0,
-          rent_collected: 115000,
-          maintenance_costs: 18000,
-          vacancy_loss: 5000
-        },
-        {
-          period: '2023-11',
-          total_income: 118000,
-          total_expenses: 48000,
-          net_profit: 70000,
-          occupancy_rate: 89.5,
-          rent_collected: 112000,
-          maintenance_costs: 22000,
-          vacancy_loss: 6000
-        }
-      ];
+      // Get user info to extract owner_id
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        console.error('No user found in localStorage');
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      const owner_id = user.id;
+      
+             // Fetch real financial data
+       const financialUrl = buildUrl(API_ENDPOINTS.reports.financialSummary, { 
+         owner_id, 
+         period: 'month', 
+         months_back: 12 
+       });
+       const financialResponse = await fetch(financialUrl, { headers: getAuthHeaders() });
+       
+       if (financialResponse.ok) {
+         const financialData = await financialResponse.json();
+         setFinancialData(financialData.financial_data || []);
+       }
 
-      // Mock property performance data
-      const mockPropertyPerformance: PropertyPerformance[] = [
-        {
-          property_id: '1',
-          property_name: 'Sunset Apartments',
-          units_count: 24,
-          occupied_units: 23,
-          monthly_rent: 45000,
-          maintenance_costs: 8500,
-          vacancy_rate: 4.2,
-          roi: 12.8,
-          tenant_satisfaction: 4.6
-        },
-        {
-          property_id: '2',
-          property_name: 'Downtown Lofts',
-          units_count: 18,
-          occupied_units: 16,
-          monthly_rent: 38000,
-          maintenance_costs: 6200,
-          vacancy_rate: 11.1,
-          roi: 10.4,
-          tenant_satisfaction: 4.2
-        },
-        {
-          property_id: '3',
-          property_name: 'Garden View Complex',
-          units_count: 32,
-          occupied_units: 30,
-          monthly_rent: 52000,
-          maintenance_costs: 9800,
-          vacancy_rate: 6.3,
-          roi: 14.2,
-          tenant_satisfaction: 4.8
-        }
-      ];
+       // Fetch property performance data
+       const performanceUrl = buildUrl(API_ENDPOINTS.reports.propertyPerformance, { owner_id });
+       const performanceResponse = await fetch(performanceUrl, { headers: getAuthHeaders() });
+       
+       if (performanceResponse.ok) {
+         const performanceData = await performanceResponse.json();
+         setPropertyPerformance(performanceData || []);
+       }
 
-      // Mock maintenance analytics
-      const mockMaintenanceAnalytics: MaintenanceAnalytics = {
-        total_requests: 156,
-        completed_requests: 142,
-        average_completion_time: 3.2,
-        total_cost: 24500,
-        cost_by_category: [
-          { category: 'Plumbing', amount: 8500, percentage: 34.7 },
-          { category: 'Electrical', amount: 6200, percentage: 25.3 },
-          { category: 'HVAC', amount: 4800, percentage: 19.6 },
-          { category: 'Appliances', amount: 3200, percentage: 13.1 },
-          { category: 'Other', amount: 1800, percentage: 7.3 }
-        ],
-        trending_issues: [
-          { issue: 'Water Leaks', count: 23, trend: 'up' },
-          { issue: 'AC Issues', count: 18, trend: 'stable' },
-          { issue: 'Electrical Problems', count: 15, trend: 'down' }
-        ]
-      };
+       // Fetch maintenance analytics
+       const maintenanceUrl = buildUrl(API_ENDPOINTS.reports.maintenanceAnalytics, { 
+         owner_id, 
+         days_back: 90 
+       });
+       const maintenanceResponse = await fetch(maintenanceUrl, { headers: getAuthHeaders() });
+       
+       if (maintenanceResponse.ok) {
+         const maintenanceData = await maintenanceResponse.json();
+         setMaintenanceAnalytics(maintenanceData);
+       }
 
-      // Mock tenant retention data
-      const mockTenantRetention: TenantRetentionData = {
-        total_tenants: 68,
-        retained_tenants: 58,
-        retention_rate: 85.3,
-        average_tenancy_duration: 18.5,
-        renewal_rate: 78.2,
-        satisfaction_score: 4.5,
-        churn_reasons: [
-          { reason: 'Relocation', count: 4, percentage: 40.0 },
-          { reason: 'Rent Increase', count: 3, percentage: 30.0 },
-          { reason: 'Property Issues', count: 2, percentage: 20.0 },
-          { reason: 'Other', count: 1, percentage: 10.0 }
-        ]
-      };
-
-      setFinancialData(mockFinancialData);
-      setPropertyPerformance(mockPropertyPerformance);
-      setMaintenanceAnalytics(mockMaintenanceAnalytics);
-      setTenantRetention(mockTenantRetention);
+       // Fetch tenant retention data
+       const retentionUrl = buildUrl(API_ENDPOINTS.reports.tenantRetention, { owner_id });
+       const retentionResponse = await fetch(retentionUrl, { headers: getAuthHeaders() });
+       
+       if (retentionResponse.ok) {
+         const retentionData = await retentionResponse.json();
+         setTenantRetention(retentionData);
+       }
+      
     } catch (error) {
       console.error('Error loading report data:', error);
     } finally {

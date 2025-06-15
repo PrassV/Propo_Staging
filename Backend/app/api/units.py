@@ -8,7 +8,7 @@ from datetime import date
 
 # Import models (adjust paths as needed)
 # Assuming models are in app.models.property for now
-from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate # Import new payload model
+from app.models.property import UnitCreate, UnitDetails, UnitUpdate, UnitCreatePayload, Amenity, AmenityCreate, AmenityUpdate, UnitTax, UnitTaxCreate, UnitTaxUpdate, Unit, Lease  # Import new payload model and Unit base model
 # Import Maintenance models
 from app.models.maintenance import MaintenanceRequest, MaintenanceCreate # Changed from MaintenanceRequestCreate
 # Import Tenant models
@@ -26,6 +26,8 @@ from app.services import maintenance_service
 from app.services import tenant_service
 # Import Payment service
 from app.services import payment_service
+# Import Lease service
+from app.services import lease_service
 
 # Import dependencies (adjust paths as needed)
 from app.config.auth import get_current_user
@@ -42,6 +44,11 @@ router = APIRouter(
 
 class LeaseTerminationPayload(BaseModel):
     termination_date: date
+
+# Response model for unit with lease info
+class UnitWithLeaseResponse(BaseModel):
+    unit: UnitDetails
+    current_lease: Optional[Lease] = None
 
 # --- Endpoint Implementations Below --- #
 
@@ -93,6 +100,7 @@ async def create_unit_endpoint(
 @router.get("/{unit_id}", response_model=UnitDetails, summary="Get Unit Details")
 async def get_unit_details_endpoint(
     unit_id: uuid.UUID = Path(..., description="The ID of the unit to retrieve"),
+    include_lease: bool = Query(False, description="Include current lease information"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
@@ -114,10 +122,28 @@ async def get_unit_details_endpoint(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                                 detail="Unit not found or not authorized to view details")
         
+        # Get current lease information if requested
+        if include_lease:
+            try:
+                lease = await lease_service.get_lease_by_unit(
+                    db_client=db_client,
+                    unit_id=unit_id,
+                    owner_id=user_id
+                )
+                if lease:
+                    unit_details["current_lease"] = lease
+            except Exception as lease_error:
+                logger.warning(f"Could not fetch lease for unit {unit_id}: {lease_error}")
+                # Don't fail the whole request if lease fetch fails
+        
         # Additionally, attempt to get current tenant information
-        tenant_info = await tenant_service.get_current_tenant_for_unit(unit_id)
-        if tenant_info:
-            unit_details["current_tenant"] = tenant_info
+        try:
+            tenant_info = await tenant_service.get_current_tenant_for_unit(unit_id)
+            if tenant_info:
+                unit_details["current_tenant"] = tenant_info
+        except Exception as tenant_error:
+            logger.warning(f"Could not fetch tenant for unit {unit_id}: {tenant_error}")
+            # Don't fail the whole request if tenant fetch fails
         
         return unit_details
     except HTTPException as http_exc:
@@ -125,6 +151,52 @@ async def get_unit_details_endpoint(
         raise http_exc
     except Exception as e:
         logger.error(f"Error retrieving unit details for {unit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail="Failed to retrieve unit details")
+
+# New endpoint specifically for unit with lease information
+@router.get("/{unit_id}/with-lease", response_model=UnitWithLeaseResponse, summary="Get Unit Details with Lease")
+async def get_unit_with_lease_endpoint(
+    unit_id: uuid.UUID = Path(..., description="The ID of the unit to retrieve"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Get details for a specific unit with lease information.
+    This endpoint always includes lease information if available.
+    """
+    logger.info(f"Endpoint: Getting unit with lease details for {unit_id}")
+    user_id = current_user.get("id")
+    
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user credentials")
+    
+    try:
+        # Get unit basic details
+        unit_details = await property_service.get_unit_details(db_client, unit_id, user_id)
+        if unit_details is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Unit not found or not authorized to view details")
+        
+        # Get current lease information
+        current_lease = None
+        try:
+            current_lease = await lease_service.get_lease_by_unit(
+                db_client=db_client,
+                unit_id=unit_id,
+                owner_id=user_id
+            )
+        except Exception as lease_error:
+            logger.warning(f"Could not fetch lease for unit {unit_id}: {lease_error}")
+        
+        return UnitWithLeaseResponse(
+            unit=unit_details,
+            current_lease=current_lease
+        )
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error retrieving unit with lease for {unit_id}: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
                           detail="Failed to retrieve unit details")
 

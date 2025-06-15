@@ -17,7 +17,11 @@ from app.models.property import (
     PropertyCategory,
     UnitCreate,
     UnitDetails,
-    PropertyDetails
+    PropertyDetails,
+    PropertyWithUnits,  # Add this for detailed property response
+    PropertyTax,
+    PropertyTaxCreate,
+    PropertyTaxUpdate
 )
 # Phase 2: Import the new response schema
 from app.schemas.property import PropertyDetailResponse
@@ -106,20 +110,40 @@ async def get_properties(
         logging.error(f"Error getting properties: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve properties: {str(e)}")
 
-@router.get("/{property_id}", response_model=PropertyDetails)
+@router.get("/{property_id}", response_model=PropertyWithUnits)
 async def get_property(
     property_id: uuid.UUID = Path(..., description="The property ID"),
+    include_units: bool = Query(True, description="Include units in response"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated),
 ):
     """Get a specific property by ID, including its units."""
-    property_data = await property_service.get_property(db_client, str(property_id))
-    if not property_data:
-        raise HTTPException(status_code=404, detail="Property not found")
-    # Verify ownership
-    if property_data.get("owner_id") != current_user.get("id"):
-        raise HTTPException(status_code=403, detail="Not authorized to access this property")
-    return property_data
+    try:
+        property_data = await property_service.get_property_with_units(
+            db_client=db_client, 
+            property_id=str(property_id),
+            owner_id=current_user.get("id"),
+            include_units=include_units
+        )
+        if not property_data:
+            raise HTTPException(status_code=404, detail="Property not found")
+        
+        # Transform the data to match frontend expectations
+        # Convert pincode to zip_code, image_urls to image_url (first one), etc.
+        frontend_property = {
+            **property_data,
+            "zip_code": property_data.get("pincode"),  # Frontend expects zip_code
+            "image_url": property_data.get("image_urls", [""])[0] if property_data.get("image_urls") else "",  # Frontend expects single image_url
+            "description": property_data.get("property_name", "") + " - " + property_data.get("property_type", ""),  # Generate description
+            "price": property_data.get("purchase_price", 0) or property_data.get("market_value", 0)  # Frontend expects price field
+        }
+        
+        return frontend_property
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logging.error(f"Error getting property {property_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve property: {str(e)}")
 
 @router.post("/", response_model=Property, status_code=status.HTTP_201_CREATED)
 async def create_property(
