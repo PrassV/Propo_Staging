@@ -736,24 +736,25 @@ async def delete_property_tenant_links_by_tenant(tenant_id: uuid.UUID) -> bool:
 # --- Added Function ---
 async def get_property_links_for_property(property_id: uuid.UUID) -> List[Dict[str, Any]]:
     """
-    Get all property-tenant links for a specific property.
+    Get all property_tenant links for a specific property.
 
     Args:
-        property_id: The property ID
+        property_id: The UUID of the property.
 
     Returns:
-        List of property-tenant link data
+        List of property tenant link dictionaries.
     """
     try:
-        response = await supabase_client.table('property_tenants').select('*').eq('property_id', str(property_id)).execute()
-
-        if response.error:
-            logger.error(f"Error fetching property links for property: {response.error.message}")
+        # FIXED: Remove await since supabase_client is synchronous
+        response = supabase_client.table('property_tenants').select('*').eq('property_id', str(property_id)).execute()
+        
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching property links for property {property_id}: {response.error.message}")
             return []
-
+        
         return response.data or []
     except Exception as e:
-        logger.error(f"Failed to get property links for property {property_id}: {str(e)}")
+        logger.exception(f"Exception fetching property links for property {property_id}: {str(e)}")
         return []
 
 # --- Added Function ---
@@ -1053,18 +1054,18 @@ async def db_get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[st
 # --- New Function ---
 async def db_get_tenants_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
     """
-    Get tenants associated with a specific unit via the property_tenants link.
+    Retrieve all tenants associated with a specific unit.
 
     Args:
-        unit_id: The ID of the unit.
+        unit_id: The UUID of the unit to query.
 
     Returns:
         A list of tenant data dictionaries associated with the unit.
     """
     tenants = []
     try:
-        # Find links for the unit
-        lease_response = await supabase_client.table('property_tenants') \
+        # Find links for the unit - FIXED: Remove await since supabase_client is synchronous
+        lease_response = supabase_client.table('property_tenants') \
             .select('tenant_id') \
             .eq('unit_id', str(unit_id)) \
             .execute()

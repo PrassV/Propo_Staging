@@ -182,10 +182,50 @@ export default function PropertyDetailsPage() {
                         <CardHeader>
                             <CardTitle>Overview & Amenities</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-muted-foreground">
-                                Detailed property attributes can be managed via the 'Edit Property' dialog.
-                            </p>
+                        <CardContent className="space-y-6">
+                            {/* Basic Property Information */}
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-lg">Property Information</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-medium text-muted-foreground">Property Name</p>
+                                        <p className="text-sm">{property.name}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-medium text-muted-foreground">Address</p>
+                                        <p className="text-sm">{property.address}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-medium text-muted-foreground">Total Units</p>
+                                        <p className="text-sm">{property.units?.length || 0}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-medium text-muted-foreground">Occupied Units</p>
+                                        <p className="text-sm">
+                                            {property.units?.filter(unit => unit.is_occupied).length || 0} / {property.units?.length || 0}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Message about detailed information */}
+                            <div className="border-t pt-4">
+                                <div className="text-center py-6 bg-muted/30 rounded-lg">
+                                    <p className="text-sm text-muted-foreground">
+                                        Detailed property information like bedrooms, bathrooms, amenities, and other specifications 
+                                        can be managed via the <strong>'Edit Property'</strong> button above.
+                                    </p>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={handleEditClick} 
+                                        className="mt-3"
+                                    >
+                                        <Edit className="mr-2 h-4 w-4" /> 
+                                        Edit Property Details
+                                    </Button>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
 

@@ -1211,3 +1211,33 @@ async def get_current_tenant_for_unit(unit_id: uuid.UUID) -> Optional[Dict[str, 
     except Exception as e:
         logger.error(f"Error in get_current_tenant_for_unit service for unit {unit_id}: {e}")
         return None
+
+async def get_leases_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """
+    Get all leases (property_tenant links) for a specific unit.
+    
+    Args:
+        unit_id: The UUID of the unit
+        
+    Returns:
+        List of lease dictionaries with tenant information
+    """
+    try:
+        from ..config.database import supabase_client
+        
+        # Get all leases for the unit with tenant information
+        response = supabase_client.table('property_tenants') \
+            .select('*, tenants(*)') \
+            .eq('unit_id', str(unit_id)) \
+            .order('start_date', desc=True) \
+            .execute()
+            
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching leases for unit {unit_id}: {response.error.message}")
+            return []
+            
+        return response.data or []
+        
+    except Exception as e:
+        logger.exception(f"Error in get_leases_for_unit for unit {unit_id}: {str(e)}")
+        return []

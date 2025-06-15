@@ -206,7 +206,7 @@ async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
             # This query assumes a direct link or view that relates tenants to owner_id
             # If using joins as before, ensure RLS allows joins. 
             # Let's try querying tenants directly linked via properties first.
-            properties_response = await supabase_client.table('properties').select('id').eq('owner_id', owner_id).execute()
+            properties_response = supabase_client.table('properties').select('id').eq('owner_id', owner_id).execute()
             if hasattr(properties_response, 'error') and properties_response.error:
                 raise Exception(f"Failed to get properties for tenant query: {properties_response.error}")
             
@@ -214,7 +214,7 @@ async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
             if not property_ids:
                 logger.warning(f"[get_tenant_stats] No properties found for owner {owner_id}, cannot calculate expirations.")
             else:
-                 property_tenants_response = await supabase_client.table('property_tenants')\
+                 property_tenants_response = supabase_client.table('property_tenants')\
                     .select('tenant_id')\
                     .in_('property_id', property_ids)\
                     .execute()
@@ -225,7 +225,7 @@ async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
                  if not tenant_ids:
                      logger.warning(f"[get_tenant_stats] No tenants linked to properties for owner {owner_id}.")
                  else:
-                    tenants_response = await supabase_client.table('tenants') \
+                    tenants_response = supabase_client.table('tenants') \
                         .select('rental_end_date, lease_end_date, rental_type') \
                         .in_('id', tenant_ids) \
                         .execute()
