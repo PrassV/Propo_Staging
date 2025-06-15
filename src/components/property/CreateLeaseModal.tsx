@@ -12,8 +12,8 @@ import { toast } from 'sonner';
 import { Plus, User, Mail, Phone } from 'lucide-react';
 
 import api from '@/api';
-import { Tenant, TenantCreate } from '@/api/types';
-import { createLease } from '@/api/services/leaseService';
+import { Tenant, TenantCreate, Lease } from '@/api/types';
+import { createLease, getLeases } from '@/api/services/leaseService';
 import { createTenant } from '@/api/services/tenantService';
 
 const leaseSchema = z.object({
@@ -47,7 +47,7 @@ interface CreateLeaseModalProps {
 
 export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, unitNumber }: CreateLeaseModalProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  // const [activeLeaseTenantIds, setActiveLeaseTenantIds] = useState<Set<string>>(new Set());
+  const [activeLeaseTenantIds, setActiveLeaseTenantIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
@@ -65,15 +65,14 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
   useEffect(() => {
     if (isOpen) {
       fetchTenants();
-      // fetchActiveLeaseTenants();
+      fetchActiveLeaseTenants();
     }
   }, [isOpen]);
 
   const fetchTenants = async () => {
     try {
-      // Fetch all tenants (not just unassigned) for better UX
-      const tenantResponse = await api.tenant.getTenants({ limit: 1000 });
-      console.log("DEBUG: Tenant API response:", tenantResponse);
+      // Fetch all tenants (limit 100 due to backend validation)
+      const tenantResponse = await api.tenant.getTenants({ limit: 100 });
       setTenants(tenantResponse.items || []);
     } catch (error) {
       console.error("Failed to fetch tenants", error);
@@ -81,11 +80,10 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
     }
   };
 
-  /*
   const fetchActiveLeaseTenants = async () => {
     try {
       // Fetch all leases to determine which tenants are already assigned to active leases
-      const leaseResponse = await getLeases({ active_only: true, limit: 1000 });
+      const leaseResponse = await getLeases({ active_only: true, limit: 100 });
       const activeTenantIds = new Set<string>(
         (leaseResponse.items || [])
           .filter((lease: Lease) => {
@@ -94,13 +92,12 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
           })
           .map((lease: Lease) => lease.tenant_id)
       );
-      // setActiveLeaseTenantIds(activeTenantIds);
+      setActiveLeaseTenantIds(activeTenantIds);
     } catch (error) {
       console.error("Failed to fetch active leases", error);
       // Don't show error toast for this as it's not critical - we'll just show all tenants
     }
   };
-  */
 
   const handleAddNewTenant = () => {
     setShowAddTenantModal(true);
@@ -165,8 +162,10 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
     }
   };
 
-  // Get available tenants - for now, show all tenants since there are no active leases
-  const availableTenants = tenants; // Simplified: show all tenants
+  // Get available tenants (filter out those already assigned to active leases)
+  const availableTenants = tenants.filter(tenant => 
+    !activeLeaseTenantIds.has(tenant.id)
+  );
 
   return (
     <>
