@@ -686,8 +686,8 @@ async def get_leases(
         total_count = count_response.count if hasattr(count_response, 'count') else 0
 
         # Apply sorting and pagination
-        sort_direction = 'asc' if sort_order.lower() == 'asc' else 'desc'
-        query = query.order(sort_by, sort_direction)
+        ascending = sort_order.lower() == 'asc'
+        query = query.order(sort_by, desc=not ascending)
         query = query.range(skip, skip + limit - 1)
 
         # Execute the query
