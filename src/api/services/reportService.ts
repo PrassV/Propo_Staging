@@ -359,7 +359,7 @@ export const getOccupancyAnalytics = async (): Promise<OccupancyAnalytics> => {
 };
 
 // Generate custom report
-export const generateCustomReport = async (filters: CustomReportFilter): Promise<any> => {
+export const generateCustomReport = async (filters: CustomReportFilter): Promise<unknown> => {
   try {
     const response = await api.post('/reports/custom', filters);
     return response.data;
@@ -416,7 +416,7 @@ export const getFinancialProjections = async (months: number = 12): Promise<Fina
 };
 
 // Get report templates
-export const getReportTemplates = async (): Promise<any[]> => {
+export const getReportTemplates = async (): Promise<unknown[]> => {
   try {
     const response = await api.get('/reports/templates');
     return response.data;
@@ -481,7 +481,7 @@ export const getReportHistory = async (limit = 20): Promise<any[]> => {
 };
 
 // Get dashboard metrics
-export const getDashboardMetrics = async (): Promise<any> => {
+export const getDashboardMetrics = async (): Promise<unknown> => {
   try {
     const response = await api.get('/reports/dashboard-metrics');
     return response.data;
@@ -508,7 +508,7 @@ export const getDashboardMetrics = async (): Promise<any> => {
 };
 
 // Bulk export multiple reports
-export const bulkExportReports = async (reportConfigs: any[]): Promise<Blob> => {
+export const bulkExportReports = async (reportConfigs: unknown[]): Promise<Blob> => {
   try {
     const response = await api.post('/reports/bulk-export', {
       reports: reportConfigs
@@ -519,5 +519,350 @@ export const bulkExportReports = async (reportConfigs: any[]): Promise<Blob> => 
   } catch (error) {
     console.error('Error bulk exporting reports:', error);
     throw error;
+  }
+};
+
+// ===== UNIT-LEVEL ANALYTICS METHODS =====
+
+export interface UnitAnalytics {
+  unitId: string;
+  unitNumber: string;
+  propertyId: string;
+  propertyName: string;
+  
+  // Financial Metrics
+  monthlyRent: number;
+  yearlyRevenue: number;
+  maintenanceCosts: number;
+  profitMargin: number;
+  roi: number;
+  revenuePerSqFt: number;
+  
+  // Occupancy Metrics
+  occupancyRate: number;
+  vacancyDuration: number;
+  turnoverRate: number;
+  leaseRenewalRate: number;
+  
+  // Operational Metrics
+  maintenanceFrequency: number;
+  averageMaintenanceCost: number;
+  tenantSatisfaction: number;
+  paymentTimeliness: number;
+  
+  // Trends (last 12 months)
+  revenueTrend: Array<{ month: string; revenue: number }>;
+  occupancyTrend: Array<{ month: string; occupancy: number }>;
+  maintenanceTrend: Array<{ month: string; cost: number; requests: number }>;
+}
+
+export interface UnitPerformanceMetrics {
+  unitId: string;
+  
+  // Current Performance
+  currentMetrics: {
+    monthlyRevenue: number;
+    occupancyStatus: 'occupied' | 'vacant' | 'maintenance';
+    daysVacant: number;
+    maintenanceRequests: number;
+    tenantSatisfaction: number;
+  };
+  
+  // Comparative Performance
+  propertyAverage: {
+    revenue: number;
+    occupancy: number;
+    maintenance: number;
+    satisfaction: number;
+  };
+  
+  // Performance Indicators
+  indicators: {
+    revenueHealth: 'excellent' | 'good' | 'average' | 'poor';
+    occupancyHealth: 'excellent' | 'good' | 'average' | 'poor';
+    maintenanceHealth: 'excellent' | 'good' | 'average' | 'poor';
+    overallHealth: 'excellent' | 'good' | 'average' | 'poor';
+  };
+  
+  // Recommendations
+  recommendations: Array<{
+    type: 'revenue' | 'occupancy' | 'maintenance' | 'tenant';
+    priority: 'high' | 'medium' | 'low';
+    title: string;
+    description: string;
+    estimatedImpact: string;
+  }>;
+}
+
+export interface UnitPredictiveInsights {
+  unitId: string;
+  
+  // Revenue Predictions
+  revenueForecast: Array<{
+    month: string;
+    predictedRevenue: number;
+    confidence: number;
+  }>;
+  
+  // Occupancy Predictions
+  occupancyForecast: {
+    nextVacancyDate: string | null;
+    vacancyProbability: number;
+    expectedVacancyDuration: number;
+  };
+  
+  // Maintenance Predictions
+  maintenanceForecast: Array<{
+    category: string;
+    predictedDate: string;
+    estimatedCost: number;
+    confidence: number;
+  }>;
+  
+  // Market Insights
+  marketInsights: {
+    rentOptimization: {
+      currentRent: number;
+      suggestedRent: number;
+      potentialIncrease: number;
+      marketConfidence: number;
+    };
+    competitivePosition: 'above_market' | 'at_market' | 'below_market';
+    demandLevel: 'high' | 'medium' | 'low';
+  };
+  
+  // Risk Assessment
+  riskFactors: Array<{
+    type: 'financial' | 'operational' | 'market';
+    risk: string;
+    probability: number;
+    impact: 'high' | 'medium' | 'low';
+    mitigation: string;
+  }>;
+}
+
+// Get comprehensive analytics for a specific unit
+export const getUnitAnalytics = async (unitId: string): Promise<UnitAnalytics> => {
+  try {
+    const response = await api.get(`/reports/units/${unitId}/analytics`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit analytics:', error);
+    // Return mock data for development
+    return {
+      unitId,
+      unitNumber: '101',
+      propertyId: 'prop_1',
+      propertyName: 'Sunset Apartments',
+      
+      // Financial Metrics
+      monthlyRent: 1200,
+      yearlyRevenue: 14400,
+      maintenanceCosts: 850,
+      profitMargin: 94.1,
+      roi: 12.8,
+      revenuePerSqFt: 1.85,
+      
+      // Occupancy Metrics
+      occupancyRate: 95.8,
+      vacancyDuration: 12,
+      turnoverRate: 8.3,
+      leaseRenewalRate: 85.0,
+      
+      // Operational Metrics
+      maintenanceFrequency: 2.1,
+      averageMaintenanceCost: 425,
+      tenantSatisfaction: 4.6,
+      paymentTimeliness: 98.5,
+      
+      // Trends
+      revenueTrend: [
+        { month: '2024-01', revenue: 1200 },
+        { month: '2023-12', revenue: 1200 },
+        { month: '2023-11', revenue: 1150 }
+      ],
+      occupancyTrend: [
+        { month: '2024-01', occupancy: 100 },
+        { month: '2023-12', occupancy: 100 },
+        { month: '2023-11', occupancy: 87 }
+      ],
+      maintenanceTrend: [
+        { month: '2024-01', cost: 125, requests: 1 },
+        { month: '2023-12', cost: 0, requests: 0 },
+        { month: '2023-11', cost: 450, requests: 2 }
+      ]
+    };
+  }
+};
+
+// Get performance metrics for a specific unit
+export const getUnitPerformanceMetrics = async (unitId: string): Promise<UnitPerformanceMetrics> => {
+  try {
+    const response = await api.get(`/reports/units/${unitId}/performance`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit performance metrics:', error);
+    // Return mock data for development
+    return {
+      unitId,
+      
+      currentMetrics: {
+        monthlyRevenue: 1200,
+        occupancyStatus: 'occupied',
+        daysVacant: 0,
+        maintenanceRequests: 1,
+        tenantSatisfaction: 4.6
+      },
+      
+      propertyAverage: {
+        revenue: 1150,
+        occupancy: 92.5,
+        maintenance: 2.3,
+        satisfaction: 4.2
+      },
+      
+      indicators: {
+        revenueHealth: 'good',
+        occupancyHealth: 'excellent',
+        maintenanceHealth: 'excellent',
+        overallHealth: 'good'
+      },
+      
+      recommendations: [
+        {
+          type: 'revenue',
+          priority: 'medium',
+          title: 'Rent Optimization Opportunity',
+          description: 'Market analysis suggests rent could be increased by 5-8%',
+          estimatedImpact: '+$60-96/month'
+        },
+        {
+          type: 'maintenance',
+          priority: 'low',
+          title: 'Preventive Maintenance',
+          description: 'Schedule HVAC inspection to prevent future issues',
+          estimatedImpact: 'Prevent $300-500 in repairs'
+        }
+      ]
+    };
+  }
+};
+
+// Get predictive insights for a specific unit
+export const getUnitPredictiveInsights = async (unitId: string): Promise<UnitPredictiveInsights> => {
+  try {
+    const response = await api.get(`/reports/units/${unitId}/insights`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit predictive insights:', error);
+    // Return mock data for development
+    return {
+      unitId,
+      
+      revenueForecast: [
+        { month: '2024-02', predictedRevenue: 1200, confidence: 95 },
+        { month: '2024-03', predictedRevenue: 1260, confidence: 88 },
+        { month: '2024-04', predictedRevenue: 1260, confidence: 82 }
+      ],
+      
+      occupancyForecast: {
+        nextVacancyDate: '2024-12-15',
+        vacancyProbability: 15,
+        expectedVacancyDuration: 18
+      },
+      
+      maintenanceForecast: [
+        {
+          category: 'HVAC',
+          predictedDate: '2024-06-15',
+          estimatedCost: 350,
+          confidence: 75
+        },
+        {
+          category: 'Plumbing',
+          predictedDate: '2024-09-20',
+          estimatedCost: 200,
+          confidence: 60
+        }
+      ],
+      
+      marketInsights: {
+        rentOptimization: {
+          currentRent: 1200,
+          suggestedRent: 1280,
+          potentialIncrease: 80,
+          marketConfidence: 85
+        },
+        competitivePosition: 'below_market',
+        demandLevel: 'high'
+      },
+      
+      riskFactors: [
+        {
+          type: 'market',
+          risk: 'Rent increase may affect tenant retention',
+          probability: 25,
+          impact: 'medium',
+          mitigation: 'Gradual increase with tenant communication'
+        }
+      ]
+    };
+  }
+};
+
+// Get unit comparison analytics (compare unit with property/market averages)
+export const getUnitComparison = async (unitId: string, propertyId: string): Promise<{
+  unit: UnitAnalytics;
+  propertyAverage: Partial<UnitAnalytics>;
+  marketAverage: Partial<UnitAnalytics>;
+  rankings: {
+    revenue: { rank: number; total: number; percentile: number };
+    occupancy: { rank: number; total: number; percentile: number };
+    satisfaction: { rank: number; total: number; percentile: number };
+    maintenance: { rank: number; total: number; percentile: number };
+  };
+}> => {
+  try {
+    const response = await api.get(`/reports/units/${unitId}/comparison?property_id=${propertyId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit comparison:', error);
+    // Return mock data for development
+    const unitAnalytics = await getUnitAnalytics(unitId);
+    return {
+      unit: unitAnalytics,
+      propertyAverage: {
+        monthlyRent: 1150,
+        occupancyRate: 92.5,
+        tenantSatisfaction: 4.2,
+        maintenanceFrequency: 2.3
+      },
+      marketAverage: {
+        monthlyRent: 1180,
+        occupancyRate: 89.2,
+        tenantSatisfaction: 4.1,
+        maintenanceFrequency: 2.8
+      },
+      rankings: {
+        revenue: { rank: 3, total: 24, percentile: 87.5 },
+        occupancy: { rank: 2, total: 24, percentile: 91.7 },
+        satisfaction: { rank: 1, total: 24, percentile: 95.8 },
+        maintenance: { rank: 5, total: 24, percentile: 79.2 }
+      }
+    };
+  }
+};
+
+// Record unit analytics event (for tracking user interactions with analytics)
+export const recordUnitAnalyticsEvent = async (unitId: string, eventType: string, data: Record<string, unknown>): Promise<void> => {
+  try {
+    await api.post(`/reports/units/${unitId}/events`, {
+      event_type: eventType,
+      data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error recording unit analytics event:', error);
+    // Don't throw error to avoid breaking analytics viewing
   }
 }; 

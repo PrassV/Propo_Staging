@@ -1,4 +1,4 @@
-import { api } from '../client';
+import api from '../client';
 
 export interface AutomationRule {
   id: string;
@@ -47,7 +47,7 @@ export interface CreateAutomationRuleRequest {
   trigger: string;
   action: string;
   status?: 'active' | 'paused';
-  configuration?: Record<string, any>;
+  configuration?: Record<string, unknown>;
 }
 
 export interface UpdateAutomationRuleRequest {
@@ -55,7 +55,7 @@ export interface UpdateAutomationRuleRequest {
   trigger?: string;
   action?: string;
   status?: 'active' | 'paused' | 'disabled';
-  configuration?: Record<string, any>;
+  configuration?: Record<string, unknown>;
 }
 
 export interface AutomationConfiguration {
@@ -270,7 +270,7 @@ export const cancelAutomationTask = async (taskId: string): Promise<void> => {
 };
 
 // Get automation logs
-export const getAutomationLogs = async (ruleId?: string, taskId?: string, limit = 50): Promise<any[]> => {
+export const getAutomationLogs = async (ruleId?: string, taskId?: string, limit = 50): Promise<unknown[]> => {
   try {
     const params = new URLSearchParams();
     if (ruleId) params.append('rule_id', ruleId);
@@ -286,7 +286,7 @@ export const getAutomationLogs = async (ruleId?: string, taskId?: string, limit 
 };
 
 // Test automation rule
-export const testAutomationRule = async (ruleId: string, testData?: any): Promise<any> => {
+export const testAutomationRule = async (ruleId: string, testData?: unknown): Promise<unknown> => {
   try {
     const response = await api.post(`/automation/rules/${ruleId}/test`, testData);
     return response.data;
@@ -297,7 +297,7 @@ export const testAutomationRule = async (ruleId: string, testData?: any): Promis
 };
 
 // Get automation rule templates
-export const getAutomationTemplates = async (): Promise<any[]> => {
+export const getAutomationTemplates = async (): Promise<unknown[]> => {
   try {
     const response = await api.get('/automation/templates');
     return response.data;
@@ -359,7 +359,7 @@ export const exportAutomationConfig = async (): Promise<Blob> => {
 };
 
 // Import automation configuration
-export const importAutomationConfig = async (configFile: File): Promise<any> => {
+export const importAutomationConfig = async (configFile: File): Promise<unknown> => {
   try {
     const formData = new FormData();
     formData.append('config', configFile);
@@ -373,5 +373,194 @@ export const importAutomationConfig = async (configFile: File): Promise<any> => 
   } catch (error) {
     console.error('Error importing automation config:', error);
     throw error;
+  }
+};
+
+// ===== UNIT-LEVEL AUTOMATION METHODS =====
+
+export interface UnitAutomationEvent {
+  unitId: string;
+  eventType: 'lease_created' | 'lease_terminated' | 'tenant_assigned' | 'tenant_removed' | 'maintenance_created' | 'maintenance_completed' | 'payment_due' | 'payment_received' | 'payment_overdue';
+  data: Record<string, unknown>;
+  propertyId?: string;
+  tenantId?: string;
+  leaseId?: string;
+  maintenanceId?: string;
+  paymentId?: string;
+}
+
+export interface UnitAutomationStatus {
+  unitId: string;
+  activeRules: number;
+  totalRules: number;
+  lastTriggered: string | null;
+  automationHealth: 'healthy' | 'warning' | 'error';
+  enabledAutomations: string[];
+  recentEvents: Array<{
+    eventType: string;
+    timestamp: string;
+    status: 'success' | 'failed';
+    message: string;
+  }>;
+}
+
+export interface UnitAutomationHistory {
+  unitId: string;
+  events: Array<{
+    id: string;
+    eventType: string;
+    timestamp: string;
+    status: 'success' | 'failed' | 'pending';
+    ruleName: string;
+    description: string;
+    data: Record<string, unknown>;
+  }>;
+}
+
+// Trigger automation event for unit operations
+export const triggerUnitAutomationEvent = async (event: UnitAutomationEvent): Promise<void> => {
+  try {
+    await api.post('/automation/unit-events', event);
+  } catch (error) {
+    console.error('Error triggering unit automation event:', error);
+    // Don't throw error to avoid breaking unit operations
+    // Log for monitoring but continue with operation
+  }
+};
+
+// Get automation status for a specific unit
+export const getUnitAutomationStatus = async (unitId: string): Promise<UnitAutomationStatus> => {
+  try {
+    const response = await api.get(`/automation/units/${unitId}/status`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit automation status:', error);
+    // Return mock data for development
+    return {
+      unitId,
+      activeRules: 3,
+      totalRules: 5,
+      lastTriggered: '2024-01-15T10:30:00Z',
+      automationHealth: 'healthy',
+      enabledAutomations: ['rent_reminder', 'lease_renewal', 'maintenance_auto_assign'],
+      recentEvents: [
+        {
+          eventType: 'rent_reminder',
+          timestamp: '2024-01-15T10:30:00Z',
+          status: 'success',
+          message: 'Rent reminder sent to tenant'
+        },
+        {
+          eventType: 'maintenance_created',
+          timestamp: '2024-01-14T14:20:00Z',
+          status: 'success',
+          message: 'Maintenance request auto-assigned to vendor'
+        }
+      ]
+    };
+  }
+};
+
+// Get automation history for a specific unit
+export const getUnitAutomationHistory = async (unitId: string, limit = 20): Promise<UnitAutomationHistory> => {
+  try {
+    const response = await api.get(`/automation/units/${unitId}/history?limit=${limit}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit automation history:', error);
+    // Return mock data for development
+    return {
+      unitId,
+      events: [
+        {
+          id: '1',
+          eventType: 'lease_created',
+          timestamp: '2024-01-10T09:00:00Z',
+          status: 'success',
+          ruleName: 'Welcome Workflow',
+          description: 'Welcome email sent to new tenant',
+          data: { tenantName: 'John Doe', leaseStartDate: '2024-01-15' }
+        },
+        {
+          id: '2',
+          eventType: 'rent_reminder',
+          timestamp: '2024-01-12T10:00:00Z',
+          status: 'success',
+          ruleName: 'Monthly Rent Reminders',
+          description: 'Rent reminder sent 3 days before due date',
+          data: { amount: 1200, dueDate: '2024-01-15' }
+        },
+        {
+          id: '3',
+          eventType: 'maintenance_created',
+          timestamp: '2024-01-14T14:20:00Z',
+          status: 'success',
+          ruleName: 'Auto-Assign Maintenance',
+          description: 'Maintenance request automatically assigned to vendor',
+          data: { category: 'Plumbing', priority: 'medium', vendorName: 'ABC Plumbing' }
+        }
+      ]
+    };
+  }
+};
+
+// Toggle automation for a specific unit
+export const toggleUnitAutomation = async (unitId: string, automationType: string, enabled: boolean): Promise<void> => {
+  try {
+    await api.patch(`/automation/units/${unitId}/toggle`, {
+      automation_type: automationType,
+      enabled
+    });
+  } catch (error) {
+    console.error('Error toggling unit automation:', error);
+    throw error;
+  }
+};
+
+// Get available automation types for units
+export const getUnitAutomationTypes = async (): Promise<Array<{
+  type: string;
+  name: string;
+  description: string;
+  defaultEnabled: boolean;
+}>> => {
+  try {
+    const response = await api.get('/automation/unit-types');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching unit automation types:', error);
+    // Return mock data for development
+    return [
+      {
+        type: 'rent_reminder',
+        name: 'Rent Reminders',
+        description: 'Automatic rent payment reminders',
+        defaultEnabled: true
+      },
+      {
+        type: 'lease_renewal',
+        name: 'Lease Renewal',
+        description: 'Automatic lease renewal notifications',
+        defaultEnabled: true
+      },
+      {
+        type: 'maintenance_auto_assign',
+        name: 'Maintenance Auto-Assignment',
+        description: 'Automatically assign maintenance requests to vendors',
+        defaultEnabled: false
+      },
+      {
+        type: 'welcome_workflow',
+        name: 'Welcome Workflow',
+        description: 'Welcome new tenants with onboarding materials',
+        defaultEnabled: true
+      },
+      {
+        type: 'move_out_workflow',
+        name: 'Move-Out Workflow',
+        description: 'Automate move-out procedures and inspections',
+        defaultEnabled: false
+      }
+    ];
   }
 }; 

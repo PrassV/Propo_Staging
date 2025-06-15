@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, MoreVertical, User, DollarSign, KeyRound, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreVertical, User, DollarSign, KeyRound, Plus, Zap, BarChart3 } from "lucide-react";
 import { UnitLeaseDetail } from "../../api/types";
 import TenantInfoTab from './details/TenantInfoTab';
 import LeaseInfoTab from './details/LeaseInfoTab';
@@ -30,6 +30,9 @@ import {
 import { deleteUnit } from '@/api/services/unitService';
 import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
+import UnitAnalyticsTab from './UnitAnalyticsTab';
+import UnitAutomationControls from './UnitAutomationControls';
+import { triggerUnitAutomationEvent, getUnitAutomationStatus } from '@/api/services/automationService';
 
 const getLeaseProgress = (startDate: string, endDate: string): number => {
     const start = new Date(startDate).getTime();
@@ -153,7 +156,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           <CollapsibleContent>
             <CardContent className="p-4 border-t">
                 <Tabs defaultValue="tenant" className="w-full">
-                    <TabsList className="grid w-full grid-cols-5 mb-4"> 
+                    <TabsList className="grid w-full grid-cols-7 mb-4"> 
                         <TabsTrigger value="tenant">
                           Tenant {isOccupied && <span className="ml-1 text-xs text-green-500">●</span>}
                         </TabsTrigger>
@@ -161,6 +164,14 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                         <TabsTrigger value="history">History</TabsTrigger>
                         <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
                         <TabsTrigger value="payments">Payments</TabsTrigger>
+                        <TabsTrigger value="analytics">
+                          <BarChart3 className="h-4 w-4 mr-1" />
+                          Analytics
+                        </TabsTrigger>
+                        <TabsTrigger value="automation">
+                          <Zap className="h-4 w-4 mr-1" />
+                          Automation
+                        </TabsTrigger>
                     </TabsList>
                     <TabsContent value="tenant">
                         {isOccupied && lease ? (
@@ -215,6 +226,19 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </TabsContent>
                     <TabsContent value="payments">
                         <PaymentListTab unitId={unit.id} tenantId={lease?.tenant.id} propertyId={propertyId} />
+                    </TabsContent>
+                    <TabsContent value="analytics">
+                        <UnitAnalyticsTab 
+                          unitId={unit.id} 
+                          propertyId={propertyId} 
+                          unitNumber={unit.unit_number} 
+                        />
+                    </TabsContent>
+                    <TabsContent value="automation">
+                        <UnitAutomationControls 
+                          unitId={unit.id} 
+                          unitNumber={unit.unit_number} 
+                        />
                     </TabsContent>
                 </Tabs>
             </CardContent>
