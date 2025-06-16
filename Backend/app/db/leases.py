@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Dict, Any, Optional, List
 from supabase import Client
-from ..schemas.lease import LeaseCreate
+from ..models.property import LeaseCreate
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +12,25 @@ async def create_lease(db_client: Client, lease_data: LeaseCreate) -> Optional[D
     'create_lease_and_occupy_unit' RPC function.
     """
     try:
+        # Ensure required fields are not None
+        if not lease_data.unit_id or not lease_data.tenant_id:
+            logger.error(f"Missing required fields: unit_id={lease_data.unit_id}, tenant_id={lease_data.tenant_id}")
+            raise ValueError("unit_id and tenant_id are required")
+        
+        if not lease_data.start_date:
+            logger.error("start_date is required")
+            raise ValueError("start_date is required")
+            
         rpc_params = {
             'p_unit_id': str(lease_data.unit_id),
             'p_tenant_id': str(lease_data.tenant_id),
             'p_start_date': lease_data.start_date.isoformat(),
             'p_end_date': lease_data.end_date.isoformat() if lease_data.end_date else None,
-            'p_rent_amount': lease_data.rent_amount,
-            'p_deposit_amount': lease_data.deposit_amount
+            'p_rent_amount': float(lease_data.rent_amount) if lease_data.rent_amount else 0.0,
+            'p_deposit_amount': float(lease_data.deposit_amount) if lease_data.deposit_amount else 0.0
         }
+        
+        logger.info(f"Calling RPC with params: {rpc_params}")
         
         response = db_client.rpc('create_lease_and_occupy_unit', rpc_params).execute()
 
