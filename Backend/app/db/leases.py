@@ -16,10 +16,9 @@ async def create_lease(db_client: Client, lease_data: LeaseCreate) -> Optional[D
             'p_unit_id': str(lease_data.unit_id),
             'p_tenant_id': str(lease_data.tenant_id),
             'p_start_date': lease_data.start_date.isoformat(),
-            'p_end_date': lease_data.end_date.isoformat(),
+            'p_end_date': lease_data.end_date.isoformat() if lease_data.end_date else None,
             'p_rent_amount': lease_data.rent_amount,
-            'p_deposit_amount': lease_data.deposit_amount,
-            'p_notes': lease_data.notes
+            'p_deposit_amount': lease_data.deposit_amount
         }
         
         response = db_client.rpc('create_lease_and_occupy_unit', rpc_params).execute()
