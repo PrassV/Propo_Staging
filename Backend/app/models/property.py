@@ -180,6 +180,7 @@ class LeaseCreate(LeaseBase):
     property_id: uuid.UUID
     unit_id: Optional[uuid.UUID] = None
     tenant_id: uuid.UUID
+    notes: Optional[str] = None
 
 class LeaseUpdate(BaseModel):
     start_date: Optional[date] = None
