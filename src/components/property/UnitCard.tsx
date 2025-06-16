@@ -34,7 +34,6 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -57,20 +56,23 @@ const getLeaseProgress = (startDate: string, endDate: string): number => {
 
 // Helper function to get unit display status
 const getUnitDisplayStatus = (unit: UnitLeaseDetail) => {
+  // Define Badge variant type
+  type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | null | undefined;
+  
   // Check if unit has a status field (from API)
   if (unit.status) {
     switch (unit.status.toLowerCase()) {
       case 'occupied':
         return { 
           label: 'Occupied', 
-          variant: 'default' as const, 
+          variant: 'default' as BadgeVariant, 
           isOccupied: true,
           description: 'This unit is currently occupied with an active lease.'
         };
       case 'upcoming':
         return { 
           label: 'Upcoming Lease', 
-          variant: 'secondary' as const, 
+          variant: 'secondary' as BadgeVariant, 
           isOccupied: false,
           description: 'This unit has an upcoming lease but is currently vacant.'
         };
@@ -78,7 +80,7 @@ const getUnitDisplayStatus = (unit: UnitLeaseDetail) => {
       default:
         return { 
           label: 'Vacant', 
-          variant: 'outline' as const, 
+          variant: 'outline' as BadgeVariant, 
           isOccupied: false,
           description: 'This unit is available for new tenant assignment.'
         };
@@ -89,7 +91,7 @@ const getUnitDisplayStatus = (unit: UnitLeaseDetail) => {
   const isOccupied = unit.is_occupied || false;
   return {
     label: isOccupied ? 'Occupied' : 'Vacant',
-    variant: (isOccupied ? 'default' : 'outline') as const,
+    variant: (isOccupied ? 'default' : 'outline') as BadgeVariant,
     isOccupied,
     description: isOccupied 
       ? 'This unit is currently occupied with an active lease.'
@@ -339,6 +341,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
           onClose={() => setShowCreateLeaseModal(false)}
           unitId={unit.id}
           unitNumber={unit.unit_number}
+          propertyId={propertyId}
           onSuccess={() => {
             setShowCreateLeaseModal(false);
             onUpdate?.();

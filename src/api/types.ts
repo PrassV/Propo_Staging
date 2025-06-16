@@ -201,6 +201,7 @@ export interface PropertyLeaseDetailResponse {
 
 // Phase 4: Types for Lease Creation and Management
 export interface LeaseCreate {
+    property_id: string;
     unit_id: string;
     tenant_id: string;
     start_date: string;

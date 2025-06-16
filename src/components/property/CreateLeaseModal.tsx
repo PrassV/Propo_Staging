@@ -43,9 +43,10 @@ interface CreateLeaseModalProps {
   onSuccess: () => void;
   unitId: string;
   unitNumber: string;
+  propertyId: string;
 }
 
-export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, unitNumber }: CreateLeaseModalProps) {
+export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, unitNumber, propertyId }: CreateLeaseModalProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [activeLeaseTenantIds, setActiveLeaseTenantIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
@@ -145,7 +146,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
   const onSubmit = async (data: LeaseFormData) => {
     setIsLoading(true);
     try {
-      const leasePayload = { ...data, unit_id: unitId };
+      const leasePayload = { ...data, unit_id: unitId, property_id: propertyId };
       await createLease(leasePayload);
       toast.success(`Lease created for Unit ${unitNumber}!`);
       onSuccess();
