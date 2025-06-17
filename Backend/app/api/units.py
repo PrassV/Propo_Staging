@@ -751,7 +751,7 @@ async def get_unit_history(
         # Get historical data
         tenants = await tenant_service.get_tenants_for_unit(unit_id, user_id)
         leases = await tenant_service.get_leases_for_unit(unit_id)
-        payments = await payment_service.get_payments_for_unit(db_client, unit_id, user_id)[0]  # Get just the list part
+        payments, _ = await payment_service.get_payments_for_unit(db_client, unit_id, user_id, skip=0, limit=100)  # Get payments with pagination
         maintenance_requests = await maintenance_service.get_requests_for_unit(db_client, str(unit_id), user_id)
         
         return {
