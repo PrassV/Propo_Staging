@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from ..db import payment as payment_db
 from ..db import properties as property_db
 from ..db import tenants as tenant_db
-from ..db.database import supabase_client
+from ..config.database import supabase_client
 from ..models.payment import PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType, Payment
 from ..models.notification import NotificationCreate, NotificationType, NotificationPriority, NotificationMethod
 from . import notification_service # Import notification service
