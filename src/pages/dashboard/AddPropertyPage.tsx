@@ -25,11 +25,11 @@ export default function AddPropertyPage() {
         try {
           const uploadResponse = await api.property.uploadPropertyImages(images);
           toast.dismiss();
-          if (uploadResponse && uploadResponse.imageUrls && uploadResponse.imageUrls.length > 0) {
-            primaryImageUrl = uploadResponse.imageUrls[0];
+          if (uploadResponse && uploadResponse.imagePaths && uploadResponse.imagePaths.length > 0) {
+            primaryImageUrl = uploadResponse.imagePaths[0];
             toast.success('Images uploaded successfully!');
           } else {
-            console.warn('Image upload response missing expected imageUrls:', uploadResponse);
+            console.warn('Image upload response missing expected imagePaths:', uploadResponse);
             toast.error('Image upload did not return expected URLs.');
           }
         } catch (uploadError) {
@@ -47,14 +47,15 @@ export default function AddPropertyPage() {
         address_line2: formData.addressLine2,
         city: formData.city,
         state: formData.state,
-        zip_code: formData.pincode,
+        pincode: formData.pincode,
         country: formData.country || 'USA',
         description: formData.description,
         bedrooms: formData.bedrooms,
         bathrooms: formData.bathrooms,
-        area: formData.sizeSqft,
+        size_sqft: formData.sizeSqft,
         year_built: formData.yearBuilt,
-        image_url: primaryImageUrl,
+        amenities: formData.amenities,
+        image_urls: primaryImageUrl ? [primaryImageUrl] : undefined,
       };
 
       // 3. Create Property Record via Backend API
