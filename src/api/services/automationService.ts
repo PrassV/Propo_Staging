@@ -71,7 +71,7 @@ export interface AutomationConfiguration {
   };
   maintenance: {
     auto_assign: boolean;
-    priority_threshold: 'low' | 'medium' | 'high';
+    priority_threshold: 'low' | 'normal' | 'urgent' | 'emergency';
     vendor_selection_criteria: 'availability' | 'cost' | 'rating';
   };
   inspection: {
@@ -497,7 +497,7 @@ export const getUnitAutomationHistory = async (unitId: string, limit = 20): Prom
           status: 'success',
           ruleName: 'Auto-Assign Maintenance',
           description: 'Maintenance request automatically assigned to vendor',
-          data: { category: 'Plumbing', priority: 'medium', vendorName: 'ABC Plumbing' }
+                      data: { category: 'Plumbing', priority: 'normal', vendorName: 'ABC Plumbing' }
         }
       ]
     };

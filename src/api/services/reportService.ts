@@ -587,7 +587,7 @@ export interface UnitPerformanceMetrics {
   // Recommendations
   recommendations: Array<{
     type: 'revenue' | 'occupancy' | 'maintenance' | 'tenant';
-    priority: 'high' | 'medium' | 'low';
+    priority: 'emergency' | 'urgent' | 'normal' | 'low';
     title: string;
     description: string;
     estimatedImpact: string;
@@ -731,17 +731,17 @@ export const getUnitPerformanceMetrics = async (unitId: string): Promise<UnitPer
       recommendations: [
         {
           type: 'revenue',
-          priority: 'medium',
+          priority: 'normal',
           title: 'Rent Optimization Opportunity',
           description: 'Market analysis suggests rent could be increased by 5-8%',
-          estimatedImpact: '+$60-96/month'
+          estimatedImpact: '+₹60-96/month'
         },
         {
           type: 'maintenance',
           priority: 'low',
           title: 'Preventive Maintenance',
           description: 'Schedule HVAC inspection to prevent future issues',
-          estimatedImpact: 'Prevent $300-500 in repairs'
+          estimatedImpact: 'Prevent ₹300-500 in repairs'
         }
       ]
     };

@@ -175,15 +175,15 @@ export default function PropertyFinancialSummary({ propertyId }: PropertyFinanci
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Total Revenue</p>
-            <p className="text-2xl font-bold">${formatCurrency(financialData.total_revenue)}</p>
+            <p className="text-2xl font-bold">₹{formatCurrency(financialData.total_revenue)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Total Expenses</p>
-            <p className="text-2xl font-bold">${formatCurrency(financialData.total_expenses)}</p>
+            <p className="text-2xl font-bold">₹{formatCurrency(financialData.total_expenses)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Net Income</p>
-            <p className="text-2xl font-bold">${formatCurrency(financialData.net_income)}</p>
+            <p className="text-2xl font-bold">₹{formatCurrency(financialData.net_income)}</p>
           </div>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-sm text-muted-foreground">Collection Rate</p>

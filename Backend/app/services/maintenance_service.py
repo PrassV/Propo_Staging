@@ -338,9 +338,9 @@ async def get_maintenance_summary(owner_id: str) -> Dict[str, Any]:
                 status_counts[status] += 1
             
         # Count by priority
-        priority_counts = {'low': 0, 'medium': 0, 'high': 0, 'emergency': 0}
+        priority_counts = {'low': 0, 'normal': 0, 'urgent': 0, 'emergency': 0}
         for request in requests:
-            priority = request.get('priority', 'low').lower()
+            priority = request.get('priority', 'normal').lower()
             if priority in priority_counts:
                 priority_counts[priority] += 1
                 

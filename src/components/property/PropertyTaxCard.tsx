@@ -200,7 +200,7 @@ export default function PropertyTaxCard({ propertyId }: PropertyTaxCardProps) {
                     <div>
                       <p className="font-medium">{tax.tax_year} Property Tax</p>
                       <p className="text-sm text-muted-foreground">
-                        Amount: ${tax.amount.toFixed(2)}
+                        Amount: ₹{tax.amount.toFixed(2)}
                       </p>
                     </div>
                     <Badge variant={badgeInfo.variant as 'default' | 'secondary' | 'destructive' | 'outline'}>{badgeInfo.label}</Badge>
@@ -260,7 +260,7 @@ export default function PropertyTaxCard({ propertyId }: PropertyTaxCardProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Amount ($)</Label>
+                  <Label htmlFor="amount">Amount (₹)</Label>
                   <Input
                     id="amount"
                     type="number"

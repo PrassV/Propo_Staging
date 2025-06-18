@@ -295,7 +295,7 @@ export default function UnitAnalyticsTab({ unitId, propertyId, unitNumber }: Uni
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <Badge 
-                            variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                            variant={rec.priority === 'urgent' ? 'destructive' : rec.priority === 'normal' ? 'default' : 'secondary'}
                           >
                             {rec.priority} priority
                           </Badge>
@@ -342,7 +342,7 @@ export default function UnitAnalyticsTab({ unitId, propertyId, unitNumber }: Uni
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Revenue per Sq Ft</span>
-                  <span className="font-medium">${analytics.revenuePerSqFt.toFixed(2)}</span>
+                  <span className="font-medium">₹{analytics.revenuePerSqFt.toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>

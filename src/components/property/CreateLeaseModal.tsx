@@ -279,7 +279,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
             
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="rent_amount">Rent Amount ($)</Label>
+                <Label htmlFor="rent_amount">Rent Amount (₹)</Label>
                 <Controller
                   name="rent_amount"
                   control={control}
@@ -288,7 +288,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
                 {errors.rent_amount && <p className="text-sm text-red-500">{errors.rent_amount.message}</p>}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="deposit_amount">Deposit Amount ($)</Label>
+                <Label htmlFor="deposit_amount">Deposit Amount (₹)</Label>
                 <Controller
                   name="deposit_amount"
                   control={control}

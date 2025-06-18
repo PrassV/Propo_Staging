@@ -97,7 +97,7 @@ export default function DashboardSummaryCards({ summaryData, userType, loading =
                 'N/A'}
             </div>
             <p className="text-xs text-muted-foreground">
-              Amount: ${summaryData?.next_due_amount?.toFixed(2) ?? 'N/A'}
+              Amount: ₹{summaryData?.next_due_amount?.toFixed(2) ?? 'N/A'}
             </p>
           </CardContent>
         </Card>

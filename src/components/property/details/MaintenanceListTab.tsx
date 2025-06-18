@@ -26,7 +26,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'normal',
         category: 'plumbing'
     });
     const [submitting, setSubmitting] = useState(false);
@@ -110,7 +110,7 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
             setFormData({
                 title: '',
                 description: '',
-                priority: 'medium',
+                priority: 'normal',
                 category: 'plumbing'
             });
             setDialogOpen(false);
@@ -213,8 +213,8 @@ export default function MaintenanceListTab({ unitId }: MaintenanceListTabProps) 
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="low">Low</SelectItem>
-                                        <SelectItem value="medium">Medium</SelectItem>
-                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="normal">Normal</SelectItem>
+                                        <SelectItem value="urgent">Urgent</SelectItem>
                                         <SelectItem value="emergency">Emergency</SelectItem>
                                     </SelectContent>
                                 </Select>

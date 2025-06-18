@@ -231,7 +231,7 @@ export default function TenantDashboard() {
                               )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                              Amount: ${paymentStatus?.nextDueAmount?.toFixed(2) ?? 'N/A'}
+                              Amount: ₹{paymentStatus?.nextDueAmount?.toFixed(2) ?? 'N/A'}
                           </p>
                       </>
                    )}
@@ -269,7 +269,7 @@ export default function TenantDashboard() {
               <CardContent>
                    {loadingOverview ? <span className="text-sm text-muted-foreground">Loading...</span> : (
                       <> 
-                          <div className="text-2xl font-bold">${paymentStatus?.lastPaymentAmount?.toFixed(2) ?? 'N/A'}</div>
+                          <div className="text-2xl font-bold">₹{paymentStatus?.lastPaymentAmount?.toFixed(2) ?? 'N/A'}</div>
                           <p className="text-xs text-muted-foreground">
                               Paid on: {formatDate(paymentStatus?.lastPaymentDate)}
                           </p>

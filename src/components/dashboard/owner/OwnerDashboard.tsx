@@ -257,7 +257,7 @@ export default function OwnerDashboard() {
               <CardContent>
                   <div className="text-2xl font-bold">
                      {summary?.pending_rent != null 
-                          ? `$${summary.pending_rent.toFixed(2)}`
+                          ? `₹${summary.pending_rent.toFixed(2)}`
                           : 'N/A'}
                   </div>
               </CardContent>
@@ -273,7 +273,7 @@ export default function OwnerDashboard() {
               <CardContent>
                   <div className="text-2xl font-bold">
                      {summary?.total_revenue != null 
-                          ? `$${summary.total_revenue.toFixed(2)}`
+                          ? `₹${summary.total_revenue.toFixed(2)}`
                           : 'N/A'}
                   </div>
               </CardContent>

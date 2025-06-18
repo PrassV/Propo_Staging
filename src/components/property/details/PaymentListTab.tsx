@@ -365,7 +365,7 @@ export default function PaymentListTab({ unitId, tenantId, propertyId }: Payment
             <Card key={pay.id} className="p-3">
               <div className="flex justify-between items-start gap-2">
                 <div>
-                  <p className="font-semibold text-lg">${pay.amount.toFixed(2)}</p>
+                  <p className="font-semibold text-lg">₹{pay.amount.toFixed(2)}</p>
                   <p className="text-sm text-gray-500">Due: {new Date(pay.due_date).toLocaleDateString()}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">

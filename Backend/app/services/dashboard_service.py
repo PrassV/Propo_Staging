@@ -96,7 +96,7 @@ async def get_dashboard_data(owner_id: str, months: int = 6) -> Dict[str, Any]:
                 'id': f'maint-{i}',
                 'title': f'Maintenance Issue {i}',
                 'status': 'pending' if i % 2 == 0 else 'in_progress',
-                'priority': 'high' if i == 1 else 'medium' if i == 2 else 'low',
+                'priority': 'urgent' if i == 1 else 'normal' if i == 2 else 'low',
                 'created_at': (datetime.utcnow().isoformat()),
                 'property_name': f'Property {i}'
             } for i in range(1, 4)

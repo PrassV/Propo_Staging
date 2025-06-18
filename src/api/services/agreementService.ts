@@ -55,7 +55,7 @@ export const generateAgreement = async (formData: RentAgreementFormData): Promis
 **Tenant:** ${formData.tenantName || '[Not Specified]'}
 **Landlord:** ${formData.landlordName || '[Not Specified]'}
 
-**Rent:** ${formData.monthlyRent || '[N/A]'} per month
+**Rent:** ₹{formData.monthlyRent || '[N/A]'} per month
 **Start Date:** ${formData.startDate || '[N/A]'}
 **Duration:** ${formData.leaseDuration || '[N/A]'} months
 

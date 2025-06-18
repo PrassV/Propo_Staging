@@ -23,9 +23,9 @@ class MaintenanceStatus(str, Enum):
 
 class MaintenancePriority(str, Enum):
     LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    NORMAL = "normal"
     URGENT = "urgent"
+    EMERGENCY = "emergency"
 
 class MaintenanceImage(BaseModel):
     url: str
@@ -46,7 +46,7 @@ class MaintenanceBase(BaseModel):
     title: str
     description: str
     category: MaintenanceCategory
-    priority: MaintenancePriority = MaintenancePriority.MEDIUM
+    priority: MaintenancePriority = MaintenancePriority.NORMAL
 
 class MaintenanceCreate(MaintenanceBase):
     status: Optional[MaintenanceStatus] = MaintenanceStatus.NEW

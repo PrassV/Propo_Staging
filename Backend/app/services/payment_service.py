@@ -8,7 +8,9 @@ from fastapi import HTTPException, status
 from ..db import payment as payment_db
 from ..db import properties as property_db
 from ..db import tenants as tenant_db
+from ..db.database import supabase_client
 from ..models.payment import PaymentCreate, PaymentUpdate, PaymentStatus, PaymentType, Payment
+from ..models.notification import NotificationCreate, NotificationType, NotificationPriority, NotificationMethod
 from . import notification_service # Import notification service
 
 logger = logging.getLogger(__name__)
@@ -124,7 +126,23 @@ async def create_payment(payment_data: dict, owner_id: str) -> Optional[Dict[str
                 if tenant_assignment:
                     insert_data['unit_id'] = tenant_assignment.get('unit_id')
                     if 'lease_id' not in insert_data or not insert_data['lease_id']:
-                        insert_data['lease_id'] = tenant_assignment.get('id')  # property_tenants.id is the lease_id
+                        # Find the corresponding lease record
+                        lease_record = await get_lease_for_tenant_and_unit(
+                            insert_data['tenant_id'], 
+                            tenant_assignment.get('unit_id')
+                        )
+                        if lease_record:
+                            insert_data['lease_id'] = lease_record.get('id')
+                        else:
+                            logger.error(f"No lease record found for tenant {insert_data['tenant_id']} and unit {tenant_assignment.get('unit_id')}")
+                            # Try to create a lease record from property_tenants data
+                            lease_record = await create_lease_from_property_tenant(tenant_assignment)
+                            if lease_record:
+                                insert_data['lease_id'] = lease_record.get('id')
+                                logger.info(f"Created new lease record {lease_record.get('id')} from property_tenant {tenant_assignment.get('id')}")
+                            else:
+                                logger.error(f"Failed to create lease record for tenant {insert_data['tenant_id']} and unit {tenant_assignment.get('unit_id')}")
+                                return None
                 else:
                     logger.error(f"Tenant {insert_data['tenant_id']} has no active unit assignment")
                     return None
@@ -132,6 +150,12 @@ async def create_payment(payment_data: dict, owner_id: str) -> Optional[Dict[str
         # Validate required fields
         if not insert_data.get('unit_id') or not insert_data.get('lease_id'):
             logger.error("Missing required fields: unit_id and lease_id are required for payments")
+            return None
+
+        # Validate lease_id exists in the database
+        lease_exists = await validate_lease_exists(insert_data.get('lease_id'))
+        if not lease_exists:
+            logger.error(f"Lease ID {insert_data.get('lease_id')} does not exist in the database")
             return None
 
         logger.info(f"Inserting payment data: {insert_data}")
@@ -598,3 +622,79 @@ async def get_payments_for_unit(
         logger.exception(f"Unexpected error in get_payments_for_unit service for unit {unit_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred fetching payments")
 # --- End New Service Function ---
+
+async def get_lease_for_tenant_and_unit(tenant_id: str, unit_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the lease record for a specific tenant and unit combination.
+
+    Args:
+        tenant_id: The tenant ID
+        unit_id: The unit ID
+
+    Returns:
+        Lease data or None if not found
+    """
+    try:
+        response = supabase_client.table('leases').select('*').eq('tenant_id', tenant_id).eq('unit_id', unit_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        else:
+            logger.warning(f"No lease found for tenant {tenant_id} and unit {unit_id}")
+            return None
+    except Exception as e:
+        logger.error(f"Error getting lease for tenant {tenant_id} and unit {unit_id}: {str(e)}")
+        return None
+
+async def create_lease_from_property_tenant(property_tenant: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Create a lease record from property_tenants data as a fallback.
+
+    Args:
+        property_tenant: The property_tenant record
+
+    Returns:
+        Created lease data or None if creation failed
+    """
+    try:
+        lease_data = {
+            'id': str(uuid.uuid4()),
+            'property_id': property_tenant.get('property_id'),
+            'unit_id': property_tenant.get('unit_id'), 
+            'tenant_id': property_tenant.get('tenant_id'),
+            'start_date': property_tenant.get('start_date'),
+            'end_date': property_tenant.get('end_date'),
+            'rent_amount': property_tenant.get('rent_amount'),
+            'deposit_amount': property_tenant.get('deposit_amount'),
+            'status': 'active',
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        response = supabase_client.table('leases').insert(lease_data).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        else:
+            logger.error(f"Failed to create lease record from property_tenant {property_tenant.get('id')}")
+            return None
+    except Exception as e:
+        logger.error(f"Error creating lease from property_tenant {property_tenant.get('id')}: {str(e)}")
+        return None
+
+async def validate_lease_exists(lease_id: str) -> bool:
+    """
+    Validate that a lease exists in the database.
+
+    Args:
+        lease_id: The lease ID to validate
+
+    Returns:
+        True if lease exists, False otherwise
+    """
+    try:
+        response = supabase_client.table('leases').select('id').eq('id', lease_id).execute()
+        return response.data and len(response.data) > 0
+    except Exception as e:
+        logger.error(f"Error validating lease {lease_id}: {str(e)}")
+        return False

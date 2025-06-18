@@ -153,7 +153,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </div>
                     <div className="flex items-center space-x-2">
                       <DollarSign size={16} className="text-gray-500"/>
-                      <span>${lease.rent_amount} / month</span>
+                      <span>₹{lease.rent_amount} / month</span>
                     </div>
                   </div>
                 )}
@@ -166,7 +166,7 @@ export default function UnitCard({ unit, onUpdate, className, propertyId }: Unit
                     </div>
                     <div className="flex items-center space-x-2">
                       <DollarSign size={16} className="text-blue-500"/>
-                      <span>${lease.rent_amount} / month</span>
+                      <span>₹{lease.rent_amount} / month</span>
                     </div>
                     <div className="text-xs text-blue-600">
                       Lease starts: {new Date(lease.start_date).toLocaleDateString()}

@@ -162,7 +162,7 @@ export default function DashboardPage() {
                       <XAxis dataKey="month" />
                       <YAxis />
                       <Tooltip 
-                        formatter={(value) => [`$${value}`, 'Revenue']}
+                        formatter={(value) => [`₹${value}`, 'Revenue']}
                         labelFormatter={(label) => `Month: ${label}`}
                       />
                       <Bar dataKey="amount" fill="#8884d8" />

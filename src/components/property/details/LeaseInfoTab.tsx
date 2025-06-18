@@ -74,12 +74,12 @@ export default function LeaseInfoTab({ lease, onUpdate }: LeaseInfoTabProps) {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Rent</span>
-            <span className="font-semibold">${lease.rent_amount} / month</span>
+                            <span className="font-semibold">₹{lease.rent_amount} / month</span>
           </div>
           {lease.deposit_amount && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Deposit</span>
-              <span>${lease.deposit_amount}</span>
+                              <span>₹{lease.deposit_amount}</span>
             </div>
           )}
           {lease.notes && (
