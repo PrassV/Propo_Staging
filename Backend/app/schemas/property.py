@@ -32,6 +32,7 @@ class UnitDetail(BaseModel):
     id: uuid.UUID
     unit_number: str
     is_occupied: bool
+    status: Optional[str] = None
     lease: Optional[LeaseDetail] = None
 
     class Config:
@@ -43,6 +44,14 @@ class PropertyDetailResponse(BaseModel):
     id: uuid.UUID
     name: str
     address: str
+    amenities: Optional[List[str]] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[int] = None
+    size_sqft: Optional[int] = None
+    year_built: Optional[int] = None
+    floors: Optional[int] = None
+    property_type: Optional[str] = None
+    description: Optional[str] = None
     units: List[UnitDetail] = []
 
     class Config:
