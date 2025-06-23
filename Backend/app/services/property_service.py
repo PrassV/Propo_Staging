@@ -64,36 +64,21 @@ async def get_properties_count( # Add count function
     )
 
 async def get_property(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]:
-    """Get a specific property by ID, generating signed URLs for images."""
+    """Get a specific property by ID, using the new property image service for URLs."""
     property_data = await property_db.get_property_by_id(db_client, property_id)
 
     if property_data:
         image_paths = property_data.get('image_urls') # Assuming DB returns paths in 'image_urls' field
         if image_paths and isinstance(image_paths, list):
-            signed_urls = []
-            bucket_name = settings.PROPERTY_IMAGE_BUCKET
-            expires_in = 60 # Signed URL expiry time in seconds
-
-            for path in image_paths:
-                if not path or not isinstance(path, str):
-                    logger.warning(f"Skipping invalid image path found for property {property_id}: {path}")
-                    continue
-                try:
-                    # Remove leading slash if present, as Supabase paths are relative to bucket root
-                    clean_path = path.lstrip('/') 
-                    signed_url_data = db_client.storage.from_(bucket_name).create_signed_url(clean_path, expires_in)
-                    # Check if 'signedURL' key exists and is not None
-                    if signed_url_data and signed_url_data.get('signedURL'):
-                        signed_urls.append(signed_url_data['signedURL'])
-                    else:
-                        logger.warning(f"Failed to generate signed URL for path: {path} in bucket {bucket_name}. Result: {signed_url_data}")
-                except Exception as e:
-                    # Catch potential errors like file not found from Supabase storage
-                    logger.error(f"Error generating signed URL for path {path} in bucket {bucket_name}: {e}")
-                    # Optionally append None or a placeholder, or just skip
-
-            # Replace the original paths with the generated signed URLs
-            property_data['image_urls'] = signed_urls
+            try:
+                # Use the new property image service to generate public URLs
+                from .property_image_service import property_image_service
+                image_urls = await property_image_service.get_property_image_urls(image_paths)
+                property_data['image_urls'] = image_urls
+            except Exception as e:
+                logger.error(f"Error generating image URLs for property {property_id}: {e}")
+                # Return empty list instead of failing completely
+                property_data['image_urls'] = []
         else:
             # Ensure image_urls is at least an empty list if no paths were found or field is missing/invalid
             property_data['image_urls'] = [] 

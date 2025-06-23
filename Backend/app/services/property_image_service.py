@@ -117,6 +117,28 @@ class PropertyImageService:
         
         for path in image_paths:
             try:
+                # Skip empty or invalid paths
+                if not path or not isinstance(path, str):
+                    logger.warning(f"Skipping invalid image path: {path}")
+                    continue
+                    
+                # First check if the file exists to avoid 404 errors
+                try:
+                    # Try to get file info to verify it exists
+                    file_info = storage_client.storage.from_(self.bucket_name).list(path=path.rsplit('/', 1)[0] if '/' in path else '')
+                    
+                    # Check if the specific file exists in the listing
+                    filename = path.split('/')[-1]
+                    file_exists = any(f.get('name') == filename for f in file_info if isinstance(f, dict))
+                    
+                    if not file_exists:
+                        logger.warning(f"File does not exist in storage, skipping: {path}")
+                        continue
+                        
+                except Exception as list_error:
+                    # If we can't list files, try to generate URL anyway but catch errors
+                    logger.debug(f"Could not verify file existence for {path}: {list_error}")
+                
                 # Generate public URL (property images are public)
                 public_url_response = storage_client.storage.from_(self.bucket_name).get_public_url(path)
                 
@@ -124,7 +146,7 @@ class PropertyImageService:
                     urls.append(public_url_response)
                     
             except Exception as e:
-                logger.error(f"Error generating URL for {path}: {str(e)}")
+                logger.warning(f"Error generating URL for {path}: {str(e)}")
                 continue
         
         return urls
