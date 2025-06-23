@@ -62,7 +62,7 @@ export class PropertyImageService {
 
       // Upload to our clean API endpoint
       const response = await apiClient.post<PropertyImageUploadResult>(
-        `/properties/${propertyId}/images/upload`,
+        `/api/v1/properties/${propertyId}/images/upload`,
         formData,
         {
           headers: {
@@ -99,7 +99,7 @@ export class PropertyImageService {
   static async getPropertyImages(propertyId: string): Promise<PropertyImageListResult> {
     try {
       const response = await apiClient.get<PropertyImageListResult>(
-        `/properties/${propertyId}/images/`
+        `/api/v1/properties/${propertyId}/images/`
       );
 
       return response.data;
@@ -122,7 +122,7 @@ export class PropertyImageService {
   static async deleteImage(propertyId: string, imageIndex: number): Promise<boolean> {
     try {
       const response = await apiClient.delete(
-        `/properties/${propertyId}/images/${imageIndex}`
+        `/api/v1/properties/${propertyId}/images/${imageIndex}`
       );
 
       if (response.data.success) {
