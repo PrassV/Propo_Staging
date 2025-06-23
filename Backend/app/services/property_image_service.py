@@ -6,7 +6,7 @@ from fastapi import UploadFile, HTTPException, status
 from supabase import Client
 
 from app.config.settings import settings
-from app.config.database import get_supabase_client
+from app.config.database import supabase_service_role_client
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class PropertyImageService:
         if not files:
             return []
             
-        storage_client = get_supabase_client()
+        storage_client = supabase_service_role_client
         uploaded_paths = []
         
         for file in files:
@@ -112,7 +112,7 @@ class PropertyImageService:
         if not image_paths:
             return []
             
-        storage_client = get_supabase_client()
+        storage_client = supabase_service_role_client
         urls = []
         
         for path in image_paths:
@@ -140,7 +140,7 @@ class PropertyImageService:
             True if deleted successfully
         """
         try:
-            storage_client = get_supabase_client()
+            storage_client = supabase_service_role_client
             
             delete_response = storage_client.storage.from_(self.bucket_name).remove([storage_path])
             
