@@ -173,6 +173,8 @@ export default function PropertyDetailsPage() {
                                 propertyId={property.id}
                                 propertyName={property.name}
                                 className="mb-6" // Add margin if needed
+                                showUploadButton={true}
+                                onImageUploaded={fetchPropertyDetails}
                             />
                         </CardContent>
                     </Card>

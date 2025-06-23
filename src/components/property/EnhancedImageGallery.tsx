@@ -1,70 +1,91 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle } from 'lucide-react';
-import api from '@/api';
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, ImageIcon, Plus } from 'lucide-react';
+import { PropertyImageService } from '@/utils/storage/propertyImages';
 
 interface EnhancedImageGalleryProps {
   propertyId: string;
   propertyName: string;
   className?: string;
+  showUploadButton?: boolean;
+  onImageUploaded?: () => void;
 }
 
 export default function EnhancedImageGallery({ 
   propertyId, 
   propertyName, 
-  className 
+  className,
+  showUploadButton = false,
+  onImageUploaded
 }: EnhancedImageGalleryProps) {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const fetchImages = useCallback(async () => {
+    if (!propertyId) {
+      setIsLoading(false);
+      setImageUrls([]);
+      setError(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Use our new PropertyImageService
+      const result = await PropertyImageService.getPropertyImages(propertyId);
+      setImageUrls(result.image_urls);
+      setSelectedImageIndex(0);
+    } catch (err: unknown) {
+      console.error("Error fetching property images:", err);
+      let message = 'Unknown error';
+      if (err instanceof Error) {
+        message = err.message;
+      }
+      setError(`Failed to load images: ${message}`);
+      setImageUrls([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [propertyId]);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    const fetchImages = async () => {
-      if (!propertyId) {
-        setIsLoading(false);
-        setImageUrls([]);
-        setError(null);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        // Use the new API endpoint instead of direct Supabase access
-        const urls = await api.property.getPropertyImages(propertyId);
-        
-        if (isMounted) {
-          setImageUrls(urls);
-          setSelectedImageIndex(0);
-        }
-      } catch (err: unknown) {
-        console.error("Error fetching property images:", err);
-        if (isMounted) {
-          let message = 'Unknown error';
-          if (err instanceof Error) {
-            message = err.message;
-          }
-          setError(`Failed to load images: ${message}`);
-          setImageUrls([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
     fetchImages();
+  }, [propertyId, fetchImages]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [propertyId]);
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const fileArray = Array.from(files);
+      await PropertyImageService.uploadImages(propertyId, fileArray);
+      await fetchImages(); // Refresh the gallery
+      onImageUploaded?.();
+    } catch (err) {
+      console.error("Error uploading images:", err);
+      setError("Failed to upload images");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteImage = async (index: number) => {
+    try {
+      await PropertyImageService.deleteImage(propertyId, index);
+      await fetchImages(); // Refresh the gallery
+    } catch (err) {
+      console.error("Error deleting image:", err);
+      setError("Failed to delete image");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -91,8 +112,31 @@ export default function EnhancedImageGallery({
   
   if (imageUrls.length === 0) {
     return (
-      <div className={cn("aspect-video w-full bg-muted rounded-md flex items-center justify-center text-muted-foreground", className)}>
-        No Images Available
+      <div className={cn("space-y-4", className)}>
+        <div className="aspect-video w-full bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground p-8">
+          <ImageIcon className="w-12 h-12 mb-4 opacity-50" />
+          <p>No Images Available</p>
+          {showUploadButton && (
+            <Button 
+              className="mt-4" 
+              onClick={() => document.getElementById(`file-upload-${propertyId}`)?.click()}
+              disabled={isUploading}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {isUploading ? 'Uploading...' : 'Add Images'}
+            </Button>
+          )}
+        </div>
+        {showUploadButton && (
+          <input
+            id={`file-upload-${propertyId}`}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+        )}
       </div>
     );
   }
@@ -117,6 +161,29 @@ export default function EnhancedImageGallery({
         )}
       </div>
 
+      {showUploadButton && (
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => document.getElementById(`file-upload-${propertyId}`)?.click()}
+            disabled={isUploading}
+            variant="outline"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {isUploading ? 'Uploading...' : 'Add Images'}
+          </Button>
+          
+          {imageUrls.length > 0 && (
+            <Button 
+              onClick={() => handleDeleteImage(safeSelectedImageIndex)}
+              variant="outline"
+              className="text-red-600 hover:text-red-700"
+            >
+              Delete Image
+            </Button>
+          )}
+        </div>
+      )}
+
       {imageUrls.length > 1 && (
         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
           {imageUrls.map((url, index) => (
@@ -136,6 +203,17 @@ export default function EnhancedImageGallery({
             </button>
           ))}
         </div>
+      )}
+
+      {showUploadButton && (
+        <input
+          id={`file-upload-${propertyId}`}
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
       )}
     </div>
   );
