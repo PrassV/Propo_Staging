@@ -5,6 +5,7 @@ import { handleLogin } from '@/utils/auth';
 import toast from 'react-hot-toast';
 import { LoginResponse } from '@/api/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface LoginFormProps {
   onSuccess?: (loginResponse: LoginResponse) => void;
@@ -35,8 +36,25 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
-      const oauthUrl = `${import.meta.env.VITE_API_URL || 'https://localhost:8000'}/auth/oauth/google/login`;
-      window.location.href = oauthUrl;
+      
+      // Use Supabase's built-in OAuth functionality
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (error) {
+        console.error('Google Sign-In error:', error);
+        toast.error('Failed to start Google Sign-In: ' + error.message);
+        setLoading(false);
+        return;
+      }
+
+      // The OAuth flow will redirect, so we don't need to handle success here
+      console.log('OAuth redirect initiated:', data);
+      
     } catch (error) {
       console.error('Error initiating Google Sign-In:', error);
       toast.error('Failed to start Google Sign-In');
