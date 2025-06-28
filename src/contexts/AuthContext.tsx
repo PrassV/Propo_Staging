@@ -1,17 +1,26 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { clearTokens, getStoredToken, storeToken } from '../utils/token';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import { LoginResponse, UserProfile } from '../api/types';
+import { getStoredToken, storeToken, clearTokens } from '../utils/token';
+import { supabase } from '../lib/supabase';
 import api from '../api';
-import toast from 'react-hot-toast';
-import { UserProfile, LoginResponse, Session, AuthError } from '@/api/types';
 
-// AuthContextType uses correct types
+export interface Session {
+  access_token: string;
+  user: UserProfile;
+}
+
 interface AuthContextType {
   user: UserProfile | null;
   session: Session | null;
   loading: boolean;
   initialized: boolean;
   setAuthData: (loginResponse: LoginResponse) => void;
-  logoutUser: () => Promise<{ error: AuthError } | void>;
+  logoutUser: () => Promise<{ error?: unknown } | void>;
+}
+
+interface AuthError {
+  message: string;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -47,12 +56,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logoutUser = async () => {
     try {
+      // Sign out from Supabase
+      await supabase.auth.signOut();
       await api.auth.logout();
       clearTokens();
       setUser(null);
       setSession(null);
       setLoading(false);
       toast.success("Logged out successfully!");
+      return {};
     } catch (error) {
       const authError = error as AuthError;
       console.error("Error logging out:", authError);
@@ -67,29 +79,69 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        const token = getStoredToken();
+        // First check if we have a Supabase session
+        const { data: { session: supabaseSession }, error } = await supabase.auth.getSession();
         
-        if (!token) {
-          if (mounted) {
-            setLoading(false);
-            setInitialized(true);
-          }
-          return;
+        if (error) {
+          console.error('Error getting Supabase session:', error);
         }
-        
-        // Fetch current user profile with the stored token
-        const userProfile = await api.auth.getCurrentUser();
-        
-        if (mounted && userProfile) {
+
+        if (supabaseSession && mounted) {
+          // We have a Supabase session, transform it to our format
+          const supabaseUser = supabaseSession.user;
+          const userProfile: UserProfile = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
+            phone: supabaseUser.user_metadata?.phone || '',
+            role: supabaseUser.user_metadata?.role || null,
+            user_type: supabaseUser.user_metadata?.user_type || null,
+            created_at: supabaseUser.created_at,
+            updated_at: supabaseUser.updated_at || null,
+            first_name: supabaseUser.user_metadata?.first_name || '',
+            last_name: supabaseUser.user_metadata?.last_name || '',
+            address_line1: null,
+            address_line2: null,
+            city: null,
+            state: null,
+            pincode: null,
+            id_image_url: null,
+            id_type: null
+          };
+
           const sessionData: Session = {
-            access_token: token,
+            access_token: supabaseSession.access_token,
             user: userProfile
           };
-          
+
+          storeToken(supabaseSession.access_token);
           setSession(sessionData);
           setUser(userProfile);
-        } else if (mounted) {
-           clearTokens();
+        } else {
+          // Fallback to stored token method
+          const token = getStoredToken();
+          
+          if (token && mounted) {
+            try {
+              // Fetch current user profile with the stored token
+              const userProfile = await api.auth.getCurrentUser();
+              
+              if (userProfile) {
+                const sessionData: Session = {
+                  access_token: token,
+                  user: userProfile
+                };
+                
+                setSession(sessionData);
+                setUser(userProfile);
+              } else {
+                clearTokens();
+              }
+            } catch (error) {
+              console.error('Error fetching user with stored token:', error);
+              clearTokens();
+            }
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -104,8 +156,53 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initializeAuth();
 
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        
+        if (event === 'SIGNED_OUT' || !session) {
+          setUser(null);
+          setSession(null);
+          clearTokens();
+                 } else if (event === 'SIGNED_IN' && session) {
+           // Handle sign in
+           const supabaseUser = session.user;
+           const userProfile: UserProfile = {
+             id: supabaseUser.id,
+             email: supabaseUser.email || '',
+             full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
+             phone: supabaseUser.user_metadata?.phone || '',
+             role: supabaseUser.user_metadata?.role || null,
+             user_type: supabaseUser.user_metadata?.user_type || null,
+             created_at: supabaseUser.created_at,
+             updated_at: supabaseUser.updated_at || null,
+             first_name: supabaseUser.user_metadata?.first_name || '',
+             last_name: supabaseUser.user_metadata?.last_name || '',
+             address_line1: null,
+             address_line2: null,
+             city: null,
+             state: null,
+             pincode: null,
+             id_image_url: null,
+             id_type: null
+           };
+
+          const sessionData: Session = {
+            access_token: session.access_token,
+            user: userProfile
+          };
+
+          storeToken(session.access_token);
+          setSession(sessionData);
+          setUser(userProfile);
+        }
+      }
+    );
+
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -116,10 +213,4 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
