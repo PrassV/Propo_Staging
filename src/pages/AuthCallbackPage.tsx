@@ -1,107 +1,101 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import { toast } from 'react-hot-toast';
 
-const AuthCallbackPage = () => {
+const AuthCallbackPage: React.FC = () => {
   const navigate = useNavigate();
   const { setAuthData } = useAuth();
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the session from the URL hash
-        const { data, error } = await supabase.auth.getSession();
-        
+        console.log('🔄 Processing OAuth callback...');
+        console.log('📍 Current URL:', window.location.href);
+        console.log('🌐 Environment:', import.meta.env.PROD ? 'Production' : 'Development');
+
+        // Get the session from URL hash or current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+
         if (error) {
-          console.error('Error getting session:', error);
-          setError('Authentication failed: ' + error.message);
+          console.error('❌ Session error:', error);
+          toast.error('Authentication failed');
+          navigate('/');
           return;
         }
 
-        if (data.session) {
-          // Extract user information
-          const user = data.session.user;
-          const accessToken = data.session.access_token;
-          
-          // Transform Supabase user data to match your LoginResponse interface
-          const loginResponse = {
-            access_token: accessToken,
-            refresh_token: data.session.refresh_token || '',
-            token_type: 'bearer',
-            expires_in: data.session.expires_in || 3600,
-            user: {
-              id: user.id,
-              email: user.email || '',
-              full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-              phone: user.user_metadata?.phone || '',
-              role: user.user_metadata?.role || null,
-              user_type: user.user_metadata?.user_type || null,
-              created_at: user.created_at,
-              updated_at: user.updated_at || null,
-              first_name: user.user_metadata?.first_name || '',
-              last_name: user.user_metadata?.last_name || '',
-              address_line1: null,
-              address_line2: null,
-              city: null,
-              state: null,
-              pincode: null,
-              id_image_url: null,
-              id_type: null
-            }
-          };
-
-          // Set auth data in context
-          setAuthData(loginResponse);
-          
-          toast.success('Successfully signed in with Google!');
-          
-          // Check if user needs to complete profile
-          const hasCompleteProfile = user.user_metadata?.full_name && 
-                                   (user.user_metadata?.role || user.user_metadata?.user_type);
-          
-          if (hasCompleteProfile) {
-            navigate('/dashboard');
-          } else {
-            navigate('/onboarding');
-          }
-        } else {
-          setError('No session found. Please try signing in again.');
+        if (!session) {
+          console.log('⚠️ No session found, redirecting to home');
+          navigate('/');
+          return;
         }
-      } catch (err) {
-        console.error('Callback error:', err);
-        setError('An unexpected error occurred during authentication.');
+
+        console.log('✅ Session found:', {
+          user: session.user.email,
+          provider: session.user.app_metadata?.provider
+        });
+
+        // Transform Supabase session to LoginResponse format
+        const loginResponse = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token || '',
+          token_type: 'bearer',
+          expires_in: session.expires_in || 3600,
+          user: {
+            id: session.user.id,
+            email: session.user.email || '',
+            full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || '',
+            phone: session.user.user_metadata?.phone || '',
+            role: session.user.user_metadata?.role || null,
+            user_type: session.user.user_metadata?.user_type || null,
+            created_at: session.user.created_at,
+            updated_at: session.user.updated_at || null,
+            first_name: session.user.user_metadata?.first_name || '',
+            last_name: session.user.user_metadata?.last_name || '',
+            address_line1: null,
+            address_line2: null,
+            city: null,
+            state: null,
+            pincode: null,
+            id_image_url: null,
+            id_type: null
+          }
+        };
+
+        // Set auth data using the context method
+        setAuthData(loginResponse);
+
+        console.log('🔄 Navigating based on profile completion...');
+
+        // Check if user needs to complete profile
+        const hasCompleteProfile = session.user.user_metadata?.full_name && 
+                                 (session.user.user_metadata?.role || session.user.user_metadata?.user_type);
+
+        // Navigate based on profile completion
+        if (hasCompleteProfile) {
+          console.log('✅ Profile complete, navigating to dashboard');
+          navigate('/dashboard');
+        } else {
+          console.log('🔄 Profile incomplete, navigating to onboarding');
+          navigate('/onboarding');
+        }
+
+      } catch (error) {
+        console.error('❌ Callback processing error:', error);
+        toast.error('Authentication processing failed');
+        navigate('/');
       }
     };
 
     handleAuthCallback();
   }, [navigate, setAuthData]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Authentication Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Return to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <LoadingSpinner />
-        <p className="mt-4 text-gray-600">Completing your sign-in...</p>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Processing authentication...</p>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { LoginResponse } from '@/api/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getAuthRedirectUrl } from '../../config/urls';
 
 interface LoginFormProps {
   onSuccess?: (loginResponse: LoginResponse) => void;
@@ -33,32 +34,34 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
     setLoading(false);
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleLogin = async () => {
     try {
-      setLoading(true);
+      console.log('🔵 Starting Google OAuth login...');
       
-      // Use Supabase's built-in OAuth functionality
+      const redirectUrl = `${getAuthRedirectUrl()}/auth/callback`;
+      
+      console.log('🔵 Environment:', import.meta.env.PROD ? 'Production' : 'Development');
+      console.log('🔵 Redirect URL:', redirectUrl);
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: redirectUrl
         }
       });
 
       if (error) {
-        console.error('Google Sign-In error:', error);
-        toast.error('Failed to start Google Sign-In: ' + error.message);
-        setLoading(false);
+        console.error('❌ OAuth error:', error);
+        toast.error(`Google sign-in failed: ${error.message}`);
         return;
       }
 
-      // The OAuth flow will redirect, so we don't need to handle success here
-      console.log('OAuth redirect initiated:', data);
+      console.log('✅ OAuth initiated successfully:', data);
+      // The redirect will happen automatically, no need to handle response here
       
     } catch (error) {
-      console.error('Error initiating Google Sign-In:', error);
-      toast.error('Failed to start Google Sign-In');
-      setLoading(false);
+      console.error('❌ Unexpected error during Google OAuth:', error);
+      toast.error('An unexpected error occurred during Google sign-in');
     }
   };
 
@@ -105,7 +108,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
 
       <button
         type="button"
-        onClick={handleGoogleSignIn}
+        onClick={handleGoogleLogin}
         disabled={loading}
         className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold tracking-wide hover:bg-gray-50 transition-colors disabled:opacity-50"
       >
