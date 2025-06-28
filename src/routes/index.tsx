@@ -6,7 +6,6 @@ import LandingPage from '../pages/LandingPage';
 import OnboardingFlow from '../components/onboarding/OnboardingFlow';
 import LeaseManagement from '../components/LeaseManagement';
 import PaymentList from '../components/payment/PaymentList';
-import AuthCallbackPage from '../pages/AuthCallbackPage';
 
 // Dashboard pages
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -37,10 +36,6 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <LandingPage />
-  },
-  {
-    path: '/auth/callback',
-    element: <AuthCallbackPage />
   },
   {
     path: '/dashboard',
