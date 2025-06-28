@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     MAINTENANCE_FILES_BUCKET: str = os.getenv("MAINTENANCE_FILES_BUCKET", "Maintenance Files")
     AGREEMENTS_BUCKET: str = os.getenv("AGREEMENTS_BUCKET", "agreements")
     GENERAL_UPLOAD_BUCKET: str = os.getenv("GENERAL_UPLOAD_BUCKET", "general-uploads") # A default bucket
-    SUPABASE_BUCKET_NAME = "propertyimage"
+    SUPABASE_BUCKET_NAME: str = "propertyimage"
     # Add others as needed based on your Supabase setup
 
     model_config = {
