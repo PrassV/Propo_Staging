@@ -5,14 +5,13 @@ import { toast } from 'react-hot-toast';
 import { uploadFileToBucket } from '../../api/services/storageService';
 import { createDocument } from '../../api/services/documentService';
 import { DocumentCreate, Document, DocumentType } from '../../types/document';
-import { useForm, SubmitHandler, Controller } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 interface DocumentUploadFormProps {
@@ -22,7 +21,8 @@ interface DocumentUploadFormProps {
   onCancel?: () => void;
 }
 
-const BUCKET_NAME = 'documents'; // Define the target bucket
+// Use the unified storage context for documents
+const STORAGE_CONTEXT = 'tenant_documents';
 
 // Define possible document types based on the type definition
 const documentTypeOptions: DocumentType[] = [
@@ -107,12 +107,17 @@ export default function DocumentUploadForm({
     const toastId = toast.loading('Uploading file and creating document...');
 
     try {
-      const folderPath = propertyId ? `properties/${propertyId}` : (tenantId ? `tenants/${tenantId}` : 'general');
-      const uploadResult = await uploadFileToBucket(file, BUCKET_NAME, folderPath);
+      // Prepare metadata for the unified storage service
+      const metadata = {
+        tenantId: tenantId,
+        propertyId: propertyId,
+        userId: tenantId // For tenant documents, use tenantId as userId
+      };
+      
+      const uploadResult = await uploadFileToBucket(file, STORAGE_CONTEXT, undefined, metadata);
 
-      if (!uploadResult) { 
-          // Assuming uploadFileToBucket shows a toast on failure
-          throw new Error('File upload failed.'); 
+      if (!uploadResult.success) { 
+          throw new Error(uploadResult.error || 'File upload failed.'); 
       }
 
       const documentData: DocumentCreate = {

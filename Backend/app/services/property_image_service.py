@@ -7,6 +7,7 @@ from supabase import Client
 
 from app.config.settings import settings
 from app.config.database import supabase_service_role_client
+from app.utils.storage import storage_service, upload_property_image
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class PropertyImageService:
         user_id: str
     ) -> List[str]:
         """
-        Upload property images to storage (S3-like pattern)
+        Upload property images using unified storage service
         
         Args:
             files: List of image files to upload
@@ -41,27 +42,18 @@ class PropertyImageService:
         if not files:
             return []
             
-        storage_client = supabase_service_role_client
         uploaded_paths = []
         
         for file in files:
             try:
-                # Validate file type
-                if not file.content_type or not file.content_type.startswith('image/'):
-                    logger.warning(f"Skipping non-image file: {file.filename}")
+                # Validate file using unified service
+                if not storage_service.validate_file(await file.read(), file.filename, 'property_images')['valid']:
+                    logger.warning(f"File validation failed for: {file.filename}")
+                    await file.seek(0)  # Reset file pointer
                     continue
                 
-                # Validate file size (10MB limit)
-                if file.size and file.size > 10 * 1024 * 1024:
-                    logger.warning(f"Skipping oversized file: {file.filename}")
-                    continue
-                
-                # Generate unique filename (S3-like pattern)
-                file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-                unique_filename = f"{uuid.uuid4()}.{file_extension}"
-                
-                # Create structured path: user_id/property_id/filename
-                storage_path = f"{user_id}/{property_id}/{unique_filename}"
+                # Reset file pointer after validation
+                await file.seek(0)
                 
                 # Read file content
                 content = await file.read()
@@ -69,24 +61,20 @@ class PropertyImageService:
                     logger.warning(f"Skipping empty file: {file.filename}")
                     continue
                 
-                # Upload to Supabase storage (like S3)
-                upload_response = storage_client.storage.from_(self.bucket_name).upload(
-                    path=storage_path,
-                    file=content,
-                    file_options={
-                        "content-type": file.content_type,
-                        "cache-control": "3600"
-                    }
+                # Upload using unified storage service
+                upload_result = upload_property_image(
+                    file_content=content,
+                    filename=file.filename,
+                    property_id=property_id,
+                    category='general'
                 )
                 
-                # Check for upload errors
-                if hasattr(upload_response, 'error') and upload_response.error:
-                    logger.error(f"Upload failed for {file.filename}: {upload_response.error}")
+                if upload_result['success']:
+                    uploaded_paths.append(upload_result['file_path'])
+                    logger.info(f"Successfully uploaded: {file.filename} -> {upload_result['file_path']}")
+                else:
+                    logger.error(f"Upload failed for {file.filename}: {upload_result.get('error', 'Unknown error')}")
                     continue
-                
-                # Store the path (not URL)
-                uploaded_paths.append(storage_path)
-                logger.info(f"Successfully uploaded: {file.filename} -> {storage_path}")
                 
             except Exception as e:
                 logger.error(f"Error uploading {file.filename}: {str(e)}")
@@ -100,7 +88,7 @@ class PropertyImageService:
         expires_in: int = 3600
     ) -> List[str]:
         """
-        Generate public URLs for property images (S3-like pattern)
+        Generate public URLs for property images using unified storage service
         
         Args:
             image_paths: List of storage paths
@@ -112,7 +100,6 @@ class PropertyImageService:
         if not image_paths:
             return []
             
-        storage_client = supabase_service_role_client
         urls = []
         
         for path in image_paths:
@@ -121,25 +108,10 @@ class PropertyImageService:
                 if not path or not isinstance(path, str):
                     logger.warning(f"Skipping invalid image path: {path}")
                     continue
-                    
-                # First check if the file exists to avoid 404 errors
-                try:
-                    # Try to get file info to verify it exists
-                    file_info = storage_client.storage.from_(self.bucket_name).list(path=path.rsplit('/', 1)[0] if '/' in path else '')
-                    
-                    # Check if the specific file exists in the listing
-                    filename = path.split('/')[-1]
-                    file_exists = any(f.get('name') == filename for f in file_info if isinstance(f, dict))
-                    
-                    if not file_exists:
-                        logger.warning(f"File does not exist in storage, skipping: {path}")
-                        continue
-                        
-                except Exception as list_error:
-                    # If we can't list files, try to generate URL anyway but catch errors
-                    logger.debug(f"Could not verify file existence for {path}: {list_error}")
                 
-                # Generate public URL (property images are public)
+                # Use unified storage service to get public URL
+                # For property images (public bucket), we can get public URL directly
+                storage_client = supabase_service_role_client
                 public_url_response = storage_client.storage.from_(self.bucket_name).get_public_url(path)
                 
                 if public_url_response:
@@ -153,7 +125,7 @@ class PropertyImageService:
     
     async def delete_property_image(self, storage_path: str) -> bool:
         """
-        Delete property image from storage (S3-like pattern)
+        Delete property image using unified storage service
         
         Args:
             storage_path: Storage path to delete
@@ -162,16 +134,15 @@ class PropertyImageService:
             True if deleted successfully
         """
         try:
-            storage_client = supabase_service_role_client
+            # Use unified storage service for deletion
+            success = storage_service.delete_file(storage_path, self.bucket_name)
             
-            delete_response = storage_client.storage.from_(self.bucket_name).remove([storage_path])
-            
-            if hasattr(delete_response, 'error') and delete_response.error:
-                logger.error(f"Delete failed for {storage_path}: {delete_response.error}")
-                return False
+            if success:
+                logger.info(f"Successfully deleted: {storage_path}")
+            else:
+                logger.error(f"Delete failed for {storage_path}")
                 
-            logger.info(f"Successfully deleted: {storage_path}")
-            return True
+            return success
             
         except Exception as e:
             logger.error(f"Error deleting {storage_path}: {str(e)}")
