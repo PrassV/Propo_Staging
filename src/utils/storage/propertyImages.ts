@@ -27,7 +27,8 @@ export class PropertyImageService {
    */
   static async uploadImages(
     propertyId: string, 
-    files: File[]
+    files: File[],
+    userId: string
   ): Promise<PropertyImageUploadResult> {
     try {
       if (!files.length) {
@@ -59,6 +60,7 @@ export class PropertyImageService {
       for (const file of validFiles) {
         try {
           const metadata = {
+            userId: userId,
             propertyId: propertyId,
             category: 'main'
           };
@@ -197,9 +199,10 @@ export class PropertyImageService {
    */
   static async uploadSingleImage(
     propertyId: string, 
-    file: File
+    file: File,
+    userId: string
   ): Promise<PropertyImageUploadResult> {
-    return this.uploadImages(propertyId, [file]);
+    return this.uploadImages(propertyId, [file], userId);
   }
 
   /**
@@ -253,7 +256,8 @@ export class PropertyImageService {
 }
 
 // Export convenience functions for backward compatibility
-export const uploadPropertyImages = PropertyImageService.uploadImages.bind(PropertyImageService);
+export const uploadPropertyImages = (propertyId: string, files: File[], userId: string) => 
+  PropertyImageService.uploadImages(propertyId, files, userId);
 export const getPropertyImages = PropertyImageService.getPropertyImages.bind(PropertyImageService);
 export const deletePropertyImage = PropertyImageService.deleteImage.bind(PropertyImageService);
 export const validateImageFile = PropertyImageService.validateImageFile.bind(PropertyImageService);

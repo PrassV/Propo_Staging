@@ -4,6 +4,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ImageIcon, Plus } from 'lucide-react';
 import { PropertyImageService } from '@/utils/storage/propertyImages';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface EnhancedImageGalleryProps {
   propertyId: string;
@@ -25,6 +27,7 @@ export default function EnhancedImageGallery({
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const { user } = useAuth();
 
   const fetchImages = useCallback(async () => {
     if (!propertyId) {
@@ -63,10 +66,15 @@ export default function EnhancedImageGallery({
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    if (!user?.id) {
+      toast.error('You must be logged in to upload images');
+      return;
+    }
+
     setIsUploading(true);
     try {
       const fileArray = Array.from(files);
-      await PropertyImageService.uploadImages(propertyId, fileArray);
+      await PropertyImageService.uploadImages(propertyId, fileArray, user.id);
       await fetchImages(); // Refresh the gallery
       onImageUploaded?.();
     } catch (err) {
