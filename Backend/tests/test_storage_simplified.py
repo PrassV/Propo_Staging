@@ -403,6 +403,105 @@ class TestSecurityValidation:
         assert "property2" in prop2_path and "property2" not in prop1_path
 
 
+class TestLegacyPathHandling:
+    """Test backward compatibility with legacy path formats"""
+    
+    def test_legacy_path_detection(self):
+        """Test that legacy paths are correctly identified"""
+        from app.services.property_image_service import property_image_service
+        
+        # Test legacy path format (user_id/filename)
+        legacy_path = "2d54223c-92ea-46fb-a53b-53cc8567b6a8/image.jpg"
+        assert property_image_service._is_legacy_path(legacy_path) == True
+        
+        # Test new secure path format
+        new_path = "users/2d54223c-92ea-46fb-a53b-53cc8567b6a8/properties/prop123/general/image.jpg"
+        assert property_image_service._is_legacy_path(new_path) == False
+        
+        # Test invalid paths
+        assert property_image_service._is_legacy_path("") == False
+        assert property_image_service._is_legacy_path("invalid/path/structure") == False
+        assert property_image_service._is_legacy_path("not-a-uuid/image.jpg") == False
+    
+    def test_legacy_path_url_conversion(self):
+        """Test conversion of legacy paths to public URLs"""
+        from app.services.property_image_service import property_image_service
+        
+        legacy_path = "2d54223c-92ea-46fb-a53b-53cc8567b6a8/a2e7b020-4024-4ff2-beca-4dc9cb3ac545.jpeg"
+        
+        # Mock the settings
+        with patch('app.services.property_image_service.settings') as mock_settings:
+            mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
+            # Use the actual bucket name that the service uses
+            mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"  # This is what's actually being used
+            
+            url = property_image_service._convert_legacy_path_to_url(legacy_path)
+            
+            expected_url = "https://oniudnupeazkagtbsxtt.supabase.co/storage/v1/object/public/property_images/2d54223c-92ea-46fb-a53b-53cc8567b6a8/a2e7b020-4024-4ff2-beca-4dc9cb3ac545.jpeg"
+            assert url == expected_url
+    
+    @patch('app.services.property_image_service.supabase_service_role_client')
+    @patch('app.services.property_image_service.settings')
+    @pytest.mark.asyncio
+    async def test_mixed_path_formats_handling(self, mock_settings, mock_supabase):
+        """Test handling of mixed legacy and new path formats"""
+        from app.services.property_image_service import property_image_service
+        
+        # Setup mocks
+        mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
+        mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"
+        
+        # Mock storage client for new paths
+        mock_supabase.storage.from_.return_value.get_public_url.return_value = "https://example.com/new-path-url"
+        
+        # Mixed paths: legacy and new formats
+        mixed_paths = [
+            "2d54223c-92ea-46fb-a53b-53cc8567b6a8/legacy-image.jpg",  # Legacy
+            "users/2d54223c-92ea-46fb-a53b-53cc8567b6a8/properties/prop123/general/new-image.jpg",  # New
+            "2d54223c-92ea-46fb-a53b-53cc8567b6a8/another-legacy.jpg"  # Legacy
+        ]
+        
+        urls = await property_image_service.get_property_image_urls(mixed_paths)
+        
+        # Should return 3 URLs
+        assert len(urls) == 3
+        
+        # First URL should be legacy format
+        assert "legacy-image.jpg" in urls[0]
+        assert "storage/v1/object/public/property_images" in urls[0]
+        
+        # Second URL should be from storage client (new format)
+        assert urls[1] == "https://example.com/new-path-url"
+        
+        # Third URL should be legacy format
+        assert "another-legacy.jpg" in urls[2]
+        assert "storage/v1/object/public/property_images" in urls[2]
+    
+    @patch('app.services.property_image_service.supabase_service_role_client')
+    @patch('app.services.property_image_service.settings')
+    @pytest.mark.asyncio
+    async def test_storage_error_fallback_to_legacy(self, mock_settings, mock_supabase):
+        """Test fallback to legacy handling when storage service fails"""
+        from app.services.property_image_service import property_image_service
+        
+        # Setup mocks
+        mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
+        mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"
+        
+        # Make storage client raise an error for new paths
+        mock_supabase.storage.from_.return_value.get_public_url.side_effect = Exception("Storage error")
+        
+        # Test with a path that looks like new format but fails
+        failing_new_path = "users/user123/properties/prop123/general/image.jpg"
+        
+        urls = await property_image_service.get_property_image_urls([failing_new_path])
+        
+        # Should fallback to legacy conversion
+        assert len(urls) == 1
+        assert "storage/v1/object/public/property_images" in urls[0]
+        assert failing_new_path in urls[0]
+
+
 if __name__ == "__main__":
     # Run tests with verbose output
     pytest.main([__file__, "-v", "--tb=short"]) 

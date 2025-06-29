@@ -22,6 +22,51 @@ class PropertyImageService:
     def __init__(self):
         self.bucket_name = settings.PROPERTY_IMAGE_BUCKET  # "propertyimage"
     
+    def _is_legacy_path(self, path: str) -> bool:
+        """
+        Check if a path is in the legacy format (user_id/filename.ext)
+        vs new secure format (users/user_id/properties/property_id/category/filename.ext)
+        """
+        if not path:
+            return False
+        
+        # Legacy paths have format: {user_id}/{filename}
+        # New secure paths have format: users/{user_id}/properties/{property_id}/...
+        parts = path.split('/')
+        
+        # Legacy paths typically have 2 parts: user_id/filename
+        # New paths have 5+ parts: users/user_id/properties/property_id/category/filename
+        if len(parts) == 2:
+            # Check if first part looks like a UUID (user_id)
+            try:
+                uuid.UUID(parts[0])
+                return True
+            except ValueError:
+                pass
+        
+        return False
+    
+    def _convert_legacy_path_to_url(self, legacy_path: str) -> Optional[str]:
+        """
+        Convert legacy path format to public URL
+        Legacy format: {user_id}/{filename}
+        Public URL: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+        """
+        try:
+            if not legacy_path:
+                return None
+            
+            # For legacy paths, construct the full public URL directly
+            base_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/{self.bucket_name}"
+            public_url = f"{base_url}/{legacy_path}"
+            
+            logger.debug(f"Converted legacy path {legacy_path} to URL: {public_url}")
+            return public_url
+            
+        except Exception as e:
+            logger.warning(f"Error converting legacy path {legacy_path}: {str(e)}")
+            return None
+    
     async def upload_property_images(
         self, 
         files: List[UploadFile], 
@@ -66,6 +111,7 @@ class PropertyImageService:
                     file_content=content,
                     filename=file.filename,
                     property_id=property_id,
+                    user_id=user_id,  # Add user_id parameter
                     category='general'
                 )
                 
@@ -88,10 +134,11 @@ class PropertyImageService:
         expires_in: int = 3600
     ) -> List[str]:
         """
-        Generate public URLs for property images using unified storage service
+        Generate public URLs for property images with backward compatibility
+        Handles both legacy and new secure path formats
         
         Args:
-            image_paths: List of storage paths
+            image_paths: List of storage paths (legacy or new format)
             expires_in: URL expiration (not used for public buckets)
             
         Returns:
@@ -109,18 +156,49 @@ class PropertyImageService:
                     logger.warning(f"Skipping invalid image path: {path}")
                     continue
                 
-                # Use unified storage service to get public URL
-                # For property images (public bucket), we can get public URL directly
-                storage_client = supabase_service_role_client
-                public_url_response = storage_client.storage.from_(self.bucket_name).get_public_url(path)
-                
-                if public_url_response:
-                    urls.append(public_url_response)
+                # Check if this is a legacy path
+                if self._is_legacy_path(path):
+                    logger.debug(f"Processing legacy path: {path}")
+                    
+                    # Handle legacy path format
+                    public_url = self._convert_legacy_path_to_url(path)
+                    if public_url:
+                        urls.append(public_url)
+                        logger.debug(f"Legacy path converted to URL: {public_url}")
+                    else:
+                        logger.warning(f"Failed to convert legacy path: {path}")
+                        
+                else:
+                    logger.debug(f"Processing new secure path: {path}")
+                    
+                    # Handle new secure path format using unified storage service
+                    try:
+                        storage_client = supabase_service_role_client
+                        public_url_response = storage_client.storage.from_(self.bucket_name).get_public_url(path)
+                        
+                        if public_url_response:
+                            urls.append(public_url_response)
+                            logger.debug(f"New path converted to URL: {public_url_response}")
+                        else:
+                            logger.warning(f"Failed to get public URL for new path: {path}")
+                            
+                    except Exception as storage_error:
+                        logger.warning(f"Storage service error for path {path}: {str(storage_error)}")
+                        
+                        # Fallback: try treating as legacy path
+                        logger.debug(f"Attempting legacy conversion as fallback for: {path}")
+                        fallback_url = self._convert_legacy_path_to_url(path)
+                        if fallback_url:
+                            urls.append(fallback_url)
+                            logger.debug(f"Fallback legacy conversion successful: {fallback_url}")
+                        else:
+                            logger.error(f"All conversion attempts failed for path: {path}")
                     
             except Exception as e:
-                logger.warning(f"Error generating URL for {path}: {str(e)}")
+                logger.warning(f"Error processing image path {path}: {str(e)}")
                 continue
         
+        logger.info(f"Converted {len(urls)} image paths to URLs (from {len(image_paths)} total paths)")
         return urls
     
     async def delete_property_image(self, storage_path: str) -> bool:

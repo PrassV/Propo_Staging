@@ -149,6 +149,7 @@ async def get_property_images(
 ):
     """
     Get all images for a property with public URLs (S3-like pattern)
+    Supports both legacy and new secure path formats
     """
     try:
         # Validate user authentication
@@ -159,9 +160,20 @@ async def get_property_images(
                 detail="User not authenticated"
             )
         
+        logger.info(f"Fetching images for property {property_id} for user {user_id}")
+        
         # Get property data
-        property_data = await property_service.get_property(db_client, str(property_id))
+        try:
+            property_data = await property_service.get_property(db_client, str(property_id))
+        except Exception as e:
+            logger.error(f"Error fetching property {property_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error fetching property data"
+            )
+            
         if not property_data:
+            logger.warning(f"Property {property_id} not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Property not found"
@@ -169,9 +181,17 @@ async def get_property_images(
         
         # Get image paths from database
         image_paths = property_data.get("image_urls", []) or []
+        logger.info(f"Found {len(image_paths)} image paths for property {property_id}: {image_paths}")
         
-        # Generate public URLs (S3-like)
-        image_urls = await property_image_service.get_property_image_urls(image_paths)
+        # Generate public URLs with improved error handling
+        try:
+            image_urls = await property_image_service.get_property_image_urls(image_paths)
+            logger.info(f"Successfully generated {len(image_urls)} URLs for property {property_id}")
+        except Exception as url_error:
+            logger.error(f"Error generating image URLs for property {property_id}: {str(url_error)}")
+            # Don't fail the entire request - return empty list instead
+            image_urls = []
+            logger.warning(f"Returning empty image list for property {property_id} due to URL generation error")
         
         return PropertyImageListResponse(
             property_id=str(property_id),
@@ -182,7 +202,7 @@ async def get_property_images(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving property images: {str(e)}")
+        logger.error(f"Unexpected error retrieving property images for {property_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving images: {str(e)}"
