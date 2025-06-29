@@ -144,14 +144,14 @@ export default function DocumentUploadForm({
 
     } catch (error: unknown) {
       console.error('Error in document upload process:', error);
-       if (!(error instanceof Error && error.message === 'File upload failed.')) {
+      if (!(error instanceof Error && error.message === 'File upload failed.')) {
         let message = 'Failed to create document record. Please try again.';
         if (error instanceof Error) { message = error.message; }
         toast.error(message, { id: toastId });
         // Set form error for feedback
         form.setError("root.serverError", { type: "custom", message: message });
       } else {
-         toast.dismiss(toastId);
+        toast.dismiss(toastId);
       }
     } finally {
       setIsLoading(false);

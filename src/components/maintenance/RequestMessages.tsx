@@ -6,7 +6,7 @@ import { formatDate } from '../../utils/date';
 import toast from 'react-hot-toast';
 
 import { getMaintenanceComments, addMaintenanceComment, MaintenanceComment } from '../../api/services/maintenanceService';
-import { uploadFile } from '../../api/services/uploadService';
+import { uploadFileToBucket } from '../../api/services/storageService';
 
 interface RequestMessagesProps {
   requestId: string;
@@ -45,15 +45,29 @@ export default function RequestMessages({ requestId }: RequestMessagesProps) {
     setLoading(true);
     try {
       const fileUrls: string[] = [];
+      
+      // Upload files using unified storage system
       for (const file of files) {
-        const url = await uploadFile(file, 'maintenance_comment', requestId);
-        fileUrls.push(url);
+        const metadata = {
+          maintenanceRequestId: requestId
+        };
+        
+        const uploadResult = await uploadFileToBucket(
+          file, 
+          'maintenance_files', 
+          undefined, 
+          metadata
+        );
+        
+        if (uploadResult.success && uploadResult.publicUrl) {
+          fileUrls.push(uploadResult.publicUrl);
+        } else {
+          console.error('Upload failed for file:', file.name, uploadResult.error);
+          toast.error(`Failed to upload ${file.name}`);
+        }
       }
 
-      await addMaintenanceComment(requestId, {
-        comment: newMessage,
-        attachments: fileUrls.length > 0 ? fileUrls : undefined
-      });
+      await addMaintenanceComment(requestId, newMessage);
 
       setNewMessage('');
       setFiles([]);

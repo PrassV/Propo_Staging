@@ -24,7 +24,7 @@ STORAGE_CONFIG = {
         'bucket': 'propertyimage',
         'max_size': 10 * 1024 * 1024,  # 10MB
         'allowed_types': ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'],
-        'path_template': 'properties/{property_id}/{category}/{filename}'
+        'path_template': 'users/{user_id}/properties/{property_id}/{category}/{filename}'
     },
     'tenant_documents': {
         'bucket': 'tenant-documents',
@@ -34,19 +34,19 @@ STORAGE_CONFIG = {
             'application/msword', 
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ],
-        'path_template': 'tenants/{tenant_id}/documents/{filename}'
+        'path_template': 'users/{user_id}/properties/{property_id}/documents/{filename}'
     },
     'maintenance_files': {
         'bucket': 'maintenance-files',
         'max_size': 15 * 1024 * 1024,  # 15MB
         'allowed_types': ['image/jpeg', 'image/png', 'application/pdf', 'image/jpg'],
-        'path_template': 'maintenance/{property_id}/{filename}'
+        'path_template': 'users/{user_id}/properties/{property_id}/maintenance/{filename}'
     },
     'agreements': {
         'bucket': 'agreements',
         'max_size': 50 * 1024 * 1024,  # 50MB
         'allowed_types': ['application/pdf'],
-        'path_template': 'agreements/{property_id}/{filename}'
+        'path_template': 'users/{user_id}/properties/{property_id}/agreements/{filename}'
     },
     'id_documents': {
         'bucket': 'id-documents',
@@ -91,6 +91,14 @@ class UnifiedStorageService:
             raise StorageError(f'Invalid storage context: {context}')
             
         config = STORAGE_CONFIG[context]
+        path_template = config['path_template']
+        
+        # Validate required metadata based on context
+        required_fields = self._get_required_fields(context, path_template)
+        missing_fields = [field for field in required_fields if not metadata.get(field)]
+        
+        if missing_fields:
+            raise StorageError(f'Missing required metadata for {context}: {missing_fields}')
         
         # Generate unique filename
         timestamp = int(datetime.now().timestamp() * 1000)
@@ -99,9 +107,6 @@ class UnifiedStorageService:
         unique_filename = f"{timestamp}-{unique_id}{file_ext}"
         
         # Replace placeholders in path template
-        path_template = config['path_template']
-        
-        # Replace common placeholders
         replacements = {
             '{filename}': unique_filename,
             '{property_id}': metadata.get('property_id', 'unknown'),
@@ -115,6 +120,23 @@ class UnifiedStorageService:
             file_path = file_path.replace(placeholder, str(value))
             
         return file_path
+    
+    def _get_required_fields(self, context: str, path_template: str) -> List[str]:
+        """Extract required metadata fields from path template"""
+        import re
+        
+        # Find all placeholders in the template
+        placeholders = re.findall(r'\{(\w+)\}', path_template)
+        
+        # user_id is always required for security
+        required = ['user_id']
+        
+        # Add context-specific requirements
+        if context in ['property_images', 'tenant_documents', 'maintenance_files', 'agreements']:
+            required.append('property_id')
+            
+        # Only include placeholders that are actually in the template
+        return [field for field in required if field in placeholders]
     
     def upload_file(
         self, 
@@ -251,24 +273,26 @@ class UnifiedStorageService:
 storage_service = UnifiedStorageService()
 
 # Convenience functions for backward compatibility
-def upload_property_image(file_content: bytes, filename: str, property_id: str, category: str = 'general') -> Dict[str, Any]:
+def upload_property_image(file_content: bytes, filename: str, property_id: str, user_id: str, category: str = 'general') -> Dict[str, Any]:
     """Upload property image"""
-    metadata = {'property_id': property_id, 'category': category}
+    metadata = {'property_id': property_id, 'user_id': user_id, 'category': category}
     return storage_service.upload_file(file_content, filename, 'property_images', metadata)
 
-def upload_tenant_document(file_content: bytes, filename: str, tenant_id: str) -> Dict[str, Any]:
+def upload_tenant_document(file_content: bytes, filename: str, property_id: str, user_id: str, tenant_id: str = None) -> Dict[str, Any]:
     """Upload tenant document"""
-    metadata = {'tenant_id': tenant_id}
+    metadata = {'property_id': property_id, 'user_id': user_id}
+    if tenant_id:
+        metadata['tenant_id'] = tenant_id
     return storage_service.upload_file(file_content, filename, 'tenant_documents', metadata)
 
-def upload_maintenance_file(file_content: bytes, filename: str, property_id: str) -> Dict[str, Any]:
+def upload_maintenance_file(file_content: bytes, filename: str, property_id: str, user_id: str) -> Dict[str, Any]:
     """Upload maintenance file"""
-    metadata = {'property_id': property_id}
+    metadata = {'property_id': property_id, 'user_id': user_id}
     return storage_service.upload_file(file_content, filename, 'maintenance_files', metadata)
 
-def upload_agreement(file_content: bytes, filename: str, property_id: str) -> Dict[str, Any]:
+def upload_agreement(file_content: bytes, filename: str, property_id: str, user_id: str) -> Dict[str, Any]:
     """Upload agreement document"""
-    metadata = {'property_id': property_id}
+    metadata = {'property_id': property_id, 'user_id': user_id}
     return storage_service.upload_file(file_content, filename, 'agreements', metadata)
 
 def upload_id_document(file_content: bytes, filename: str, user_id: str) -> Dict[str, Any]:

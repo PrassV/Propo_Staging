@@ -3,7 +3,7 @@ import { MaintenanceCategory, MaintenancePriority, MaintenanceRequestCreate, Doc
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import api from '../../api';
-import { uploadFile } from '../../api/services/uploadService';
+import { uploadFileToBucket } from '../../api/services/storageService';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -78,7 +78,11 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
     setUnitError(null);
     try {
       const fetchedUnits = await getUnitsForProperty(propertyId);
-      setUnits(fetchedUnits || []);
+      const propertyUnits = (fetchedUnits || []).map(unit => ({
+        ...unit,
+        tenant_id: unit.tenant_id || undefined
+      }));
+      setUnits(propertyUnits);
     } catch (err: unknown) {
       console.error('Error fetching units:', err);
       setUnitError(err instanceof Error ? err.message : 'Failed to load units.');
@@ -172,8 +176,27 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
       if (files.length > 0) {
         toast.loading('Uploading files...');
         const uploadPromises = files.map(async (file) => {
-           const url = await uploadFile(file, 'maintenance_request', formData.propertyId);
-           return { url: url, fileName: file.name, fileType: file.type, size: file.size };
+          const metadata = {
+            propertyId: formData.propertyId
+          };
+          
+          const uploadResult = await uploadFileToBucket(
+            file, 
+            'maintenance_files', 
+            undefined, 
+            metadata
+          );
+          
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
+          
+          return { 
+            url: uploadResult.publicUrl || '', 
+            fileName: file.name, 
+            fileType: file.type, 
+            size: file.size 
+          };
         });
         const results = await Promise.all(uploadPromises);
         uploadedFileInfos.push(...results);
@@ -199,17 +222,13 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
         const linkPromises = uploadedFileInfos.map(fileInfo => {
           const docData: DocumentCreate = {
             document_name: fileInfo.fileName,
-            title: fileInfo.fileName,
             maintenance_request_id: createdRequest!.id,
             property_id: formData.propertyId || undefined,
             tenant_id: formData.tenantId || undefined,
             file_url: fileInfo.url,
-            file_name: fileInfo.fileName,
             mime_type: fileInfo.fileType,
             file_size: fileInfo.size,
-            file_extension: fileInfo.fileName.split('.').pop(),
             document_type: fileInfo.fileType.startsWith('image/') ? 'maintenance_photo' : 'other',
-            access_level: 'private',
           };
           return api.document.createDocument(docData);
         });

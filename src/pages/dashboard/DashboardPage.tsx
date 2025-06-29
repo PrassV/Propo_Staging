@@ -10,7 +10,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import api from '../../api';
 import { DashboardSummary } from '../../api/types';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/alert';
-import StorageTest from '../../components/test/StorageTest';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -117,15 +116,7 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* TEMPORARY: Storage Test Component */}
-      <Card>
-        <CardHeader>
-          <CardTitle>🧪 Storage System Test (Phase 2)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StorageTest />
-        </CardContent>
-      </Card>
+
 
       {/* Dashboard Summary Cards */}
       {dashboardData ? (

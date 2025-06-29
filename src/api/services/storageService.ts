@@ -78,21 +78,43 @@ function generateFilePath(
     return `${folderPath}/${uniqueFileName}`;
   }
 
-  // Generate path based on context and metadata
+  // Validate required metadata
+  if (!metadata?.userId) {
+    throw new Error('userId is required for all file uploads for security');
+  }
+
+  // Generate secure path based on context and metadata
   switch (context) {
     case 'property_images':
-      return `properties/${metadata?.propertyId || 'unknown'}/${metadata?.category || 'general'}/${uniqueFileName}`;
+      if (!metadata.propertyId) {
+        throw new Error('propertyId is required for property images');
+      }
+      return `users/${metadata.userId}/properties/${metadata.propertyId}/${metadata.category || 'general'}/${uniqueFileName}`;
+      
     case 'tenant_documents':
     case 'documents':
-      return `tenants/${metadata?.tenantId || metadata?.userId || 'unknown'}/documents/${uniqueFileName}`;
+      if (!metadata.propertyId) {
+        throw new Error('propertyId is required for tenant documents');
+      }
+      return `users/${metadata.userId}/properties/${metadata.propertyId}/documents/${uniqueFileName}`;
+      
     case 'maintenance_files':
-      return `maintenance/${metadata?.propertyId || 'unknown'}/${uniqueFileName}`;
+      if (!metadata.propertyId) {
+        throw new Error('propertyId is required for maintenance files');
+      }
+      return `users/${metadata.userId}/properties/${metadata.propertyId}/maintenance/${uniqueFileName}`;
+      
     case 'agreements':
-      return `agreements/${metadata?.propertyId || 'unknown'}/${uniqueFileName}`;
+      if (!metadata.propertyId) {
+        throw new Error('propertyId is required for agreements');
+      }
+      return `users/${metadata.userId}/properties/${metadata.propertyId}/agreements/${uniqueFileName}`;
+      
     case 'id_documents':
-      return `users/${metadata?.userId || 'unknown'}/id/${uniqueFileName}`;
+      return `users/${metadata.userId}/id/${uniqueFileName}`;
+      
     default:
-      return `general/${uniqueFileName}`;
+      return `users/${metadata.userId}/general/${uniqueFileName}`;
   }
 }
 
@@ -137,7 +159,7 @@ export const uploadFileToBucket = async (
 
     if (isValidStorageContext(bucketNameOrContext)) {
       context = bucketNameOrContext;
-      bucketName = (STORAGE_CONFIG as any)[context].bucket;
+      bucketName = STORAGE_CONFIG[context].bucket;
     } else {
       // Legacy support - try to map bucket name to context
       const contextEntry = Object.entries(STORAGE_CONFIG).find(
@@ -150,7 +172,7 @@ export const uploadFileToBucket = async (
       } else {
         // Fallback - use documents context for unknown buckets
         context = 'documents';
-        bucketName = (STORAGE_CONFIG as any).documents.bucket;
+        bucketName = STORAGE_CONFIG.documents.bucket;
         console.warn(`Unknown bucket ${bucketNameOrContext}, using documents bucket`);
       }
     }

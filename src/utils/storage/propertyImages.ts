@@ -1,5 +1,6 @@
 import apiClient from '../../api/client';
 import toast from 'react-hot-toast';
+import { uploadFileToBucket, StorageContext } from '../../api/services/storageService';
 
 export interface PropertyImageUploadResult {
   success: boolean;
@@ -16,13 +17,13 @@ export interface PropertyImageListResult {
 }
 
 /**
- * Upload property images using clean S3-like pattern
- * Follows the same logic as S3: upload files -> store paths -> generate URLs on demand
+ * Upload property images using unified storage system
+ * Uses the centralized storageService for consistent behavior
  */
 export class PropertyImageService {
   
   /**
-   * Upload multiple images for a property
+   * Upload multiple images for a property using unified storage
    */
   static async uploadImages(
     propertyId: string, 
@@ -33,54 +34,83 @@ export class PropertyImageService {
         throw new Error('No files provided');
       }
 
+      const validFiles: File[] = [];
+      const failedFiles: string[] = [];
+
       // Validate files before upload
-      const validFiles = files.filter(file => {
-        // Check file type
-        if (!file.type.startsWith('image/')) {
-          toast.error(`${file.name} is not an image file`);
-          return false;
+      files.forEach(file => {
+        const validation = this.validateImageFile(file);
+        if (validation.valid) {
+          validFiles.push(file);
+        } else {
+          toast.error(validation.error || `${file.name} is invalid`);
+          failedFiles.push(file.name);
         }
-        
-        // Check file size (10MB limit)
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`${file.name} is too large (max 10MB)`);
-          return false;
-        }
-        
-        return true;
       });
 
       if (!validFiles.length) {
         throw new Error('No valid image files to upload');
       }
 
-      // Create FormData for upload (S3-like multipart upload)
-      const formData = new FormData();
-      validFiles.forEach(file => {
-        formData.append('files', file);
-      });
+      const uploadedPaths: string[] = [];
+      const imageUrls: string[] = [];
 
-      // Upload to our clean API endpoint
-      const response = await apiClient.post<PropertyImageUploadResult>(
-        `/api/v1/properties/${propertyId}/images/upload`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+      // Upload each file using unified storage service
+      for (const file of validFiles) {
+        try {
+          const metadata = {
+            propertyId: propertyId,
+            category: 'main'
+          };
+
+          const uploadResult = await uploadFileToBucket(
+            file, 
+            'property_images' as StorageContext, 
+            undefined, 
+            metadata
+          );
+
+          if (uploadResult.success && uploadResult.publicUrl && uploadResult.filePath) {
+            uploadedPaths.push(uploadResult.filePath);
+            imageUrls.push(uploadResult.publicUrl);
+          } else {
+            failedFiles.push(file.name);
+            console.error(`Upload failed for ${file.name}:`, uploadResult.error);
+          }
+        } catch (error) {
+          failedFiles.push(file.name);
+          console.error(`Upload error for ${file.name}:`, error);
         }
-      );
-
-      if (response.data.success) {
-        toast.success(response.data.message);
       }
 
-      return response.data;
+      // Update property record with new image paths if any succeeded
+      if (uploadedPaths.length > 0) {
+        try {
+          await this.updatePropertyImages(propertyId, uploadedPaths);
+        } catch (error) {
+          console.warn('Failed to update property record with image paths:', error);
+          // Don't fail the entire operation if database update fails
+        }
+      }
+
+      const message = uploadedPaths.length > 0 
+        ? `Successfully uploaded ${uploadedPaths.length} image(s)` 
+        : 'No images were uploaded';
+
+      if (uploadedPaths.length > 0) {
+        toast.success(message);
+      }
+
+      return {
+        success: uploadedPaths.length > 0,
+        message,
+        uploaded_paths: uploadedPaths,
+        image_urls: imageUrls,
+        failed_files: failedFiles
+      };
       
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error && 'response' in error && error.response 
-        ? (error.response as any)?.data?.detail || error.message || 'Upload failed'
-        : 'Upload failed';
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
       toast.error(errorMessage);
       
       return {
@@ -90,6 +120,21 @@ export class PropertyImageService {
         image_urls: [],
         failed_files: files.map(f => f.name)
       };
+    }
+  }
+
+  /**
+   * Update property record with image paths
+   */
+  private static async updatePropertyImages(propertyId: string, imagePaths: string[]): Promise<void> {
+    try {
+      await apiClient.patch(`/api/v1/properties/${propertyId}/images`, {
+        image_paths: imagePaths,
+        action: 'add'
+      });
+    } catch (error) {
+      console.error('Failed to update property images:', error);
+      throw error;
     }
   }
 
@@ -104,8 +149,12 @@ export class PropertyImageService {
 
       return response.data;
       
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to fetch images';
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === 'object' && 'response' in error && error.response && 
+        typeof error.response === 'object' && 'data' in error.response && error.response.data &&
+        typeof error.response.data === 'object' && 'detail' in error.response.data
+        ? (error.response.data as { detail: string }).detail
+        : error instanceof Error ? error.message : 'Failed to fetch images';
       console.error('Error fetching property images:', errorMessage);
       
       return {
@@ -132,8 +181,12 @@ export class PropertyImageService {
 
       return false;
       
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to delete image';
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === 'object' && 'response' in error && error.response && 
+        typeof error.response === 'object' && 'data' in error.response && error.response.data &&
+        typeof error.response.data === 'object' && 'detail' in error.response.data
+        ? (error.response.data as { detail: string }).detail
+        : error instanceof Error ? error.message : 'Failed to delete image';
       toast.error(errorMessage);
       return false;
     }
