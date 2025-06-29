@@ -284,10 +284,8 @@ class TestUploadWorkflow:
     def test_upload_with_supabase_error(self, mock_supabase):
         """Test upload workflow when Supabase returns an error"""
         
-        # Mock Supabase upload error
-        mock_upload_result = Mock()
-        mock_upload_result.error = "Storage service unavailable"
-        mock_supabase.storage.from_.return_value.upload.return_value = mock_upload_result
+        # Mock Supabase upload to raise an exception (new client behavior)
+        mock_supabase.storage.from_.return_value.upload.side_effect = Exception("Storage service unavailable")
         
         from app.utils.storage import UnifiedStorageService
         
@@ -305,6 +303,7 @@ class TestUploadWorkflow:
         
         assert result['success'] == False
         assert 'error' in result
+        assert "Storage service unavailable" in str(result['error'])
 
 
 class TestConvenienceFunctions:
@@ -432,12 +431,11 @@ class TestLegacyPathHandling:
         # Mock the settings
         with patch('app.services.property_image_service.settings') as mock_settings:
             mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
-            # Use the actual bucket name that the service uses
-            mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"  # This is what's actually being used
+            mock_settings.PROPERTY_IMAGE_BUCKET = "propertyimage"  # Use actual bucket ID
             
             url = property_image_service._convert_legacy_path_to_url(legacy_path)
             
-            expected_url = "https://oniudnupeazkagtbsxtt.supabase.co/storage/v1/object/public/property_images/2d54223c-92ea-46fb-a53b-53cc8567b6a8/a2e7b020-4024-4ff2-beca-4dc9cb3ac545.jpeg"
+            expected_url = "https://oniudnupeazkagtbsxtt.supabase.co/storage/v1/object/public/propertyimage/2d54223c-92ea-46fb-a53b-53cc8567b6a8/a2e7b020-4024-4ff2-beca-4dc9cb3ac545.jpeg"
             assert url == expected_url
     
     @patch('app.services.property_image_service.supabase_service_role_client')
@@ -449,7 +447,7 @@ class TestLegacyPathHandling:
         
         # Setup mocks
         mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
-        mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"
+        mock_settings.PROPERTY_IMAGE_BUCKET = "propertyimage"
         
         # Mock storage client for new paths
         mock_supabase.storage.from_.return_value.get_public_url.return_value = "https://example.com/new-path-url"
@@ -468,14 +466,14 @@ class TestLegacyPathHandling:
         
         # First URL should be legacy format
         assert "legacy-image.jpg" in urls[0]
-        assert "storage/v1/object/public/property_images" in urls[0]
+        assert "storage/v1/object/public/propertyimage" in urls[0]
         
         # Second URL should be from storage client (new format)
         assert urls[1] == "https://example.com/new-path-url"
         
         # Third URL should be legacy format
         assert "another-legacy.jpg" in urls[2]
-        assert "storage/v1/object/public/property_images" in urls[2]
+        assert "storage/v1/object/public/propertyimage" in urls[2]
     
     @patch('app.services.property_image_service.supabase_service_role_client')
     @patch('app.services.property_image_service.settings')
@@ -486,7 +484,7 @@ class TestLegacyPathHandling:
         
         # Setup mocks
         mock_settings.SUPABASE_URL = "https://oniudnupeazkagtbsxtt.supabase.co"
-        mock_settings.PROPERTY_IMAGE_BUCKET = "property_images"
+        mock_settings.PROPERTY_IMAGE_BUCKET = "propertyimage"
         
         # Make storage client raise an error for new paths
         mock_supabase.storage.from_.return_value.get_public_url.side_effect = Exception("Storage error")
@@ -498,7 +496,7 @@ class TestLegacyPathHandling:
         
         # Should fallback to legacy conversion
         assert len(urls) == 1
-        assert "storage/v1/object/public/property_images" in urls[0]
+        assert "storage/v1/object/public/propertyimage" in urls[0]
         assert failing_new_path in urls[0]
 
 

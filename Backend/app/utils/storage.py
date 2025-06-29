@@ -21,7 +21,7 @@ supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVIC
 # Storage configuration for different contexts
 STORAGE_CONFIG = {
     'property_images': {
-        'bucket': 'propertyimage',
+        'bucket': 'propertyimage',  # Use the actual bucket ID from Supabase
         'max_size': 10 * 1024 * 1024,  # 10MB
         'allowed_types': ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'],
         'path_template': 'users/{user_id}/properties/{property_id}/{category}/{filename}'
@@ -165,12 +165,15 @@ class UnifiedStorageService:
             result = self.supabase.storage.from_(bucket_name).upload(
                 file_path, 
                 file_content,
-                file_options={'cache-control': '3600', 'upsert': 'false'}
+                file_options={
+                    'cache-control': '3600', 
+                    'upsert': 'false',
+                    'content-type': validation['mime_type']  # Specify content type
+                }
             )
             
-            if result.error:
-                logger.error(f"Upload error: {result.error}")
-                return {'success': False, 'error': str(result.error)}
+            # New Supabase client doesn't have .error - it raises exceptions instead
+            # If we get here, upload was successful
             
             # Get public URL
             public_url_result = self.supabase.storage.from_(bucket_name).get_public_url(file_path)

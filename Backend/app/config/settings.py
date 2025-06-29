@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
     # Specific Storage Buckets (read from env vars, provide defaults if sensible)
-    PROPERTY_IMAGE_BUCKET: str = os.getenv("PROPERTY_IMAGE_BUCKET", "Property Images")
+    PROPERTY_IMAGE_BUCKET: str = os.getenv("PROPERTY_IMAGE_BUCKET", "propertyimage")
     TENANT_DOCUMENT_BUCKET: str = os.getenv("TENANT_DOCUMENT_BUCKET", "Tenant Documents")
     ID_DOCUMENT_BUCKET: str = os.getenv("ID_DOCUMENT_BUCKET", "ID Documents")
     MAINTENANCE_FILES_BUCKET: str = os.getenv("MAINTENANCE_FILES_BUCKET", "Maintenance Files")
