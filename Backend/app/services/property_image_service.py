@@ -258,4 +258,4 @@ class PropertyImageService:
         return True
 
 # Create service instance
-property_image_service = PropertyImageService() 
+property_image_service = PropertyImageService() # Deployment trigger comment
