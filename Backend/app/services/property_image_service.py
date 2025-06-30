@@ -156,6 +156,12 @@ class PropertyImageService:
                     logger.warning(f"Skipping invalid image path: {path}")
                     continue
                 
+                # Check if this is already a full URL (avoid double URL construction)
+                if path.startswith('http'):
+                    logger.debug(f"Path is already a full URL: {path}")
+                    urls.append(path)
+                    continue
+                
                 # Check if this is a legacy path
                 if self._is_legacy_path(path):
                     logger.debug(f"Processing legacy path: {path}")
