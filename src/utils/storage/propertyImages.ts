@@ -1,6 +1,5 @@
 import apiClient from '../../api/client';
 import toast from 'react-hot-toast';
-import { uploadFileToBucket, StorageContext } from '../../api/services/storageService';
 
 export interface PropertyImageUploadResult {
   success: boolean;
@@ -12,6 +11,17 @@ export interface PropertyImageUploadResult {
 
 export interface PropertyImageListResult {
   property_id: string;
+  image_urls: string[];
+  total_images: number;
+}
+
+interface ImageValidation {
+  valid: boolean;
+  error?: string;
+}
+
+interface PropertyImageData {
+  id: string;
   image_urls: string[];
   total_images: number;
 }
@@ -28,7 +38,8 @@ export class PropertyImageService {
   static async uploadImages(
     propertyId: string, 
     files: File[],
-    userId: string
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _userId: string  // Keep for backward compatibility but won't be used
   ): Promise<PropertyImageUploadResult> {
     try {
       if (!files.length) {
@@ -53,66 +64,48 @@ export class PropertyImageService {
         throw new Error('No valid image files to upload');
       }
 
-      const uploadedPaths: string[] = [];
-      const imageUrls: string[] = [];
+      // Use backend API upload endpoint instead of direct Supabase upload
+      const formData = new FormData();
+      validFiles.forEach(file => {
+        formData.append('files', file);
+      });
+      formData.append('context', 'property_images');
+      formData.append('property_id', propertyId);
 
-      // Upload each file using unified storage service
-      for (const file of validFiles) {
-        try {
-          const metadata = {
-            userId: userId,
-            propertyId: propertyId,
-            category: 'main'
-          };
+      const response = await apiClient.post('/uploads/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-          const uploadResult = await uploadFileToBucket(
-            file, 
-            'property_images' as StorageContext, 
-            undefined, 
-            metadata
-          );
+      if (response.data?.success) {
+        const uploadedPaths = response.data.uploaded_paths || [];
+        const imageUrls = response.data.image_urls || [];
 
-          if (uploadResult.success && uploadResult.publicUrl && uploadResult.filePath) {
-            uploadedPaths.push(uploadResult.filePath);
-            imageUrls.push(uploadResult.publicUrl);
-          } else {
-            failedFiles.push(file.name);
-            console.error(`Upload failed for ${file.name}:`, uploadResult.error);
-          }
-        } catch (error) {
-          failedFiles.push(file.name);
-          console.error(`Upload error for ${file.name}:`, error);
-        }
+        return {
+          success: true,
+          message: `Successfully uploaded ${uploadedPaths.length} images`,
+          uploaded_paths: uploadedPaths,
+          image_urls: imageUrls,
+          failed_files: failedFiles
+        };
+      } else {
+        throw new Error(response.data?.message || 'Upload failed');
       }
 
-      // Update property record with new image paths if any succeeded
-      if (uploadedPaths.length > 0) {
-        try {
-          await this.updatePropertyImages(propertyId, uploadedPaths);
-        } catch (error) {
-          console.warn('Failed to update property record with image paths:', error);
-          // Don't fail the entire operation if database update fails
-        }
-      }
-
-      const message = uploadedPaths.length > 0 
-        ? `Successfully uploaded ${uploadedPaths.length} image(s)` 
-        : 'No images were uploaded';
-
-      if (uploadedPaths.length > 0) {
-        toast.success(message);
-      }
-
-      return {
-        success: uploadedPaths.length > 0,
-        message,
-        uploaded_paths: uploadedPaths,
-        image_urls: imageUrls,
-        failed_files: failedFiles
-      };
-      
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      console.error('Upload error:', error);
+      let errorMessage = 'Upload failed';
+      
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { detail?: string } } };
+        if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast.error(errorMessage);
       
       return {

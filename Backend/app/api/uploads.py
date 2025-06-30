@@ -19,8 +19,12 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 class UploadResponse(BaseModel):
-    file_paths: List[str]
+    success: bool = True
+    uploaded_paths: List[str]
+    image_urls: List[str]
     message: str = "Files uploaded successfully"
+    # Keep backward compatibility
+    file_paths: List[str]
 
 @router.post("/", response_model=UploadResponse)
 async def upload_files(
@@ -44,6 +48,7 @@ async def upload_files(
         storage_context = context if context in ['property_images', 'tenant_documents', 'maintenance_files', 'agreements', 'id_documents'] else 'tenant_documents'
         
         uploaded_paths = []
+        image_urls = []
         
         for file in files:
             try:
@@ -70,6 +75,9 @@ async def upload_files(
                 
                 if upload_result['success']:
                     uploaded_paths.append(upload_result['file_path'])
+                    # Add public URL if available
+                    if upload_result.get('public_url'):
+                        image_urls.append(upload_result['public_url'])
                     logger.info(f"Successfully uploaded: {file.filename} -> {upload_result['file_path']}")
                 else:
                     logger.error(f"Upload failed for {file.filename}: {upload_result.get('error', 'Unknown error')}")
@@ -82,7 +90,13 @@ async def upload_files(
              logger.warning(f"No files were successfully uploaded for user {user_id}")
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files were successfully uploaded")
 
-        return {"file_paths": uploaded_paths, "message": "Files uploaded successfully"}
+        return {
+            "success": True,
+            "uploaded_paths": uploaded_paths,
+            "image_urls": image_urls,
+            "file_paths": uploaded_paths,  # Backward compatibility
+            "message": f"Successfully uploaded {len(uploaded_paths)} files"
+        }
 
     except HTTPException as http_exc:
         logger.error(f"HTTPException during upload for user {user_id}: {http_exc.detail}")

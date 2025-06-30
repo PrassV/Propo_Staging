@@ -6,7 +6,6 @@ import { AlertTriangle, ImageIcon, Plus } from 'lucide-react';
 import { PropertyImageService } from '@/utils/storage/propertyImages';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { supabase } from '@/lib/supabase';
 
 interface EnhancedImageGalleryProps {
   propertyId: string;
@@ -69,23 +68,6 @@ export default function EnhancedImageGallery({
 
     if (!user?.id) {
       toast.error('You must be logged in to upload images');
-      return;
-    }
-
-    // Debug: Check if user is authenticated with Supabase
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('Supabase session check:', session ? 'AUTHENTICATED' : 'NOT AUTHENTICATED');
-      console.log('Supabase user ID:', session?.user?.id);
-      console.log('Frontend user ID:', user.id);
-      
-      if (!session) {
-        toast.error('Not authenticated with Supabase. Please log in again.');
-        return;
-      }
-    } catch (error) {
-      console.error('Error checking Supabase session:', error);
-      toast.error('Authentication check failed');
       return;
     }
 
