@@ -171,19 +171,17 @@ class PropertyImageService:
                 else:
                     logger.debug(f"Processing new secure path: {path}")
                     
-                    # Handle new secure path format using unified storage service
+                    # Handle new secure path format - construct public URL manually
                     try:
-                        storage_client = supabase_service_role_client
-                        public_url_response = storage_client.storage.from_(self.bucket_name).get_public_url(path)
+                        # For new secure paths, construct the full public URL directly
+                        base_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/{self.bucket_name}"
+                        public_url = f"{base_url}/{path}"
                         
-                        if public_url_response:
-                            urls.append(public_url_response)
-                            logger.debug(f"New path converted to URL: {public_url_response}")
-                        else:
-                            logger.warning(f"Failed to get public URL for new path: {path}")
-                            
+                        urls.append(public_url)
+                        logger.debug(f"New path converted to URL: {public_url}")
+                        
                     except Exception as storage_error:
-                        logger.warning(f"Storage service error for path {path}: {str(storage_error)}")
+                        logger.warning(f"Error constructing URL for path {path}: {str(storage_error)}")
                         
                         # Fallback: try treating as legacy path
                         logger.debug(f"Attempting legacy conversion as fallback for: {path}")
