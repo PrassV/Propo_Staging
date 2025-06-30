@@ -1,9 +1,9 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
-import { MaintenanceCategory, MaintenancePriority, MaintenanceRequestCreate, DocumentCreate, MaintenanceRequest, Property, PropertyUnit, Tenant } from '../../api/types';
+import { MaintenanceCategory, MaintenancePriority, MaintenanceRequestCreate, MaintenanceRequest, Property, PropertyUnit, Tenant } from '../../api/types';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import api from '../../api';
-import { uploadFileToBucket } from '../../api/services/storageService';
+import apiClient from '../../api/client';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -173,33 +173,38 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
     const uploadedFileInfos: UploadedFileInfo[] = [];
 
     try {
+      // Upload files first (if any)
       if (files.length > 0) {
         toast.loading('Uploading files...');
-        const uploadPromises = files.map(async (file) => {
-          const metadata = {
-            propertyId: formData.propertyId
-          };
-          
-          const uploadResult = await uploadFileToBucket(
-            file, 
-            'maintenance_files', 
-            undefined, 
-            metadata
-          );
-          
-          if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'Upload failed');
-          }
-          
-          return { 
-            url: uploadResult.publicUrl || '', 
-            fileName: file.name, 
-            fileType: file.type, 
-            size: file.size 
-          };
+        
+        const uploadFormData = new FormData();
+        files.forEach(file => {
+          uploadFormData.append('files', file);
         });
-        const results = await Promise.all(uploadPromises);
-        uploadedFileInfos.push(...results);
+        uploadFormData.append('context', 'maintenance_files');
+        if (formData.propertyId) {
+          uploadFormData.append('property_id', formData.propertyId);
+        }
+
+        const uploadResponse = await apiClient.post('/uploads/', uploadFormData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data?.success && uploadResponse.data?.uploaded_paths) {
+          // Map uploaded files to info objects
+          const newUploadedFiles = uploadResponse.data.uploaded_paths.map((path: string, index: number) => ({
+            url: uploadResponse.data.image_urls?.[index] || '',
+            fileName: files[index].name,
+            fileType: files[index].type,
+            size: files[index].size
+          }));
+          uploadedFileInfos.push(...newUploadedFiles);
+        } else {
+          throw new Error('Failed to upload files');
+        }
+        
         toast.dismiss();
       }
 
@@ -220,16 +225,16 @@ const NewRequestModal = ({ open, onOpenChange, onSubmitSuccess }: NewRequestModa
       if (createdRequest?.id && uploadedFileInfos.length > 0) { 
         toast.loading('Linking files...');
         const linkPromises = uploadedFileInfos.map(fileInfo => {
-          const docData: DocumentCreate = {
+          const docData = {
             document_name: fileInfo.fileName,
             maintenance_request_id: createdRequest!.id,
-            property_id: formData.propertyId || undefined,
-            tenant_id: formData.tenantId || undefined,
+            ...(formData.propertyId ? { property_id: formData.propertyId } : {}),
+            ...(formData.tenantId ? { tenant_id: formData.tenantId } : {}),
             file_url: fileInfo.url,
             mime_type: fileInfo.fileType,
             file_size: fileInfo.size,
             document_type: fileInfo.fileType.startsWith('image/') ? 'maintenance_photo' : 'other',
-          };
+          } as const;
           return api.document.createDocument(docData);
         });
         await Promise.all(linkPromises);

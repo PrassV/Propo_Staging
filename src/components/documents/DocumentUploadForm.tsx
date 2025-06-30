@@ -2,9 +2,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { uploadFileToBucket } from '../../api/services/storageService';
 import { createDocument } from '../../api/services/documentService';
-import { DocumentCreate, Document, DocumentType } from '../../types/document';
+import { DocumentCreate, DocumentType } from '../../types/document';
+import { Document } from '../../api/types';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import apiClient from '../../api/client';
 
 interface DocumentUploadFormProps {
   propertyId?: string; // Optional pre-filled ID
@@ -21,18 +22,9 @@ interface DocumentUploadFormProps {
   onCancel?: () => void;
 }
 
-// Use the unified storage context for documents
-const STORAGE_CONTEXT = 'tenant_documents';
-
 // Define possible document types based on the type definition
 const documentTypeOptions: DocumentType[] = [
-    'lease_agreement', 
-    'id_proof', 
-    'payment_receipt', 
-    'maintenance_invoice', 
-    'maintenance_photo', 
-    'property_photo', 
-    'other'
+  'lease_agreement', 'id_proof', 'payment_receipt', 'maintenance_invoice', 'maintenance_photo', 'property_photo', 'other'
 ];
 
 // Define Zod schema for form validation
@@ -69,64 +61,75 @@ export default function DocumentUploadForm({
     if (acceptedFiles.length > 0) {
       const selectedFile = acceptedFiles[0];
       setFile(selectedFile);
-      if (!form.getValues('documentName')) { 
-        form.setValue('documentName', selectedFile.name.replace(/\.[^/.]+$/, ""), { shouldValidate: true }); 
-      }
+      
+      // Auto-populate document name based on file name (remove extension)
+      const nameWithoutExtension = selectedFile.name.split('.').slice(0, -1).join('.');
+      form.setValue('documentName', nameWithoutExtension);
+      
+      // Clear any previous file errors
+      form.clearErrors('root.serverError');
     }
   }, [form]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
-      onDrop,
-      accept: { 
-          'application/pdf': ['.pdf'],
-          'image/jpeg': ['.jpeg', '.jpg'],
-          'image/png': ['.png'],
-          'application/msword': ['.doc'],
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
-      },
-      multiple: false 
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: false,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png']
+    },
+    maxSize: 25 * 1024 * 1024 // 25MB
   });
 
   // Function to remove the selected file
   const handleRemoveFile = () => {
     setFile(null);
+    form.clearErrors('root.serverError');
   };
 
   // Form submission handler
   const onSubmit: SubmitHandler<DocumentFormData> = async (data) => {
     if (!file) {
-      // Explicitly set an error on a non-existent field for general file validation
       form.setError("root.serverError", { type: "custom", message: "File is required." });
       toast.error('Please select a file to upload.');
       return;
     }
-    // Clear previous root error if file is now present
     form.clearErrors("root.serverError");
 
     setIsLoading(true);
     const toastId = toast.loading('Uploading file and creating document...');
 
     try {
-      // Prepare metadata for the unified storage service
-      const metadata = {
-        tenantId: tenantId,
-        propertyId: propertyId,
-        userId: tenantId // For tenant documents, use tenantId as userId
-      };
-      
-      const uploadResult = await uploadFileToBucket(file, STORAGE_CONTEXT, undefined, metadata);
+      // Use backend API upload endpoint instead of direct Supabase upload
+      const formData = new FormData();
+      formData.append('files', file);
+      formData.append('context', 'tenant_documents');
+      if (propertyId) formData.append('property_id', propertyId);
+      if (tenantId) formData.append('tenant_id', tenantId);
 
-      if (!uploadResult.success) { 
-          throw new Error(uploadResult.error || 'File upload failed.'); 
+      const uploadResponse = await apiClient.post('/uploads/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!uploadResponse.data?.success || !uploadResponse.data?.uploaded_paths?.length) {
+        throw new Error(uploadResponse.data?.message || 'File upload failed.');
       }
+
+      const uploadedPath = uploadResponse.data.uploaded_paths[0];
+      const publicUrl = uploadResponse.data.image_urls?.[0] || '';
 
       const documentData: DocumentCreate = {
         document_name: data.documentName.trim(),
         document_type: data.documentType,
-        file_url: uploadResult.publicUrl, 
-        file_path: uploadResult.filePath, 
-        mime_type: uploadResult.mimeType,
-        file_size: uploadResult.fileSize,
+        file_url: publicUrl, 
+        file_path: uploadedPath, 
+        mime_type: file.type,
+        file_size: file.size,
         description: data.description?.trim() || undefined,
         property_id: propertyId || undefined,
         tenant_id: tenantId || undefined,

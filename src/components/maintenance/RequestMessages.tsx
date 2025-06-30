@@ -6,7 +6,7 @@ import { formatDate } from '../../utils/date';
 import toast from 'react-hot-toast';
 
 import { getMaintenanceComments, addMaintenanceComment, MaintenanceComment } from '../../api/services/maintenanceService';
-import { uploadFileToBucket } from '../../api/services/storageService';
+import apiClient from '../../api/client';
 
 interface RequestMessagesProps {
   requestId: string;
@@ -46,24 +46,25 @@ export default function RequestMessages({ requestId }: RequestMessagesProps) {
     try {
       const fileUrls: string[] = [];
       
-      // Upload files using unified storage system
-      for (const file of files) {
-        const metadata = {
-          maintenanceRequestId: requestId
-        };
-        
-        const uploadResult = await uploadFileToBucket(
-          file, 
-          'maintenance_files', 
-          undefined, 
-          metadata
-        );
-        
-        if (uploadResult.success && uploadResult.publicUrl) {
-          fileUrls.push(uploadResult.publicUrl);
+      // Upload files using backend API instead of direct Supabase upload
+      if (files.length > 0) {
+        const formData = new FormData();
+        files.forEach(file => {
+          formData.append('files', file);
+        });
+        formData.append('context', 'maintenance_files');
+        // Note: We don't have property_id here, but maintenance_files might not require it
+
+        const uploadResponse = await apiClient.post('/uploads/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data?.success && uploadResponse.data?.image_urls) {
+          fileUrls.push(...uploadResponse.data.image_urls);
         } else {
-          console.error('Upload failed for file:', file.name, uploadResult.error);
-          toast.error(`Failed to upload ${file.name}`);
+          toast.error('Failed to upload some files');
         }
       }
 
