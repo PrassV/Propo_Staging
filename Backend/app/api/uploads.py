@@ -90,6 +90,43 @@ async def upload_files(
              logger.warning(f"No files were successfully uploaded for user {user_id}")
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files were successfully uploaded")
 
+        # Special handling for property images - update properties table
+        if storage_context == 'property_images' and property_id:
+            try:
+                from app.services import property_service
+                from app.config.database import supabase_service_role_client
+                
+                # Use service role client for database operations
+                db_client = supabase_service_role_client
+                
+                # Get current property data
+                property_data = await property_service.get_property(db_client, property_id)
+                if property_data:
+                    # Get existing image paths and add new ones
+                    existing_paths = property_data.get("image_urls", []) or []
+                    all_paths = existing_paths + uploaded_paths
+                    
+                    # Update property with new image paths
+                    update_response = db_client.table("properties").update({
+                        "image_urls": all_paths
+                    }).eq("id", property_id).execute()
+                    
+                    if hasattr(update_response, 'error') and update_response.error:
+                        logger.error(f"Failed to update property {property_id} with image paths: {update_response.error}")
+                    else:
+                        logger.info(f"Successfully updated property {property_id} with {len(uploaded_paths)} new image paths")
+                        
+                        # Generate URLs for the newly uploaded images
+                        from app.services.property_image_service import property_image_service
+                        new_image_urls = await property_image_service.get_property_image_urls(uploaded_paths)
+                        image_urls.extend(new_image_urls)
+                else:
+                    logger.warning(f"Property {property_id} not found when trying to update image paths")
+                    
+            except Exception as prop_update_error:
+                logger.error(f"Error updating property {property_id} with image paths: {str(prop_update_error)}")
+                # Don't fail the entire upload, just log the error
+
         return {
             "success": True,
             "uploaded_paths": uploaded_paths,
