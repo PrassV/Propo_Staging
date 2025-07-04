@@ -47,6 +47,33 @@ export default function TenantOnboardingForm() {
     }
   }, [invitationData]);
 
+  // Pre-populate form data from user information (OAuth providers)
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        email: user.email || prev.email, // Don't override invitation email
+        // Only populate names if not already set by invitation
+        firstName: prev.firstName || user.first_name || extractFirstName(user.full_name) || '',
+        lastName: prev.lastName || user.last_name || extractLastName(user.full_name) || '',
+        phone: prev.phone || user.phone || '',
+      }));
+    }
+  }, [user]);
+
+  // Helper function to extract first name from full name
+  const extractFirstName = (fullName?: string): string => {
+    if (!fullName) return '';
+    return fullName.split(' ')[0] || '';
+  };
+
+  // Helper function to extract last name from full name
+  const extractLastName = (fullName?: string): string => {
+    if (!fullName) return '';
+    const parts = fullName.split(' ');
+    return parts.slice(1).join(' ') || '';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;

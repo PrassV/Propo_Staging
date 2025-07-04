@@ -1,15 +1,23 @@
 import apiClient from '../client';
 
-// ... interface definition ...
+// Interface for the upload service response
+interface UploadServiceResponse {
+  success: boolean;
+  uploaded_paths: string[];
+  image_urls: string[];
+  message: string;
+  file_paths: string[]; // Backward compatibility
+  file_url?: string; // For single file uploads
+}
 
 export const uploadFile = async (
   file: File,
   context?: string,
   relatedId?: string
 ): Promise<string> => {
-  // ... formData creation ...
   const formData = new FormData();
-  formData.append('file', file);
+  // Fix: Use 'files' (plural) to match backend expectation
+  formData.append('files', file);
   if (context) {
     formData.append('context', context);
   }
@@ -18,17 +26,25 @@ export const uploadFile = async (
   }
 
   try {
-    // ... apiClient.post call ...
-    const response = await apiClient.post<UploadServiceResponse>('/uploads', formData, {
+    // Fix: Use correct endpoint path with trailing slash
+    const response = await apiClient.post<UploadServiceResponse>('/uploads/', formData, {
       headers: {
-        'Content-Type': undefined, 
+        'Content-Type': 'multipart/form-data', 
       },
     });
 
-    if (response.data && response.data.file_url) {
-      return response.data.file_url;
+    // Handle the updated response format
+    if (response.data && response.data.success) {
+      // For single file uploads, return the first URL
+      if (response.data.image_urls && response.data.image_urls.length > 0) {
+        return response.data.image_urls[0];
+      } else if (response.data.file_url) {
+        return response.data.file_url;
+      } else {
+        throw new Error('Upload succeeded but no file URL was returned.');
+      }
     } else {
-      throw new Error('Upload succeeded but no file URL was returned.');
+      throw new Error(response.data?.message || 'Upload failed.');
     }
   } catch (error) {
     console.error('Error uploading file:', error);
