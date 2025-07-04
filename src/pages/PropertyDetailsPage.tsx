@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, /* useNavigate */ } from 'react-router-dom'; // Commented out unused navigate
+import { useParams, Link } from 'react-router-dom';
 import { PropertyLeaseDetailResponse, Document as ApiDocument, PropertyFormData, UnitCreate } from '@/api/types';
 import api from '@/api'; // Correct import path
 import LoadingSpinner from '@/components/common/LoadingSpinner';

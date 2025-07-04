@@ -16,6 +16,7 @@ if ROOT_DIR not in sys.path:
 
 from .config.settings import settings
 from .config.auth import get_current_user
+from .config.cache import startup_cache, shutdown_cache
 from .api import (
     property,
     tenant,
@@ -35,7 +36,8 @@ from .api import (
     units,
     reports,
     automation,
-    property_images
+    property_images,
+    performance
 )
 
 # Setup logging
@@ -124,6 +126,19 @@ async def home():
 async def health_check():
     return {"status": "ok"}
 
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    logger.info("Starting up Property Management API...")
+    await startup_cache()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up services on shutdown"""
+    logger.info("Shutting down Property Management API...")
+    await shutdown_cache()
+
 # Protected route example
 @app.get("/protected", tags=["Auth"])
 async def protected_route(current_user: Dict = Depends(get_current_user)):
@@ -148,6 +163,7 @@ app.include_router(automation.router, prefix="/automation", tags=["Automation"])
 app.include_router(notification, prefix="/notifications", tags=["Notifications"])
 app.include_router(uploads)
 app.include_router(property_images.router, prefix="/api/v1", tags=["Property Images"])
+app.include_router(performance.router, prefix="/api/v1", tags=["Performance"])
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
