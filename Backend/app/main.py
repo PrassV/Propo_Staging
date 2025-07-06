@@ -15,10 +15,10 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.config.settings import settings
-from app.config.auth import get_current_user
-from app.config.cache import startup_cache, shutdown_cache
-from app.api import (
+from .config.settings import settings
+from .config.auth import get_current_user
+from .config.cache import startup_cache, shutdown_cache
+from .api import (
     property,
     tenant,
     user,
