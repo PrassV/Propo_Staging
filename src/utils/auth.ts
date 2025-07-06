@@ -1,7 +1,7 @@
 import api from '@/api'; // Use central API client
 import toast from 'react-hot-toast';
 // Import types from central location
-import { LoginRequest } from '@/api/types'; // Removed unused LoginResponse import
+import { LoginRequest } from '@/api/types';
 
 // Removed redundant LoginData interface, use LoginRequest directly
 

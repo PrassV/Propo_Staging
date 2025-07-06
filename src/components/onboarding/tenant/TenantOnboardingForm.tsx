@@ -83,7 +83,7 @@ export default function TenantOnboardingForm() {
       // Upload ID proof using service
       let idProofUrl = '';
       if (formData.idProof) {
-        idProofUrl = await uploadFile(formData.idProof, 'tenant_id_document', user.id);
+        idProofUrl = await uploadFile(formData.idProof, 'id_documents', user.id);
       }
 
       // Create/update profile using service

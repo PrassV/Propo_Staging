@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/pgn008/PV/Staging_2 stable_Version/Staging_2/Backend/bin/python" "$0" "$@"
+'''exec' "/Users/pgn008/PV/Staging_2 stable_Version/Staging_2/Backend/bin/python3.13" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re

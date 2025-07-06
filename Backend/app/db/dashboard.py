@@ -3,10 +3,12 @@ import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
 from ..config.database import supabase_client
+from ..config.cache import cache_result, invalidate_cache, cache_service
 import uuid
 
 logger = logging.getLogger(__name__)
 
+@cache_result(ttl=300, key_prefix="property_stats")  # Cache for 5 minutes
 async def get_property_stats(owner_id: str) -> Dict[str, Any]:
     """
     Get property statistics from Supabase.
@@ -75,6 +77,7 @@ async def get_property_stats(owner_id: str) -> Dict[str, Any]:
         logger.error(f"[get_property_stats] Exception fetching property stats: {str(e)}", exc_info=True)
         return {'total_properties': 0, 'total_rented': 0, 'total_vacant': 0, 'total_under_maintenance': 0, 'occupancy_rate': 0}
 
+@cache_result(ttl=300, key_prefix="revenue_stats")  # Cache for 5 minutes
 async def get_revenue_stats(owner_id: str) -> Dict[str, Any]:
     """
     Get revenue statistics from Supabase.
@@ -150,6 +153,7 @@ async def get_revenue_stats(owner_id: str) -> Dict[str, Any]:
         logger.error(f"[get_revenue_stats] Failed to get revenue stats: {str(e)}", exc_info=True)
         return {'monthly_rental_income': 0, 'total_lease_value': 0, 'total_security_deposits': 0, 'total_maintenance_income': 0, 'yearly_income': 0}
 
+@cache_result(ttl=300, key_prefix="tenant_stats")  # Cache for 5 minutes
 async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
     """
     Get tenant statistics from Supabase.
@@ -267,6 +271,7 @@ async def get_tenant_stats(owner_id: str) -> Dict[str, Any]:
         logger.error(f"[get_tenant_stats] Failed to get tenant stats: {str(e)}", exc_info=True)
         return {'total_tenants': 0, 'upcoming_lease_expirations': 0}
 
+@cache_result(ttl=1800, key_prefix="monthly_revenue")  # Cache for 30 minutes
 async def get_monthly_revenue(owner_id: str, months: int = 6) -> List[Dict[str, Any]]:
     """
     Get monthly revenue and expense data from the database for the owner.

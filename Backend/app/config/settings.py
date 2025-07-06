@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    
+    # Redis Configuration
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # Specific Storage Buckets (read from env vars, provide defaults if sensible)
     PROPERTY_IMAGE_BUCKET: str = os.getenv("PROPERTY_IMAGE_BUCKET", "propertyimage")

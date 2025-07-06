@@ -106,7 +106,12 @@ export default function DocumentUploadForm({
       // Use backend API upload endpoint instead of direct Supabase upload
       const formData = new FormData();
       formData.append('files', file);
-      formData.append('context', 'tenant_documents');
+      
+      // Choose context based on available IDs
+      // If propertyId is available, use tenant_documents, otherwise use id_documents
+      const context = propertyId ? 'tenant_documents' : 'id_documents';
+      formData.append('context', context);
+      
       if (propertyId) formData.append('property_id', propertyId);
       if (tenantId) formData.append('tenant_id', tenantId);
 

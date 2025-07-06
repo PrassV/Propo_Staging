@@ -7,6 +7,7 @@ from supabase import Client
 import json
 from ..models.property import PropertyCreate, PropertyUpdate, Property, PropertyDocument, PropertyDocumentCreate, UnitCreate # Import UnitCreate
 from ..config.database import supabase_client # Import the global client
+from ..config.cache import cache_result, invalidate_cache, cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ async def get_properties_count(
         logger.error(f"Failed to count properties: {str(e)}", exc_info=True)
         return 0
 
+@cache_result(ttl=300, key_prefix="property_by_id")  # Cache for 5 minutes
 async def get_property_by_id(db_client: Client, property_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a property by ID from Supabase, including its related units.
@@ -217,6 +219,7 @@ async def get_property_owner_for_unit(db_client: Client, unit_id: uuid.UUID) -> 
         logger.error(f"Failed to get property owner for unit {unit_id}: {str(e)}", exc_info=True)
         return None
 
+@invalidate_cache("property_*")  # Invalidate all property caches
 async def create_property(db_client: Client, property_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Create a new property in Supabase by calling the 'create_my_property' RPC function.
@@ -272,6 +275,7 @@ async def create_property(db_client: Client, property_data: Dict[str, Any]) -> O
         logger.error(f"Exception during/after RPC execute() call: {str(e)}", exc_info=True)
         return None
 
+@invalidate_cache("property_*")  # Invalidate all property caches
 async def update_property(db_client: Client, property_id: str, property_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Update a property in Supabase.

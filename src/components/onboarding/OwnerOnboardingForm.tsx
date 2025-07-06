@@ -72,7 +72,7 @@ export default function OwnerOnboardingForm() {
     try {
       let idImageUrl = '';
       if (formData.idImage) {
-        idImageUrl = await uploadFile(formData.idImage, 'id_document', user.id);
+        idImageUrl = await uploadFile(formData.idImage, 'id_documents', user.id);
       }
 
       const profileData: UserProfileUpdateData = {
