@@ -9,15 +9,11 @@ import os
 import sys
 from fastapi.exceptions import RequestValidationError
 
-# Set ROOT_DIR for proper path resolution
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
-
-# Add the app directory to Python path for absolute imports
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-if APP_DIR not in sys.path:
-    sys.path.insert(0, APP_DIR)
+# Ensure the Backend directory (containing 'app' package) is in Python path
+# This is critical for deployment environments where working directory may vary
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 from app.config.settings import settings
 from app.config.auth import get_current_user
