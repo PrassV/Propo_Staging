@@ -19,10 +19,10 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
-from .config.settings import settings
-from .config.auth import get_current_user
-from .config.cache import startup_cache, shutdown_cache
-from .api import (
+from app.config.settings import settings
+from app.config.auth import get_current_user
+from app.config.cache import startup_cache, shutdown_cache
+from app.api import (
     property,
     tenant,
     user,
