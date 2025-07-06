@@ -1,63 +1,58 @@
 # Core API
-fastapi==0.104.1
-uvicorn==0.24.0
-pydantic==2.4.2
+fastapi>=0.115.0
+uvicorn>=0.24.0
+pydantic>=2.4.0
 pydantic-settings>=2.0.0
 email-validator>=1.1.3
-httpx==0.25.1
+httpx>=0.25.0
 
 # Database
-supabase==2.0.0
-postgrest==0.13.0
-gotrue==2.0.0
-storage3==0.7.0
+supabase>=2.0.0
+postgrest>=0.13.0
+gotrue>=2.0.0
+storage3>=0.7.0
 
 # Authentication
-python-jose==3.3.0
-python-multipart==0.0.6
+python-jose>=3.3.0
+python-multipart>=0.0.6
 
 # Utilities
-python-dotenv==1.0.0
-jinja2==3.1.2
-python-slugify==8.0.1
+python-dotenv>=1.0.0
+jinja2>=3.1.0
+python-slugify>=8.0.0
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
 pytest-cov>=3.0.0
+
+# Email and reporting
 resend
 reportlab>=4.0.0
-tailwind-merge>=0.2.0
 
 # Additional dependencies
-passlib==1.7.4
-bcrypt==4.0.1
-requests==2.31.0
-urllib3==2.3.0
+passlib>=1.7.4
+bcrypt>=4.0.1
+requests>=2.31.0
+urllib3>=2.0.0
 weasyprint>=58.0
 apscheduler>=3.9.0
-pyasn1==0.6.1
-Pillow==10.0.1
-# twilio>=8.0.0
+pyasn1>=0.6.0
+Pillow>=10.4.0
 
-# Explicit pins for other identified diffs
-starlette==0.46.1
-typing-extensions==4.13.1
-multidict==6.3.2
+# Core dependencies for compatibility
+starlette>=0.40.0
+typing-extensions>=4.8.0
+multidict>=6.0.0
+httpcore>=1.0.0
 
-# Checking httpx setup.py -> requires httpcore >=1.0.0,<2.0.0
-# Let's explicitly add and pin httpcore
-httpcore==1.0.7
+# Redis for caching (ESSENTIAL FOR PERFORMANCE)
+redis>=5.0.0
+aioredis>=2.0.0
 
-# Adding Redis for caching
-redis==5.0.1
-aioredis==2.0.1
+# Performance monitoring (ESSENTIAL FOR MONITORING)
+psutil>=5.9.0
 
-# Adding performance monitoring
-psutil==5.9.6
-
-# Additional dependencies
-aiofiles==23.2.1
-PyJWT==2.8.0
-realtime==1.0.0
-functions-framework==3.5.0
+# Additional performance dependencies
+aiofiles>=23.0.0
+PyJWT>=2.8.0
