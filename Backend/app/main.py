@@ -14,6 +14,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
+# Add the app directory to Python path for absolute imports
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
+
 from .config.settings import settings
 from .config.auth import get_current_user
 from .config.cache import startup_cache, shutdown_cache
