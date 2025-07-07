@@ -174,11 +174,19 @@ class TenantInvitation(TenantInvitationBase):
 # Model for tenant assignment to unit
 class TenantAssignment(BaseModel):
     tenant_id: uuid.UUID
+    lease_start: date
+    lease_end: Optional[date] = None
+    rent_amount: Optional[float] = Field(None, ge=0)
+    deposit_amount: Optional[float] = Field(None, ge=0)
     notes: Optional[str] = None
     class Config:
         json_schema_extra = {
             "example": {
                 "tenant_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+                "lease_start": "2024-01-01",
+                "lease_end": "2024-12-31",
+                "rent_amount": 1500.00,
+                "deposit_amount": 1500.00,
                 "notes": "Assigning tenant to the unit."
             }
         }

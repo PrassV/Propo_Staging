@@ -431,20 +431,21 @@ async def assign_tenant_to_unit(
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
 
         # 6. Create the property_tenant_link (lease) record
-        lease_start_date = tenant.get('rental_start_date')
-        lease_end_date = tenant.get('rental_end_date')
-        rent_amount = tenant.get('rent_amount')
-        deposit_amount = tenant.get('advance_amount')  # Tenant model uses advance_amount
+        # Use assignment data from frontend instead of tenant record
+        lease_start_date = assignment_data.get('lease_start')
+        lease_end_date = assignment_data.get('lease_end')
+        rent_amount = assignment_data.get('rent_amount')
+        deposit_amount = assignment_data.get('deposit_amount')
 
         # Validate required fields for lease creation
         missing_fields = []
         if not lease_start_date:
-            missing_fields.append('rental_start_date')
+            missing_fields.append('lease_start')
         
         if missing_fields:
-            logger.error(f"Cannot assign tenant {tenant_id}: Tenant record is missing required fields: {', '.join(missing_fields)}")
+            logger.error(f"Cannot assign tenant {tenant_id}: Assignment data is missing required fields: {', '.join(missing_fields)}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail=f"Tenant record is missing required lease details: {', '.join(missing_fields)}")
+                                detail=f"Assignment data is missing required lease details: {', '.join(missing_fields)}")
         
         link_data = {
             "id": uuid.uuid4(),

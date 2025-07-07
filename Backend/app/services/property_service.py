@@ -890,7 +890,7 @@ async def delete_unit(db_client: Client, unit_id: uuid.UUID, owner_id: str) -> b
 
 async def _check_unit_amenity_authorization(db_client: Client, unit_id: uuid.UUID, user_id: str) -> bool:
     """Helper to check if user owns the parent property of the unit."""
-    parent_property_id = await property_db.get_parent_property_id_for_unit(db_client, unit_id)
+    parent_property_id = await property_db.get_parent_property_id_for_unit(unit_id)
     if not parent_property_id:
         # Unit not found implicitly denies access
         logger.warning(f"Auth check failed: Unit {unit_id} not found.")
