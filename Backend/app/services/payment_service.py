@@ -578,7 +578,7 @@ async def get_payments_for_unit(
     try:
         # 1. Authorization Check (Simplified: user owns parent property)
         #    A more robust check might verify if the user is the tenant of the unit.
-        parent_property_id = await property_db.get_parent_property_id_for_unit(db_client, unit_id)
+        parent_property_id = await property_db.get_parent_property_id_for_unit(unit_id)
         if not parent_property_id:
             logger.warning(f"Unit {unit_id} not found during payment fetch.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unit not found")

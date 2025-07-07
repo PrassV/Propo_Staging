@@ -124,19 +124,13 @@ class UnitBase(BaseModel):
     bedrooms: Optional[int] = Field(None, ge=0)
     bathrooms: Optional[float] = Field(None, ge=0)
     area_sqft: Optional[int] = Field(None, ge=0)
-    rent: Optional[float] = Field(None, ge=0)
-    deposit: Optional[float] = Field(None, ge=0)
+    # Removed rent and deposit fields - these belong in lease creation
 
     # Frontend compatibility properties
     @property
     def size_sqft(self) -> Optional[int]:
         """Alias for area_sqft to match frontend expectations"""
         return self.area_sqft
-    
-    @property
-    def rent_amount(self) -> Optional[float]:
-        """Alias for rent to match frontend expectations"""
-        return self.rent
     
     @property
     def is_occupied(self) -> bool:
@@ -165,8 +159,6 @@ class UnitUpdate(UnitBase):
     bedrooms: Optional[int] = Field(None, ge=0)
     bathrooms: Optional[float] = Field(None, ge=0)
     area_sqft: Optional[int] = Field(None, ge=0)
-    rent: Optional[float] = Field(None, ge=0)
-    deposit: Optional[float] = Field(None, ge=0)
 
 # --- Lease Models ---
 class LeaseBase(BaseModel):

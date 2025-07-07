@@ -21,8 +21,6 @@ const formSchema = z.object({
     bedrooms: z.number().nullable().optional(),
     bathrooms: z.number().nullable().optional(),
     area_sqft: z.number().nullable().optional(),
-    rent: z.number().min(0, 'Rent must be a positive number').nullable().optional(),
-    deposit: z.number().min(0, 'Deposit must be a positive number').nullable().optional(),
 });
 
 // Define the form values type
@@ -38,8 +36,6 @@ export default function AddUnitForm({ onSubmit, onCancel, isLoading = false }: A
             bedrooms: null,
             bathrooms: null,
             area_sqft: null,
-            rent: null,
-            deposit: null,
         },
     });
 
@@ -152,54 +148,6 @@ export default function AddUnitForm({ onSubmit, onCancel, isLoading = false }: A
                                 <Input
                                     type="number"
                                     placeholder="Area in square feet"
-                                    {...field}
-                                    value={field.value === null ? '' : field.value}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val === '' ? null : Number(val));
-                                    }}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                {/* Rent */}
-                <FormField
-                    control={form.control}
-                    name="rent"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Monthly Rent</FormLabel>
-                            <FormControl>
-                                <Input
-                                    type="number"
-                                    placeholder="Rent amount"
-                                    {...field}
-                                    value={field.value === null ? '' : field.value}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val === '' ? null : Number(val));
-                                    }}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                {/* Deposit */}
-                <FormField
-                    control={form.control}
-                    name="deposit"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Security Deposit</FormLabel>
-                            <FormControl>
-                                <Input
-                                    type="number"
-                                    placeholder="Deposit amount"
                                     {...field}
                                     value={field.value === null ? '' : field.value}
                                     onChange={(e) => {

@@ -74,8 +74,8 @@ async def get_tenants(
                 sort_order=sort_order
             )
         else:
-            # If getting all tenants for an owner, use the new direct lookup
-            tenant_dicts, total_count = await tenants_db.get_tenants_by_owner_id(
+            # If getting all tenants for an owner, use the enriched lookup with property/unit info
+            tenant_dicts, total_count = await tenants_db.get_enriched_tenants_by_owner_id(
                 owner_id=owner_id,
                 status=status,
                 skip=skip,

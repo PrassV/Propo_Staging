@@ -1561,3 +1561,119 @@ async def get_current_tenant_assignment(tenant_id: str) -> Optional[Dict[str, An
     except Exception as e:
         logger.error(f"Failed to get current assignment for tenant {tenant_id}: {str(e)}")
         return None
+
+async def get_enriched_tenants_by_owner_id(
+    owner_id: uuid.UUID,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = 'created_at',
+    sort_order: str = 'desc'
+) -> tuple[List[Dict[str, Any]], int]:
+    """
+    Get all tenants created by a specific owner with enriched property and unit information.
+    
+    Args:
+        owner_id: The ID of the owner who created the tenants
+        status: Optional tenant status to filter by (active, unassigned, inactive)
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return (pagination)
+        sort_by: Field to sort by
+        sort_order: Sort direction ('asc' or 'desc')
+        
+    Returns:
+        Tuple of (list of enriched tenant dictionaries, total count)
+    """
+    try:
+        # First get the basic tenant data
+        basic_tenants, total_count = await get_tenants_by_owner_id(
+            owner_id=owner_id,
+            status=status,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        
+        # Enrich each tenant with property/unit information
+        enriched_tenants = []
+        for tenant in basic_tenants:
+            tenant_id = tenant.get('id')
+            if not tenant_id:
+                enriched_tenants.append(tenant)
+                continue
+                
+            # Get property links for this tenant
+            property_links = await get_property_links_for_tenant(uuid.UUID(tenant_id))
+            
+            # Add property/unit information to tenant
+            enriched_tenant = tenant.copy()
+            enriched_tenant['properties'] = []
+            enriched_tenant['current_property'] = None
+            enriched_tenant['current_unit'] = None
+            enriched_tenant['current_lease'] = None
+            
+            # Find the most recent active lease
+            active_lease = None
+            today = date.today().isoformat()
+            
+            for link in property_links:
+                # Get property details
+                property_id = link.get('property_id')
+                if property_id:
+                    try:
+                        property_response = supabase_client.table('properties')\
+                            .select('id, property_name, address_line1, address_line2, city, state, pincode')\
+                            .eq('id', property_id)\
+                            .single()\
+                            .execute()
+                        
+                        if property_response.data:
+                            property_info = property_response.data
+                            
+                            # Get unit details if unit_id exists
+                            unit_id = link.get('unit_id')
+                            unit_info = None
+                            if unit_id:
+                                try:
+                                    unit_response = supabase_client.table('units')\
+                                        .select('id, unit_number, floor, area, rent, deposit')\
+                                        .eq('id', unit_id)\
+                                        .single()\
+                                        .execute()
+                                    
+                                    if unit_response.data:
+                                        unit_info = unit_response.data
+                                except Exception as unit_error:
+                                    logger.warning(f"Could not fetch unit {unit_id}: {unit_error}")
+                            
+                            # Check if this is an active lease
+                            end_date = link.get('end_date')
+                            is_active = end_date is None or end_date >= today
+                            
+                            lease_info = {
+                                'property': property_info,
+                                'unit': unit_info,
+                                'lease': link,
+                                'is_active': is_active
+                            }
+                            
+                            enriched_tenant['properties'].append(lease_info)
+                            
+                            # Set current property/unit/lease if this is active
+                            if is_active and not active_lease:
+                                active_lease = lease_info
+                                enriched_tenant['current_property'] = property_info
+                                enriched_tenant['current_unit'] = unit_info
+                                enriched_tenant['current_lease'] = link
+                                
+                    except Exception as property_error:
+                        logger.warning(f"Could not fetch property {property_id}: {property_error}")
+            
+            enriched_tenants.append(enriched_tenant)
+        
+        return enriched_tenants, total_count
+        
+    except Exception as e:
+        logger.exception(f"Failed to get enriched tenants by owner_id {owner_id}: {str(e)}")
+        return [], 0

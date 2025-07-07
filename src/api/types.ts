@@ -296,6 +296,59 @@ export interface Tenant {
   rent_amount?: number;
   rent_frequency?: 'monthly' | 'quarterly' | 'annually';
   property_id?: string;
+  
+  // Enriched fields from backend with property/unit information
+  properties?: Array<{
+    property: {
+      id: string;
+      property_name: string;
+      address_line1: string;
+      address_line2?: string;
+      city: string;
+      state: string;
+      pincode: string;
+    };
+    unit?: {
+      id: string;
+      unit_number: string;
+      floor?: number;
+      area?: number;
+      rent?: number;
+      deposit?: number;
+    };
+    lease: {
+      id: string;
+      start_date: string;
+      end_date?: string;
+      rent_amount?: number;
+      deposit_amount?: number;
+    };
+    is_active: boolean;
+  }>;
+  current_property?: {
+    id: string;
+    property_name: string;
+    address_line1: string;
+    address_line2?: string;
+    city: string;
+    state: string;
+    pincode: string;
+  } | null;
+  current_unit?: {
+    id: string;
+    unit_number: string;
+    floor?: number;
+    area?: number;
+    rent?: number;
+    deposit?: number;
+  } | null;
+  current_lease?: {
+    id: string;
+    start_date: string;
+    end_date?: string;
+    rent_amount?: number;
+    deposit_amount?: number;
+  } | null;
 }
 
 export interface TenantCreate extends Omit<SupabaseTenantInsert, 'dob' | 'gender' | 'family_size' | 'id_type' | 'id_number' | 'permanent_address' | 'owner_id' | 'user_id'> {
@@ -699,9 +752,8 @@ export interface UnitCreate {
   area_sqft?: number | null;
   bathrooms?: number | null;
   bedrooms?: number | null;
-  deposit?: number | null;
-  rent?: number | null;
   status?: string | null;
+  // Removed rent and deposit fields - these belong in lease creation
 }
 
 export interface UnitResponse {

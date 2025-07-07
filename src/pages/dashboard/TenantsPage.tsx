@@ -414,8 +414,9 @@ export default function TenantsPage() {
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                     </div>
-                    <div className="col-span-3">Tenant</div>
-                    <div className="col-span-2">Contact</div>
+                    <div className="col-span-2">Tenant</div>
+                    <div className="col-span-2">Property/Unit</div>
+                    <div className="col-span-1">Contact</div>
                     <div className="col-span-2">Status</div>
                     <div className="col-span-2">Added</div>
                     <div className="col-span-1">Lease Info</div>
@@ -441,7 +442,7 @@ export default function TenantsPage() {
                           </div>
 
                           {/* Tenant Info */}
-                          <div className="col-span-3">
+                          <div className="col-span-2">
                             <div className="flex items-center space-x-3">
                               <div className="bg-blue-100 p-2 rounded-full">
                                 <Users className="w-4 h-4 text-blue-600" />
@@ -453,8 +454,23 @@ export default function TenantsPage() {
                             </div>
                           </div>
 
-                          {/* Contact */}
+                          {/* Property/Unit Info */}
                           <div className="col-span-2">
+                            {tenant.current_property ? (
+                              <div className="text-sm">
+                                <p className="font-medium text-gray-900">{tenant.current_property.property_name}</p>
+                                <p className="text-gray-500">{tenant.current_property.city}, {tenant.current_property.state}</p>
+                                {tenant.current_unit && (
+                                  <p className="text-gray-500">Unit: {tenant.current_unit.unit_number}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">No active assignment</p>
+                            )}
+                          </div>
+
+                          {/* Contact */}
+                          <div className="col-span-1">
                             <p className="text-sm text-gray-900">{tenant.phone || 'No phone'}</p>
                           </div>
 
@@ -470,7 +486,16 @@ export default function TenantsPage() {
 
                           {/* Lease Info */}
                           <div className="col-span-1">
-                            {tenant.rental_start_date ? (
+                            {tenant.current_lease ? (
+                              <div className="text-sm">
+                                <p className="text-gray-900">
+                                  {formatDate(tenant.current_lease.start_date)} - {tenant.current_lease.end_date ? formatDate(tenant.current_lease.end_date) : 'Ongoing'}
+                                </p>
+                                {tenant.current_lease.rent_amount && (
+                                  <p className="text-gray-500">₹{tenant.current_lease.rent_amount}/month</p>
+                                )}
+                              </div>
+                            ) : tenant.rental_start_date ? (
                               <div className="text-sm">
                                 <p className="text-gray-900">
                                   {formatDate(tenant.rental_start_date)} - {tenant.rental_end_date ? formatDate(tenant.rental_end_date) : 'Ongoing'}
