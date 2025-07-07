@@ -37,8 +37,7 @@ from .api import (
     units,
     reports,
     automation,
-    property_images,
-    performance
+    property_images
 )
 
 # Setup logging
@@ -164,7 +163,6 @@ app.include_router(automation.router, prefix="/automation", tags=["Automation"])
 app.include_router(notification, prefix="/notifications", tags=["Notifications"])
 app.include_router(uploads)
 app.include_router(property_images.router, prefix="/api/v1", tags=["Property Images"])
-app.include_router(performance.router, prefix="/api/v1", tags=["Performance"])
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

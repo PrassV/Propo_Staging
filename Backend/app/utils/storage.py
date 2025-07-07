@@ -15,8 +15,13 @@ from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Supabase client
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+# Initialize Supabase client with fallback
+supabase_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
+if not supabase_key:
+    logger.error("Neither SUPABASE_SERVICE_ROLE_KEY nor SUPABASE_KEY is available")
+    raise ValueError("Supabase key required for storage service")
+
+supabase: Client = create_client(settings.SUPABASE_URL, supabase_key)
 
 # Storage configuration for different contexts
 STORAGE_CONFIG = {
