@@ -39,6 +39,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import TenantAnalytics from '../../components/tenant/TenantAnalytics';
+import EnhancedTenantOnboardingForm from '../../components/onboarding/tenant/EnhancedTenantOnboardingForm';
 import { toast } from 'react-hot-toast';
 
 export default function TenantsPage() {
@@ -545,70 +546,12 @@ export default function TenantsPage() {
 
       {/* Add Tenant Modal */}
       <Dialog open={showAddTenantModal} onOpenChange={setShowAddTenantModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Tenant</DialogTitle>
+            <DialogTitle>Add New Tenant - Enhanced Profile</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="tenant_name">Full Name *</Label>
-              <Input
-                id="tenant_name"
-                placeholder="Enter tenant's full name"
-                value={newTenantData.name}
-                onChange={(e) => setNewTenantData({ ...newTenantData, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_email">Email Address *</Label>
-              <Input
-                id="tenant_email"
-                type="email"
-                placeholder="Enter tenant's email"
-                value={newTenantData.email}
-                onChange={(e) => setNewTenantData({ ...newTenantData, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_phone">Phone Number</Label>
-              <Input
-                id="tenant_phone"
-                type="tel"
-                placeholder="Enter tenant's phone number"
-                value={newTenantData.phone}
-                onChange={(e) => setNewTenantData({ ...newTenantData, phone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_type">Tenant Type</Label>
-              <Select
-                value={newTenantData.tenant_type}
-                onValueChange={(value: string) => setNewTenantData({ ...newTenantData, tenant_type: value as 'individual' | 'company' })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowAddTenantModal(false)}
-                disabled={isCreatingTenant}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateTenant}
-                disabled={isCreatingTenant}
-              >
-                {isCreatingTenant ? 'Creating...' : 'Create Tenant'}
-              </Button>
-            </div>
+          <div className="py-4">
+            <EnhancedTenantOnboardingForm />
           </div>
         </DialogContent>
       </Dialog>

@@ -1,26 +1,20 @@
-import { supabase, cachedQuery, batchRequests } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import type { Property } from '../types/property';
 
-export const getProperty = async (propertyId: string) => {
-  return cachedQuery<Property>(
-    `property:${propertyId}`,
-    async () => {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('id', propertyId)
-        .single();
+export const getProperty = async (propertyId: string): Promise<Property> => {
+  const { data, error } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .single();
 
-      if (error) throw error;
-      return data;
-    },
-    5 * 60 * 1000 // 5 minutes cache
-  );
+  if (error) throw error;
+  return data;
 };
 
-export const getPropertiesWithDetails = async (propertyIds: string[]) => {
-  const requests = propertyIds.map(id => () => getProperty(id));
-  return batchRequests(requests, 3);
+export const getPropertiesWithDetails = async (propertyIds: string[]): Promise<Property[]> => {
+  const results = await Promise.all(propertyIds.map(id => getProperty(id)));
+  return results;
 };
 
 export const deleteProperty = async (propertyId: string) => {

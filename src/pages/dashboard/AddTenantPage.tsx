@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import TenantForm from '../../components/tenant/TenantForm';
+import EnhancedTenantOnboardingForm from '../../components/onboarding/tenant/EnhancedTenantOnboardingForm';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import api from '../../api';
@@ -108,12 +108,7 @@ export default function AddTenantPage() {
           Adding tenant to property: <strong>{property.property_name}</strong> (Unit ID: {unitId})
         </p>
 
-        <TenantForm
-          propertyId={propertyId} 
-          unitId={unitId}
-          onSubmit={handleTenantAdded}
-          onCancel={() => navigate(`/property/${propertyId}`)}
-        />
+        <EnhancedTenantOnboardingForm />
       </div>
     </div>
   );

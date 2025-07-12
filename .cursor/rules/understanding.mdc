@@ -6,8 +6,36 @@ alwaysApply: true
 
 # Your rule content
 
-- Always follow below framework: Explore - Identify - Narrow - Implement. Explore means exploring the codebase, Identify means identifying the potential 3-4 root causes, Narrow means zeroing in on one particular root cause with 100% confidence, Implement means Implement the solution only after narrowing down the root cause to one root cause.
-- Always perform root-cause analysis before proposing solution.
+CRITICAL DEVELOPMENT RULES - NEVER VIOLATE:
+
+## BEFORE ANY CODE CHANGES:
+1. **ANALYZE EXISTING PATTERNS FIRST** - Study how similar features are currently implemented in the codebase. Follow the same database query patterns, service layer structure, and API contracts that already exist and work.
+
+2. **NO MOCK/PLACEHOLDER IMPLEMENTATIONS** - Never write placeholder logic like `return [], 0` or `# TODO: implement`. Either implement the real functionality by following existing patterns, or explicitly state "I cannot implement this without [specific missing information]."
+
+3. **VERIFY INTEGRATION POINTS** - Check that database tables/columns exist, API endpoints are defined, and frontend/backend contracts match before writing code.
+
+## DURING IMPLEMENTATION:
+4. **FOLLOW EXISTING CODE ARCHITECTURE** - Use the same database access patterns, error handling, and response formats already established in the codebase.
+
+5. **REAL DATABASE QUERIES ONLY** - Write actual SQL queries or use existing database service methods. Never return fake/empty data.
+
+6. **TEST INTEGRATION IMMEDIATELY** - After making changes, explicitly state what needs to be tested and what could fail.
+
+## COMMUNICATION RULES:
+7. **NEVER CLAIM COMPLETION WITHOUT VERIFICATION** - Say "I've made code changes that should..." instead of "✅ Completed". Always acknowledge uncertainty.
+
+8. **BE EXPLICIT ABOUT LIMITATIONS** - State exactly what you implemented vs. what still needs work. List potential failure points.
+
+9. **NO FALSE CONFIDENCE** - Avoid checkmarks, "should work now", or definitive language unless you can verify the complete user experience.
+
+## WHEN STUCK:
+10. **ASK FOR CLARIFICATION** - Instead of guessing or using placeholders, ask about database schema, existing API patterns, or integration requirements.
+
+11. **BREAK DOWN COMPLEX TASKS** - Split large features into smaller verifiable pieces rather than attempting everything at once.
+
+ENFORCE: If you cannot implement something properly using existing patterns, say "I need [specific information] to implement this correctly" rather than creating broken placeholder code.
+
 - While performing root-cause analysis, reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions before we move onto implementing the actual code fix
 - If the same error happens 3 times in a row, it is time to step back and rethink the entire strategy and do alternative thinking. 
 - Always use MCP server to communicate with supabase 
@@ -35,17 +63,9 @@ alwaysApply: true
 - Add sufficient error handling and logging for troubleshooting
 - Validate assumptions about API behaviors rather than guessing implementation details
 
-## Communication
-- Provide clear explanations of the reasoning behind proposed solutions
-- Highlight trade-offs and potential risks with any approach
-- Use progressive disclosure - start with core concepts before diving into implementation details
-- Acknowledge complexity when it exists, but avoid unnecessary complexity
-- Ask clarifying questions when requirements or errors are ambiguous
-
-## Learning and Improvement
-- After resolving an issue, summarize key learnings for future reference
-- Identify patterns in recurring problems to address root causes
-- When suggesting improvements, prioritize stability and simplicity over cleverness
-- Document decisions and their rationale for future maintenance
-- Build upon proven, established patterns rather than reinventing solutions
-- Your supabase project id: oniudnupeazkagtbsxtt
+VERIFICATION REQUIREMENT: After any code changes, explicitly list:
+- What files were modified
+- What could break or fail
+- What testing is needed
+- What you're uncertain about
+Never claim features work without verification.

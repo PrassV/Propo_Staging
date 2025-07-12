@@ -1,4 +1,3 @@
-```typescript
 import { useState, useEffect } from 'react';
 import { getMaintenanceRequests } from '../utils/maintenance';
 import { MaintenanceRequest } from '../types/maintenance';
@@ -10,12 +9,16 @@ export function useMaintenanceRequests(propertyId?: string) {
 
   const fetchRequests = async () => {
     setLoading(true);
-    const result = await getMaintenanceRequests(propertyId);
-    if (result.success) {
-      setRequests(result.data);
-      setError(null);
-    } else {
-      setError(result.error?.message || 'Failed to fetch requests');
+    try {
+      const result = await getMaintenanceRequests(propertyId ? { property_id: propertyId } : undefined);
+      if (result.success && result.data) {
+        setRequests(result.data.items || []);
+        setError(null);
+      } else {
+        setError(result.error || 'Failed to fetch requests');
+      }
+    } catch (err) {
+      setError('Failed to fetch requests');
     }
     setLoading(false);
   };
@@ -26,4 +29,3 @@ export function useMaintenanceRequests(propertyId?: string) {
 
   return { requests, loading, error, refetch: fetchRequests };
 }
-```

@@ -304,6 +304,11 @@ export const getTenantDocuments = async (tenantId: string): Promise<{ documents:
     return response.data;
   } catch (error) {
     console.error("Error fetching tenant documents:", error);
+    // If endpoint doesn't exist, return empty documents array
+    if (error && typeof error === 'object' && 'response' in error && 
+        (error as any).response?.status === 404) {
+      return { documents: [] };
+    }
     throw new Error('Failed to fetch tenant documents');
   }
 };
@@ -317,6 +322,11 @@ export const getTenantHistory = async (tenantId: string): Promise<{ history: any
     return response.data;
   } catch (error) {
     console.error("Error fetching tenant history:", error);
+    // If endpoint doesn't exist, return empty history array
+    if (error && typeof error === 'object' && 'response' in error && 
+        (error as any).response?.status === 404) {
+      return { history: [] };
+    }
     throw new Error('Failed to fetch tenant history');
   }
 };

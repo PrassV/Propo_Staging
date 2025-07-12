@@ -1,4 +1,3 @@
-```typescript
 export interface InvitationData {
   id: string;
   property: {
@@ -33,4 +32,9 @@ export interface InvitationData {
   created_at: string;
   updated_at: string;
 }
-```
+
+export interface InvitationVerificationResponse {
+  success: boolean;
+  data?: InvitationData;
+  error?: string;
+}

@@ -1,4 +1,3 @@
-```typescript
 import { supabase } from '../lib/supabase';
 import type { InvitationVerificationResponse } from '../types/invitation';
 
@@ -64,4 +63,3 @@ export async function verifyInvitationToken(token: string): Promise<InvitationVe
     };
   }
 }
-```
