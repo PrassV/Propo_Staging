@@ -26,7 +26,7 @@ export const getTenants = async (params: {
   sort_order?: 'asc' | 'desc';
 } = {}): Promise<TenantsListResponse> => {
   try {
-    const response = await apiClient.get<TenantsListResponse>('/tenants', { params });
+    const response = await apiClient.get<TenantsListResponse>('/tenants/', { params });
     return response.data;
   } catch (error: unknown) {
     console.error("Error fetching tenants:", error);
@@ -67,7 +67,7 @@ export const getTenantById = async (id: string): Promise<TenantResponse> => {
  */
 export const createTenant = async (data: TenantCreate): Promise<TenantResponse> => {
   try {
-    const response = await apiClient.post<TenantResponse>('/tenants', data);
+    const response = await apiClient.post<TenantResponse>('/tenants/', data);
     return response.data;
   } catch (error: unknown) {
     console.error("Error creating tenant:", error);
@@ -203,7 +203,7 @@ export const verifyTenantPropertyLink = async (propertyId: string): Promise<void
 export const getCurrentTenantProfile = async (): Promise<Tenant> => { // Changed return type from any to Tenant
   try {
     // Backend endpoint returns { tenant: Tenant, message: string }
-    const response = await apiClient.get<TenantResponse>('/tenants/me'); 
+    const response = await apiClient.get<TenantResponse>('/tenants/me/'); 
     
     if (response.data && response.data.tenant) {
       return response.data.tenant; // Return the nested tenant object
