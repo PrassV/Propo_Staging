@@ -207,6 +207,16 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
             for key in ['gender', 'id_type', 'rental_type', 'rental_frequency', 'electricity_responsibility', 'water_responsibility', 'property_tax_responsibility', 'status']:
                 if key in tenant_dict and tenant_dict[key] and hasattr(tenant_dict[key], 'value'):
                     tenant_dict[key] = tenant_dict[key].value
+                    
+            # Map gender values to match database constraint (prefer_not_to_say -> other)
+            if 'gender' in tenant_dict and tenant_dict['gender']:
+                gender_mapping = {
+                    'prefer_not_to_say': 'other',
+                    'male': 'male',
+                    'female': 'female',
+                    'other': 'other'
+                }
+                tenant_dict['gender'] = gender_mapping.get(tenant_dict['gender'], 'other')
 
             # Create the tenant in the database
             created_tenant_dict = await tenants_db.create_tenant(tenant_dict)
@@ -256,6 +266,16 @@ async def update_tenant(tenant_id: uuid.UUID, tenant_data: TenantUpdate, request
         for key in ['gender', 'id_type', 'rental_type', 'rental_frequency', 'electricity_responsibility', 'water_responsibility', 'property_tax_responsibility']:
              if key in update_dict and update_dict[key]:
                 update_dict[key] = update_dict[key].value
+                
+        # Map gender values to match database constraint (prefer_not_to_say -> other)
+        if 'gender' in update_dict and update_dict['gender']:
+            gender_mapping = {
+                'prefer_not_to_say': 'other',
+                'male': 'male',
+                'female': 'female',
+                'other': 'other'
+            }
+            update_dict['gender'] = gender_mapping.get(update_dict['gender'], 'other')
 
         updated_tenant_dict = await tenants_db.update_tenant(tenant_id, update_dict)
         return Tenant(**updated_tenant_dict) if updated_tenant_dict else None
