@@ -16,7 +16,7 @@ const api = {
   invitation: services.invitationService,
   rentEstimation: services.rentEstimationService,
   document: services.documentService,
-  reporting: services.reportingService,
+
   notification: services.notificationService,
   agreement: services.agreementService,
   vendor: services.vendorService,

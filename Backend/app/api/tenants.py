@@ -15,7 +15,7 @@ from app.models.tenant import (
     PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
     TenantInvitationCreate, TenantInvitation, TenantWithHistory, 
     TenantVerificationRequest, TenantVerificationResponse,
-    DocumentUploadRequest, DocumentUploadResponse, BulkTenantOperation
+    DocumentUploadRequest, DocumentUploadResponse
 )
 from app.models.user import User
 
@@ -71,12 +71,7 @@ class TenantVerifyLinkRequest(BaseModel):
     invitation_code: str
     tenant_id: UUID4
 
-class BulkOperationResponse(BaseModel):
-    success: bool
-    processed: int
-    failed: int
-    errors: List[str]
-    message: str = "Success"
+
 
 # --- Enhanced Tenant CRUD Endpoints ---
 
@@ -484,34 +479,6 @@ async def update_tenant_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating status: {str(e)}"
-        )
-
-# --- Bulk Operations ---
-
-@router.post("/bulk-operations", response_model=BulkOperationResponse)
-async def bulk_tenant_operations(
-    operation_data: BulkTenantOperation,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """Perform bulk operations on multiple tenants."""
-    try:
-        user_id = uuid.UUID(current_user["id"])
-
-        result = await tenant_service.perform_bulk_operation(operation_data, user_id)
-
-        return {
-            "success": result["success"],
-            "processed": result["processed"],
-            "failed": result["failed"],
-            "errors": result["errors"],
-            "message": f"Bulk operation completed. {result['processed']} processed, {result['failed']} failed"
-        }
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error performing bulk operation: {str(e)}"
         )
 
 # --- Existing endpoints with minimal changes ---

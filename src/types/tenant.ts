@@ -361,19 +361,7 @@ export interface TenantVerificationResponse {
   message: string;
 }
 
-// --- Bulk Operations Interfaces ---
-export interface BulkTenantStatusUpdate {
-  tenant_ids: string[];
-  new_status: TenantStatus;
-  notes?: string;
-}
 
-export interface BulkTenantResponse {
-  success_count: number;
-  failed_count: number;
-  failed_tenant_ids: string[];
-  errors: string[];
-}
 
 // --- Legacy/Backward Compatibility ---
 // Keep the old TenantFormData interface for existing components

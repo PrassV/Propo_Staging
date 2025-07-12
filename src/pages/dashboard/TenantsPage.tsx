@@ -37,7 +37,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import BulkOperationsPanel from '../../components/tenant/BulkOperationsPanel';
+
 import TenantAnalytics from '../../components/tenant/TenantAnalytics';
 import { toast } from 'react-hot-toast';
 
@@ -50,7 +50,7 @@ export default function TenantsPage() {
   const [error, setError] = useState<string | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [selectedTenants, setSelectedTenants] = useState<Tenant[]>([]);
+
   
   // Filter and search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -193,89 +193,7 @@ export default function TenantsPage() {
     navigate(`/dashboard/tenants/${tenantId}`);
   };
 
-  // Bulk operations handlers
-  const handleSelectTenant = (tenant: Tenant, isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedTenants(prev => [...prev, tenant]);
-    } else {
-      setSelectedTenants(prev => prev.filter(t => t.id !== tenant.id));
-    }
-  };
 
-  const handleSelectAll = (isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedTenants(tenants);
-    } else {
-      setSelectedTenants([]);
-    }
-  };
-
-  const handleClearSelection = () => {
-    setSelectedTenants([]);
-  };
-
-  const handleBulkUpdate = async (tenantIds: string[], updates: Record<string, unknown>) => {
-    try {
-      // In a real implementation, this would call a bulk update API
-      for (const tenantId of tenantIds) {
-        // await tenantService.updateTenant(tenantId, updates);
-      }
-      toast.success('Bulk update completed successfully');
-      await fetchTenants(); // Refresh the list
-    } catch (error) {
-      console.error('Bulk update error:', error);
-      throw error;
-    }
-  };
-
-  const handleBulkNotify = async (tenantIds: string[], notificationData: { subject: string; message: string; type: string; priority: string }) => {
-    try {
-      // In a real implementation, this would call a bulk notification API
-      for (const tenantId of tenantIds) {
-        // await notificationService.sendNotification(tenantId, notificationData);
-      }
-      toast.success('Notifications sent successfully');
-    } catch (error) {
-      console.error('Bulk notification error:', error);
-      throw error;
-    }
-  };
-
-  const handleExport = async (tenantIds: string[]) => {
-    try {
-      // In a real implementation, this would call an export API
-      // For now, we'll create a CSV export
-      const selectedTenantsData = tenants.filter(t => tenantIds.includes(t.id));
-      
-      const csvContent = [
-        ['Name', 'Email', 'Phone', 'Status', 'Property', 'Unit', 'Rent Amount', 'Start Date', 'End Date'].join(','),
-        ...selectedTenantsData.map(tenant => [
-          tenant.name,
-          tenant.email,
-          tenant.phone || '',
-          tenant.status || 'unassigned',
-          tenant.current_property?.property_name || 'N/A',
-          tenant.current_unit?.unit_number || 'N/A',
-          tenant.current_lease?.rent_amount || tenant.rental_amount || 0,
-          tenant.current_lease?.start_date || tenant.rental_start_date || '',
-          tenant.current_lease?.end_date || tenant.rental_end_date || ''
-        ].join(','))
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `tenants_export_${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Export completed successfully');
-    } catch (error) {
-      console.error('Export error:', error);
-      throw error;
-    }
-  };
 
   // Helper functions
   const getStatusBadge = (status: string) => {
@@ -313,8 +231,6 @@ export default function TenantsPage() {
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
-  const isAllSelected = tenants.length > 0 && selectedTenants.length === tenants.length;
-  const isPartiallySelected = selectedTenants.length > 0 && selectedTenants.length < tenants.length;
 
   // Loading state
   if (loading && tenants.length === 0) {
@@ -364,14 +280,7 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* Bulk Operations Panel */}
-      <BulkOperationsPanel
-        selectedTenants={selectedTenants}
-        onClearSelection={handleClearSelection}
-        onBulkUpdate={handleBulkUpdate}
-        onBulkNotify={handleBulkNotify}
-        onExport={handleExport}
-      />
+
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -454,23 +363,6 @@ export default function TenantsPage() {
               <>
                 {/* Select All Header */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      ref={(input) => {
-                        if (input) input.indeterminate = isPartiallySelected;
-                      }}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      {selectedTenants.length > 0 
-                        ? `${selectedTenants.length} tenant${selectedTenants.length > 1 ? 's' : ''} selected`
-                        : 'Select all tenants'
-                      }
-                    </span>
-                  </div>
                   <div className="text-sm text-gray-600">
                     Showing {tenants.length} of {totalCount} tenants
                   </div>
@@ -479,18 +371,11 @@ export default function TenantsPage() {
                 {/* Tenant Cards Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {tenants.map((tenant) => {
-                    const isSelected = selectedTenants.some(t => t.id === tenant.id);
                     return (
-                      <Card key={tenant.id} className={`shadow-sm hover:shadow-md transition-shadow duration-200 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                      <Card key={tenant.id} className="shadow-sm hover:shadow-md transition-shadow duration-200">
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center space-x-3">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => handleSelectTenant(tenant, e.target.checked)}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
                               <Avatar className="h-12 w-12">
                                 <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
                                   {getInitials(tenant.name)}

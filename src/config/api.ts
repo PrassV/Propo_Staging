@@ -78,21 +78,7 @@ export const API_ENDPOINTS = {
     delete: '/api/payments' // /{payment_id}
   },
   
-  // Reports endpoints
-  reports: {
-    financialSummary: '/api/reports/financial-summary',
-    propertyPerformance: '/api/reports/property-performance',
-    maintenanceAnalytics: '/api/reports/maintenance-analytics',
-    tenantRetention: '/api/reports/tenant-retention'
-  },
   
-  // Automation endpoints
-  automation: {
-    stats: '/api/automation/stats',
-    rules: '/api/automation/rules',
-    tasks: '/api/automation/tasks',
-    toggleRule: '/api/automation/rules'
-  },
   
   // Auth endpoints
   auth: {

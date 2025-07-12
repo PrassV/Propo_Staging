@@ -511,14 +511,3 @@ class TenantVerificationResponse(BaseModel):
     next_steps: List[str] = Field(default_factory=list)
     message: str
 
-# --- Bulk Operations ---
-class BulkTenantStatusUpdate(BaseModel):
-    tenant_ids: List[uuid.UUID]
-    new_status: TenantStatus
-    notes: Optional[str] = None
-
-class BulkTenantResponse(BaseModel):
-    success_count: int
-    failed_count: int
-    failed_tenant_ids: List[uuid.UUID] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)

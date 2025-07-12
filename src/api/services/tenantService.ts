@@ -225,32 +225,7 @@ export const getCurrentTenantProfile = async (): Promise<Tenant> => { // Changed
   }
 };
 
-/**
- * Bulk update multiple tenants
- */
-export const bulkUpdateTenants = async (
-  tenantIds: string[], 
-  updates: Record<string, unknown>
-): Promise<{ success: boolean; updated_count: number }> => {
-  try {
-    // In a real implementation, this would be a single API call
-    // For now, we'll update each tenant individually
-    const updatePromises = tenantIds.map(id => updateTenant(id, updates));
-    await Promise.all(updatePromises);
-    
-    return {
-      success: true,
-      updated_count: tenantIds.length
-    };
-  } catch (error: unknown) {
-    console.error("Error in bulk update:", error);
-    let errorMessage = 'Failed to bulk update tenants';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    throw new Error(errorMessage);
-  }
-};
+
 
 /**
  * Export tenant data to CSV
@@ -318,39 +293,7 @@ export const getTenantAnalytics = async (): Promise<{
   }
 };
 
-/**
- * Send bulk notification to tenants
- */
-export const sendBulkNotification = async (
-  tenantIds: string[],
-  _notification: {
-    subject: string;
-    message: string;
-    type: 'email' | 'in_app' | 'both';
-    priority: 'low' | 'normal' | 'high';
-  }
-): Promise<{ success: boolean; sent_count: number }> => {
-  try {
-    // In a real implementation, this would call a backend notification endpoint
-    // const response = await apiClient.post<NotificationResponse>('/tenants/bulk-notify', {
-    //   tenant_ids: tenantIds,
-    //   notification
-    // });
-    
-    // Mock implementation
-    return {
-      success: true,
-      sent_count: tenantIds.length
-    };
-  } catch (error: unknown) {
-    console.error("Error sending bulk notification:", error);
-    let errorMessage = 'Failed to send bulk notification';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-    throw new Error(errorMessage);
-  }
-}; 
+
 
 /**
  * Get tenant documents
