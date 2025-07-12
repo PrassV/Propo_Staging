@@ -185,7 +185,8 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
         
         if existing_tenant:
             logger.warning(f"Tenant with email {tenant_data.email} already exists (ID: {existing_tenant['id']})")
-            tenant_id = existing_tenant['id']
+            # Fix: Convert string ID to UUID for proper handling
+            tenant_id = uuid.UUID(existing_tenant['id']) if isinstance(existing_tenant['id'], str) else existing_tenant['id']
             # We could update existing tenant details here if needed
         else:
             # Create the core tenant record
@@ -213,7 +214,8 @@ async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -
                 logger.error(f"Failed to create tenant record in DB for email {tenant_data.email}")
                 return None
             
-            tenant_id = created_tenant_dict['id']
+            # Fix: Ensure tenant_id is a UUID object for consistency
+            tenant_id = uuid.UUID(created_tenant_dict['id']) if isinstance(created_tenant_dict['id'], str) else created_tenant_dict['id']
             logger.info(f"Successfully created tenant with ID: {tenant_id}")
             
         # Return the created tenant
