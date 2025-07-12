@@ -296,8 +296,10 @@ class Tenant(TenantBase):
     owner_id: uuid.UUID # ID of the owner who created this tenant
     created_at: datetime
     updated_at: Optional[datetime] = None
-    # We might add fields from property_tenants here if needed for specific views
-    # e.g., current_property_id, current_unit_number, current_tenancy_start_date
+    
+    # Property relationship fields for frontend compatibility
+    property_id: Optional[str] = None  # Current property ID for storage uploads
+    current_property: Optional[Dict[str, Any]] = None  # Current property details
 
     class Config:
         from_attributes = True # Enable ORM mode

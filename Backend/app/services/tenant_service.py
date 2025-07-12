@@ -91,16 +91,68 @@ async def get_tenants(
 async def get_tenant_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> Optional[Tenant]:
     """
     Get a specific tenant by ID, performing access control.
+    Now includes property information for frontend compatibility.
     """
     try:
         if not await _can_access_tenant(tenant_id, requesting_user_id):
             return None # Access denied
 
+        # Get basic tenant data
         tenant_dict = await tenants_db.get_tenant_by_id(tenant_id)
+        if not tenant_dict:
+            return None
+            
+        # Enrich with property information
+        tenant_dict = await _enrich_tenant_with_property_info(tenant_dict)
+        
         return Tenant(**tenant_dict) if tenant_dict else None
     except Exception as e:
         logger.error(f"Error in get_tenant_by_id service: {str(e)}")
         return None
+
+async def _enrich_tenant_with_property_info(tenant_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enrich tenant data with property information for frontend compatibility.
+    Adds property_id and current_property fields based on property_tenants relationship.
+    """
+    try:
+        tenant_id = tenant_dict.get('id')
+        if not tenant_id:
+            return tenant_dict
+            
+        # Get current property relationship
+        property_links = await tenants_db.get_property_links_for_tenant(uuid.UUID(tenant_id))
+        
+        if property_links:
+            # Get the most recent/current property link
+            current_link = property_links[0]  # Assuming sorted by most recent
+            property_id = current_link.get('property_id')
+            
+            if property_id:
+                # Add property_id for storage compatibility
+                tenant_dict['property_id'] = property_id
+                
+                # Get property details for current_property field
+                from ..config.database import supabase_client as db_client
+                property_data = await properties_db.get_property_by_id(db_client, uuid.UUID(property_id))
+                
+                if property_data:
+                    tenant_dict['current_property'] = {
+                        'id': property_id,
+                        'property_name': property_data.get('property_name'),
+                        'address_line1': property_data.get('address_line1'),
+                        'address_line2': property_data.get('address_line2'),
+                        'city': property_data.get('city'),
+                        'state': property_data.get('state'),
+                        'pincode': property_data.get('pincode')
+                    }
+                    
+                    logger.info(f"Enriched tenant {tenant_id} with property {property_id}")
+        
+        return tenant_dict
+    except Exception as e:
+        logger.error(f"Error enriching tenant with property info: {str(e)}")
+        return tenant_dict  # Return original data if enrichment fails
 
 async def create_tenant(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -> Optional[Tenant]:
     """
@@ -974,6 +1026,7 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
     """
     Retrieves a tenant profile linked to a specific user ID.
     Returns the Tenant object or None if not found.
+    Now includes property information for frontend compatibility.
     """
     logger.info(f"Retrieving tenant profile for user_id {user_id}")
     try:
@@ -1001,6 +1054,9 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
             if tenant_data.get('electricity_responsibility') == 'landlord':
                 tenant_data['electricity_responsibility'] = 'owner'
             
+            # Enrich with property information
+            tenant_data = await _enrich_tenant_with_property_info(tenant_data)
+            
             try:
                 # Create the Tenant model with the fixed data
                 return Tenant(**tenant_data)
@@ -1013,8 +1069,7 @@ async def get_tenant_by_user_id(user_id: uuid.UUID) -> Optional[Tenant]:
             logger.info(f"No tenant profile found for user_id {user_id}")
             return None
     except Exception as e:
-        logger.exception(f"Unexpected error retrieving tenant by user_id {user_id}: {e}")
-        # Re-raise for API layer to handle
+        logger.error(f"Error in get_tenant_by_user_id: {str(e)}")
         raise
 
 async def link_tenant_to_property(
@@ -1309,6 +1364,7 @@ async def get_tenants_enhanced(
 async def get_tenant_with_history_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     """
     Get a tenant with their complete history.
+    Now includes property information for frontend compatibility.
     """
     try:
         if not await _can_access_tenant(tenant_id, requesting_user_id):
@@ -1318,6 +1374,9 @@ async def get_tenant_with_history_by_id(tenant_id: uuid.UUID, requesting_user_id
         tenant_dict = await tenants_db.get_tenant_by_id(tenant_id)
         if not tenant_dict:
             return None
+        
+        # Enrich with property information
+        tenant_dict = await _enrich_tenant_with_property_info(tenant_dict)
         
         # Get history data (mock implementation for now)
         history_data = []
@@ -1338,12 +1397,16 @@ async def get_tenant_with_history_by_id(tenant_id: uuid.UUID, requesting_user_id
 async def get_tenant_with_history_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
     """
     Get a tenant with history by user ID.
+    Now includes property information for frontend compatibility.
     """
     try:
         # First find the tenant by user_id
         tenant_dict = await tenants_db.get_tenant_by_user_id(user_id)
         if not tenant_dict:
             return None
+        
+        # Enrich with property information
+        tenant_dict = await _enrich_tenant_with_property_info(tenant_dict)
         
         tenant_id = tenant_dict['id']
         return await get_tenant_with_history_by_id(tenant_id, user_id)
