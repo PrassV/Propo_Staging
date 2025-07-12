@@ -16,9 +16,19 @@ const OnboardingFlow = () => {
   const { invitationData, loading: invitationLoading } = useInvitationData();
   const [showTypeSelection, setShowTypeSelection] = useState(false);
 
+  // Helper function to get user type from either role or user_type
+  const getUserType = (profile: any): 'owner' | 'tenant' | null => {
+    return (profile?.role || profile?.user_type) as 'owner' | 'tenant' | null;
+  };
+
+  // Helper function to check if profile is complete
+  const isProfileComplete = (profile: any): boolean => {
+    return !!(profile?.first_name && profile?.last_name && getUserType(profile));
+  };
+
   useEffect(() => {
     // If user has a complete profile, redirect to dashboard
-    if (profile?.first_name && profile?.last_name && profile?.role) {
+    if (isProfileComplete(profile)) {
       navigate('/dashboard');
     }
   }, [profile, navigate]);
@@ -34,7 +44,7 @@ const OnboardingFlow = () => {
   }
 
   // If user has a complete profile, don't render anything as they'll be redirected
-  if (profile?.first_name && profile?.last_name && profile?.role) {
+  if (isProfileComplete(profile)) {
     return null;
   }
 
@@ -43,11 +53,13 @@ const OnboardingFlow = () => {
     return <TenantOnboardingForm />;
   }
 
+  const userType = getUserType(profile);
+
   // Show type selection if no user type or explicitly showing selection
-  if (showTypeSelection || !profile?.role) {
+  if (showTypeSelection || !userType) {
     return (
       <UserTypeSelection 
-        onSelect={(userType) => {
+        onSelect={(_selectedType) => {
           setShowTypeSelection(false);
           // Force reload profile after type selection
           window.location.reload();
@@ -56,15 +68,15 @@ const OnboardingFlow = () => {
     );
   }
 
-  // Show the appropriate onboarding form based on user role
+  // Show the appropriate onboarding form based on user type
   return (
     <div className="mx-auto max-w-4xl p-6">
       <UserTypeSwitch 
-        currentType={profile.role as 'owner' | 'tenant' | null}
+        currentType={userType}
         onSwitch={() => setShowTypeSelection(true)}
       />
       
-      {profile.role === 'owner' ? (
+      {userType === 'owner' ? (
         <OwnerOnboardingForm />
       ) : (
         <TenantOnboardingForm />

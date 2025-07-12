@@ -97,9 +97,100 @@ export default function EnhancedTenantOnboardingForm() {
     }
   }, [user]);
 
+  // Validation functions for each section
+  const validateSection = (sectionIndex: number): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    switch (sectionIndex) {
+      case 0: // Basic Information
+        if (!formData.firstName.trim()) errors.push('First name is required');
+        if (!formData.lastName.trim()) errors.push('Last name is required');
+        if (!formData.phone.trim()) errors.push('Phone number is required');
+        if (formData.phone.trim() && !/^\d{10}$/.test(formData.phone.trim())) {
+          errors.push('Phone number must be 10 digits');
+        }
+        if (!formData.familySize.trim()) errors.push('Family size is required');
+        if (formData.familySize.trim() && (parseInt(formData.familySize) < 1 || parseInt(formData.familySize) > 20)) {
+          errors.push('Family size must be between 1 and 20');
+        }
+        break;
+        
+      case 1: // Personal Details
+        if (!formData.dateOfBirth.trim()) errors.push('Date of birth is required');
+        if (formData.dateOfBirth.trim()) {
+          const birthDate = new Date(formData.dateOfBirth);
+          const today = new Date();
+          const age = today.getFullYear() - birthDate.getFullYear();
+          if (age < 18 || age > 100) errors.push('Age must be between 18 and 100');
+        }
+        break;
+        
+      case 2: // Address
+        if (!formData.addressLine1.trim()) errors.push('Address line 1 is required');
+        if (!formData.city.trim()) errors.push('City is required');
+        if (formData.city.trim() && /^\d+$/.test(formData.city.trim())) {
+          errors.push('City name cannot be only numbers');
+        }
+        if (!formData.state.trim()) errors.push('State is required');
+        if (!formData.pincode.trim()) errors.push('Pincode is required');
+        if (formData.pincode.trim() && !/^\d{6}$/.test(formData.pincode.trim())) {
+          errors.push('Pincode must be 6 digits');
+        }
+        break;
+        
+      case 3: // Occupation & Income
+        if (!formData.occupation.trim()) errors.push('Occupation is required');
+        if (!formData.monthlyIncome.trim()) errors.push('Monthly income is required');
+        if (formData.monthlyIncome.trim() && (parseFloat(formData.monthlyIncome) < 0 || parseFloat(formData.monthlyIncome) > 10000000)) {
+          errors.push('Monthly income must be between 0 and 1,00,00,000');
+        }
+        if (!formData.employerName.trim()) errors.push('Employer name is required');
+        break;
+        
+      case 4: // Emergency Contact
+        if (!formData.emergencyContactName.trim()) errors.push('Emergency contact name is required');
+        if (!formData.emergencyContactPhone.trim()) errors.push('Emergency contact phone is required');
+        if (formData.emergencyContactPhone.trim() && !/^\d{10}$/.test(formData.emergencyContactPhone.trim())) {
+          errors.push('Emergency contact phone must be 10 digits');
+        }
+        if (!formData.emergencyContactRelationship.trim()) errors.push('Emergency contact relationship is required');
+        break;
+        
+      case 5: // Documents
+        // Documents are optional for now
+        break;
+        
+      case 6: // ID Verification
+        if (!formData.idNumber.trim()) errors.push('ID number is required');
+        if (!formData.idProof) errors.push('ID proof upload is required');
+        break;
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  };
+
+  const handleNext = () => {
+    const validation = validateSection(currentSection);
+    if (!validation.isValid) {
+      toast.error(validation.errors.join('\n'));
+      return;
+    }
+    setCurrentSection(prev => Math.min(sections.length - 1, prev + 1));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    // Validate all sections before submitting
+    for (let i = 0; i < sections.length; i++) {
+      const validation = validateSection(i);
+      if (!validation.isValid) {
+        toast.error(`Please fix errors in section ${i + 1}: ${validation.errors.join(', ')}`);
+        setCurrentSection(i);
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -531,7 +622,7 @@ export default function EnhancedTenantOnboardingForm() {
           {currentSection < sections.length - 1 ? (
             <button
               type="button"
-              onClick={() => setCurrentSection(prev => Math.min(sections.length - 1, prev + 1))}
+              onClick={handleNext}
               disabled={loading}
               className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
             >

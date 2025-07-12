@@ -44,8 +44,8 @@ async def upload_files(
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated")
 
-        # Map context to storage context (default to tenant_documents for backward compatibility)
-        storage_context = context if context in ['property_images', 'tenant_documents', 'maintenance_files', 'agreements', 'id_documents'] else 'tenant_documents'
+        # Map context to storage context (default to id_documents since it doesn't require property_id)
+        storage_context = context if context in ['property_images', 'tenant_documents', 'maintenance_files', 'agreements', 'id_documents'] else 'id_documents'
         
         uploaded_paths = []
         image_urls = []
