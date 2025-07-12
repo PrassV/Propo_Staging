@@ -93,7 +93,6 @@ export default function TenantProfilePage() {
     
     try {
       setDocumentsLoading(true);
-      // TODO: Implement tenantService.getTenantDocuments
       const response = await tenantService.getTenantDocuments(tenantId);
       setDocuments(response.documents || []);
     } catch (err: unknown) {
@@ -109,7 +108,6 @@ export default function TenantProfilePage() {
     
     try {
       setHistoryLoading(true);
-      // TODO: Implement tenantService.getTenantHistory
       const response = await tenantService.getTenantHistory(tenantId);
       setHistory(response.history || []);
     } catch (err: unknown) {
@@ -125,7 +123,6 @@ export default function TenantProfilePage() {
     
     try {
       setStatusUpdateLoading(true);
-      // TODO: Implement tenantService.updateTenantStatus
       await tenantService.updateTenantStatus(tenantId, data.status, data.reason);
       setTenant(prev => prev ? { ...prev, status: data.status } : null);
       setStatusUpdateOpen(false);
@@ -140,7 +137,6 @@ export default function TenantProfilePage() {
 
   const handleDownloadDocument = async (documentId: string, filename: string) => {
     try {
-      // TODO: Implement document download
       const blob = await tenantService.downloadDocument(documentId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

@@ -21,6 +21,7 @@ const RentAgreement = lazy(() => import('../pages/RentAgreement'));
 const AddTenantPage = lazy(() => import('../pages/dashboard/AddTenantPage'));
 const TenantsPage = lazy(() => import('../pages/dashboard/TenantsPage'));
 const TenantProfilePage = lazy(() => import('../pages/dashboard/TenantProfilePage'));
+const TenantEditPage = lazy(() => import('../pages/dashboard/TenantEditPage'));
 const MaintenanceDashboard = lazy(() => import('../pages/maintenance/MaintenanceDashboard'));
 const RequestDetails = lazy(() => import('../components/maintenance/RequestDetails'));
 
@@ -174,6 +175,14 @@ export const routes: RouteObject[] = [
     element: (
       <RouteGuard requireAuth requireProfile>
         {withSuspense(TenantProfilePage)}
+      </RouteGuard>
+    )
+  },
+  {
+    path: '/dashboard/tenants/:tenantId/edit',
+    element: (
+      <RouteGuard requireAuth requireProfile>
+        {withSuspense(TenantEditPage)}
       </RouteGuard>
     )
   },

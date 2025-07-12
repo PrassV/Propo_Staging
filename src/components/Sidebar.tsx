@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calculator, LayoutDashboard, FileText, Receipt, Wrench, Settings, X, Users, BarChart3, Zap } from 'lucide-react';
+import { Home, Calculator, LayoutDashboard, FileText, Receipt, Wrench, Settings, X, Users } from 'lucide-react';
 import { useProfile } from '../hooks/useProfile';
 
 interface SidebarProps {
@@ -36,18 +36,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       path: '/dashboard/maintenance',
       iconClassName: 'text-gray-600'
     },
-    { 
-      icon: Zap, 
-      label: 'Automation', 
-      path: '/dashboard/automation',
-      iconClassName: 'text-gray-600'
-    },
-    { 
-      icon: BarChart3, 
-      label: 'Reports', 
-      path: '/dashboard/reports',
-      iconClassName: 'text-gray-600'
-    },
+
     { 
       icon: Calculator, 
       label: 'Rent Estimation', 

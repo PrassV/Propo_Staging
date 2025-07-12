@@ -5,7 +5,7 @@ import { useProfile } from '../../hooks/useProfile';
 import { useInvitationData } from '../../hooks/useInvitationData';
 import UserTypeSelection from './UserTypeSelection';
 import OwnerOnboardingForm from './OwnerOnboardingForm';
-import TenantOnboardingForm from './tenant/TenantOnboardingForm';
+import TenantOnboardingForm from './tenant/EnhancedTenantOnboardingForm';
 import UserTypeSwitch from './UserTypeSwitch';
 import LoadingSpinner from '../common/LoadingSpinner';
 
