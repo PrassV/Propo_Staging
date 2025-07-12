@@ -1637,7 +1637,7 @@ async def get_enriched_tenants_by_owner_id(
                             if unit_id:
                                 try:
                                     unit_response = supabase_client.table('units')\
-                                        .select('id, unit_number, floor, area, rent, deposit')\
+                                        .select('id, unit_number, area_sqft, rent, deposit')\
                                         .eq('id', unit_id)\
                                         .single()\
                                         .execute()
