@@ -48,14 +48,14 @@ export const API_ENDPOINTS = {
   
   // Tenant endpoints
   tenants: {
-    list: '/api/tenants',
-    details: '/api/tenants', // /{tenant_id}
-    create: '/api/tenants',
-    update: '/api/tenants', // /{tenant_id}
-    delete: '/api/tenants', // /{tenant_id}
-    properties: '/api/tenants', // /{tenant_id}/properties
-    payments: '/api/tenants', // /{tenant_id}/payments
-    maintenanceRequests: '/api/tenants' // /{tenant_id}/maintenance_requests
+    list: '/tenants',
+    details: '/tenants', // /{tenant_id}
+    create: '/tenants',
+    update: '/tenants', // /{tenant_id}
+    delete: '/tenants', // /{tenant_id}
+    properties: '/tenants', // /{tenant_id}/properties
+    payments: '/tenants', // /{tenant_id}/payments
+    maintenanceRequests: '/tenants' // /{tenant_id}/maintenance_requests
   },
   
   // Maintenance endpoints

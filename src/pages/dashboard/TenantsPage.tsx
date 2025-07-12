@@ -92,10 +92,24 @@ export default function TenantsPage() {
 
       console.log('Fetching tenants with params:', params);
       console.log('User authenticated:', !!user);
+      console.log('User object:', user);
+
+      // Test API connectivity first
+      try {
+        console.log('Testing API connectivity...');
+        const testResponse = await fetch('/health', { method: 'GET' });
+        console.log('API health check response:', testResponse.status);
+      } catch (healthError) {
+        console.error('API health check failed:', healthError);
+      }
 
       const response = await tenantService.getTenants(params);
-      setTenants(response.items);
-      setTotalCount(response.total);
+      console.log('API Response:', response);
+      console.log('Response items:', response.items);
+      console.log('Response total:', response.total);
+      
+      setTenants(response.items || []);
+      setTotalCount(response.total || 0);
     } catch (err: unknown) {
       console.error('Error fetching tenants:', err);
       let message = 'Failed to load tenants';
@@ -104,6 +118,21 @@ export default function TenantsPage() {
         message = err.message;
         if (message.includes('authentication') || message.includes('token')) {
           message = 'Authentication failed. Please log out and log back in.';
+        }
+      }
+      
+      // Add more detailed error information
+      if (typeof err === 'object' && err !== null) {
+        console.error('Error details:', {
+          message: (err as any).message,
+          response: (err as any).response,
+          status: (err as any).response?.status,
+          data: (err as any).response?.data
+        });
+        
+        // Check if it's a network error
+        if ((err as any).code === 'NETWORK_ERROR' || (err as any).message?.includes('Network Error')) {
+          message = 'Cannot connect to server. Please check if the backend is running.';
         }
       }
       
