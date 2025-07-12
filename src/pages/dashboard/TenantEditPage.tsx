@@ -4,6 +4,8 @@ import { ArrowLeft, User, Camera, FileText, Upload, Save, X } from 'lucide-react
 import { Tenant, TenantUpdate } from '../../api/types';
 import * as tenantService from '../../api/services/tenantService';
 import * as uploadService from '../../api/services/uploadService';
+import * as documentService from '../../api/services/documentService';
+import apiClient from '../../api/client';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { formatDate } from '@/utils/date';
+
 import { useAuth } from '@/contexts/AuthContext';
 
 interface TenantEditFormData {
@@ -84,25 +86,26 @@ export default function TenantEditPage() {
       
       // Populate form data
       const tenantData = response.tenant;
+      const tenantUnknown = tenantData as unknown as Record<string, string>;
       setFormData({
         name: tenantData.name || '',
         email: tenantData.email || '',
         phone: tenantData.phone || '',
-        date_of_birth: tenantData.date_of_birth || (tenantData as any).dob || '',
+        date_of_birth: tenantData.date_of_birth || tenantUnknown.dob || '',
         gender: tenantData.gender || '',
-        profile_photo_url: (tenantData as any).profile_photo_url || '',
-        monthly_income: (tenantData as any).monthly_income || '',
-        employer_name: (tenantData as any).employer_name || '',
-        occupation: (tenantData as any).occupation || '',
-        emergency_contact_name: (tenantData as any).emergency_contact_name || '',
-        emergency_contact_phone: (tenantData as any).emergency_contact_phone || '',
-        emergency_contact_relationship: (tenantData as any).emergency_contact_relationship || '',
-        address_line1: (tenantData as any).address_line1 || '',
-        address_line2: (tenantData as any).address_line2 || '',
-        city: (tenantData as any).city || '',
-        state: (tenantData as any).state || '',
-        pincode: (tenantData as any).pincode || '',
-        verification_notes: (tenantData as any).verification_notes || ''
+        profile_photo_url: tenantUnknown.profile_photo_url || '',
+        monthly_income: tenantUnknown.monthly_income || '',
+        employer_name: tenantUnknown.employer_name || '',
+        occupation: tenantUnknown.occupation || '',
+        emergency_contact_name: tenantUnknown.emergency_contact_name || '',
+        emergency_contact_phone: tenantUnknown.emergency_contact_phone || '',
+        emergency_contact_relationship: tenantUnknown.emergency_contact_relationship || '',
+        address_line1: tenantUnknown.address_line1 || '',
+        address_line2: tenantUnknown.address_line2 || '',
+        city: tenantUnknown.city || '',
+        state: tenantUnknown.state || '',
+        pincode: tenantUnknown.pincode || '',
+        verification_notes: tenantUnknown.verification_notes || ''
       });
     } catch (error) {
       console.error('Error fetching tenant:', error);
@@ -146,25 +149,80 @@ export default function TenantEditPage() {
 
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !tenant) return;
 
     if (file.size > 50 * 1024 * 1024) {
       toast.error('Document must be less than 50MB');
       return;
     }
 
+    // Get property_id from tenant object
+    const propertyId = tenant.property_id || tenant.current_property?.id;
+    if (!propertyId) {
+      toast.error('Cannot upload document: No property associated with this tenant');
+      return;
+    }
+
     setUploadingDocument(true);
     try {
-      const documentUrl = await uploadService.uploadFile(file, 'tenant_documents', user.id);
-      
-      // Upload document to backend (temporarily disabled - endpoint not implemented)
-      // await tenantService.uploadTenantDocument(tenantId!, file.name, documentUrl, 'other');
-      console.log('Document uploaded to storage:', documentUrl);
-      
-      toast.success('Document uploaded successfully');
+      // Use direct API call with property_id metadata
+      const formData = new FormData();
+      formData.append('files', file);
+      formData.append('context', 'tenant_documents');
+      formData.append('related_id', user.id);
+      formData.append('property_id', propertyId);
+
+      const response = await apiClient.post('/uploads/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data?.success) {
+        const documentUrl = response.data.image_urls?.[0] || response.data.file_url;
+        if (documentUrl) {
+          console.log('Document uploaded to storage:', documentUrl);
+          
+          // Create document record after successful upload
+          try {
+            await documentService.createDocument({
+              document_name: file.name,
+              file_url: documentUrl,
+              property_id: propertyId,
+              tenant_id: tenantId!,
+              document_type: 'other',
+              mime_type: file.type,
+              file_size: file.size,
+              title: file.name,
+              file_name: file.name,
+              access_level: 'private'
+            });
+            console.log('Document record created successfully');
+          } catch (docError) {
+            console.warn('Document uploaded but failed to create record:', docError);
+            // Don't throw error here - the file was still uploaded successfully
+          }
+          
+          toast.success('Document uploaded successfully');
+        } else {
+          throw new Error('Upload succeeded but no file URL was returned');
+        }
+      } else {
+        throw new Error(response.data?.message || 'Upload failed');
+      }
     } catch (error) {
       console.error('Error uploading document:', error);
-      toast.error('Failed to upload document');
+      let errorMessage = 'Failed to upload document';
+      
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 'data' in error.response &&
+          error.response.data && typeof error.response.data === 'object' && 'detail' in error.response.data) {
+        errorMessage = (error.response.data as { detail: string }).detail;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setUploadingDocument(false);
     }

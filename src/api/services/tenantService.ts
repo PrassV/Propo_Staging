@@ -10,6 +10,7 @@ import {
     TenantInvitationResponse,
     TenantInvitationVerify
 } from '../types';
+import { getDocuments } from './documentService';
 
 /**
  * Get all tenants with optional filters
@@ -300,8 +301,9 @@ export const getTenantAnalytics = async (): Promise<{
  */
 export const getTenantDocuments = async (tenantId: string): Promise<{ documents: any[] }> => {
   try {
-    const response = await apiClient.get(`/tenants/${tenantId}/documents`);
-    return response.data;
+    // Use document service to get documents filtered by tenant_id
+    const response = await getDocuments({ tenant_id: tenantId });
+    return { documents: response.documents };
   } catch (error) {
     console.error("Error fetching tenant documents:", error);
     // If endpoint doesn't exist, return empty documents array
@@ -309,7 +311,8 @@ export const getTenantDocuments = async (tenantId: string): Promise<{ documents:
         (error as any).response?.status === 404) {
       return { documents: [] };
     }
-    throw new Error('Failed to fetch tenant documents');
+    // Return empty array on any error for now
+    return { documents: [] };
   }
 };
 
