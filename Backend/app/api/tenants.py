@@ -1,3 +1,4 @@
+# Enhanced Tenant API with comprehensive document and verification support
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Path, Query, Body
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, UUID4, Field
@@ -10,24 +11,23 @@ from app.config.database import get_supabase_client_authenticated
 logger = logging.getLogger(__name__)
 
 from app.models.tenant import (
-    Tenant, TenantCreate, TenantUpdate,
+    Tenant, TenantCreate, TenantUpdate, TenantDocument, TenantHistory, UnitHistory,
     PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate,
-    TenantInvitationCreate, TenantInvitation
+    TenantInvitationCreate, TenantInvitation, TenantWithHistory, 
+    TenantVerificationRequest, TenantVerificationResponse,
+    DocumentUploadRequest, DocumentUploadResponse, BulkTenantOperation
 )
-from app.models.user import User # Assuming User model exists for auth response
+from app.models.user import User
 
-# Importing placeholder models until properly defined
-from app.models.property import Property  # Assuming Property model exists
-from app.models.payment import Payment  # Placeholder, replace with actual model
-from app.models.maintenance import MaintenanceRequest  # Placeholder, replace with actual model
+from app.models.property import Property
+from app.models.payment import Payment
+from app.models.maintenance import MaintenanceRequest
 
 from ..services import tenant_service
 from ..db import tenants as tenants_db
 from ..db import properties as properties_db
 from ..config.auth import get_current_user
-
-# For pagination
-from app.utils.common import PaginationParams  # Assuming this exists or define below
+from app.utils.common import PaginationParams
 
 router = APIRouter(
     prefix="/tenants",
@@ -35,47 +35,56 @@ router = APIRouter(
     responses={404: {"description": "Not found"}}
 )
 
-# --- Response Models ---
-
+# Enhanced Response Models
 class TenantResponse(BaseModel):
-    """Standard response wrapper for a single tenant"""
     tenant: Tenant
     message: str = "Success"
 
+class TenantWithHistoryResponse(BaseModel):
+    tenant: TenantWithHistory
+    message: str = "Success"
+
 class TenantsListResponse(BaseModel):
-    """Response model for paginated tenant list"""
     items: List[Tenant]
     total: int
     message: str = "Success"
 
+class TenantDocumentResponse(BaseModel):
+    document: TenantDocument
+    message: str = "Success"
+
+class TenantDocumentsResponse(BaseModel):
+    documents: List[TenantDocument]
+    total: int
+    message: str = "Success"
+
+class TenantHistoryResponse(BaseModel):
+    history: List[TenantHistory]
+    total: int
+    message: str = "Success"
+
 class TenantInvitationResponse(BaseModel):
-    """Response wrapper for tenant invitation"""
     invitation: TenantInvitation
     message: str = "Success"
 
-# --- Payment Status Response Model ---
-class PaymentStatusResponse(BaseModel):
-    """Response model for tenant payment status"""
-    nextDueDate: Optional[str] = None
-    nextDueAmount: Optional[float] = None
-    lastPaymentDate: Optional[str] = None
-    lastPaymentAmount: Optional[float] = None
-    isOverdue: bool = False
+class TenantVerifyLinkRequest(BaseModel):
+    invitation_code: str
+    tenant_id: UUID4
+
+class BulkOperationResponse(BaseModel):
+    success: bool
+    processed: int
+    failed: int
+    errors: List[str]
     message: str = "Success"
 
-# --- Request Body Model for Verification ---
-class TenantVerifyLinkRequest(BaseModel):
-    property_id: UUID4 = Field(..., description="The ID of the property to verify association with.")
+# --- Enhanced Tenant CRUD Endpoints ---
 
-# --- Tenant CRUD Endpoints ---
-
-@router.get("/me", response_model=TenantResponse)
+@router.get("/me", response_model=TenantWithHistoryResponse)
 async def get_current_user_tenant(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get the tenant profile associated with the currently authenticated user.
-    """
+    """Get the tenant profile with history for the currently authenticated user."""
     try:
         user_id_str = current_user.get("id")
         if not user_id_str:
@@ -85,8 +94,7 @@ async def get_current_user_tenant(
             )
 
         user_id = uuid.UUID(user_id_str)
-
-        tenant_data = await tenant_service.get_tenant_by_user_id(user_id)
+        tenant_data = await tenant_service.get_tenant_with_history_by_user_id(user_id)
 
         if not tenant_data:
             raise HTTPException(
@@ -96,7 +104,7 @@ async def get_current_user_tenant(
 
         return {
             "tenant": tenant_data,
-            "message": "Current tenant profile retrieved successfully"
+            "message": "Current tenant profile with history retrieved successfully"
         }
     except HTTPException as http_exc:
         raise http_exc
@@ -111,24 +119,26 @@ async def get_current_user_tenant(
 async def get_tenants(
     pagination: PaginationParams = Depends(),
     property_id: Optional[UUID4] = Query(None, description="Filter tenants by property ID"),
-    status: Optional[str] = Query(None, description="Filter tenants by status (active, unassigned, inactive)"),
+    status: Optional[str] = Query(None, description="Filter tenants by status"),
+    verification_status: Optional[str] = Query(None, description="Filter by verification status"),
+    occupation_category: Optional[str] = Query(None, description="Filter by occupation category"),
     sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
     sort_order: Optional[str] = Query("desc", description="Sort order ('asc' or 'desc')"),
+    search: Optional[str] = Query(None, description="Search by name, email, or phone"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get all tenants for the current user, optionally filtered by property and status.
-    Includes pagination and sorting.
-    """
+    """Get all tenants with enhanced filtering and search capabilities."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         property_id_obj = uuid.UUID(str(property_id)) if property_id else None
 
-        tenants, total_count = await tenant_service.get_tenants(
-            owner_id=user_id,  # Pass the current user's ID as the owner_id
+        tenants, total_count = await tenant_service.get_tenants_enhanced(
+            owner_id=user_id,
             property_id=property_id_obj,
-            status=status,  # Pass status to filter
+            status=status,
+            verification_status=verification_status,
+            occupation_category=occupation_category,
+            search=search,
             skip=pagination.skip,
             limit=pagination.limit,
             sort_by=sort_by,
@@ -146,33 +156,30 @@ async def get_tenants(
             detail=f"Error retrieving tenants: {str(e)}"
         )
 
-@router.get("/{tenant_id}", response_model=TenantResponse)
+@router.get("/{tenant_id}", response_model=TenantWithHistoryResponse)
 async def get_tenant(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to retrieve"),
+    include_history: bool = Query(True, description="Include tenant history"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get a tenant by ID. Access is restricted to:
-    - The tenant accessing their own profile
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get a tenant by ID with comprehensive history and document information."""
     try:
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
 
-        tenant_data = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
+        if include_history:
+            tenant_data = await tenant_service.get_tenant_with_history_by_id(tenant_id_obj, user_id)
+        else:
+            tenant_data = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
 
         if not tenant_data:
-            # If service returns None, check if tenant exists at all to differentiate 403 from 404
             raw_tenant = await tenants_db.get_tenant_by_id(tenant_id_obj)
             if raw_tenant:
-                # Tenant exists, but user cannot access it
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to access this tenant's information."
                 )
             else:
-                # Tenant does not exist
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Tenant not found."
@@ -195,18 +202,11 @@ async def create_tenant(
     tenant_data: TenantCreate,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Create a new tenant with default status "unassigned".
-    Property and unit association will be done separately via lease creation.
-    """
+    """Create a new tenant with comprehensive validation and history tracking."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         
-        # Ensure status is set to unassigned for new tenants
-        # Instead of converting to dict, pass the TenantCreate object directly
-        # and let the service handle the conversion if needed
-        created_tenant = await tenant_service.create_tenant(tenant_data, user_id)
+        created_tenant = await tenant_service.create_tenant_comprehensive(tenant_data, user_id)
 
         if not created_tenant:
             raise HTTPException(
@@ -233,18 +233,12 @@ async def update_tenant(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to update"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Update a tenant's information.
-    Access is restricted to:
-    - The tenant updating their own profile
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Update a tenant's information with comprehensive validation and history tracking."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
 
-        updated_tenant = await tenant_service.update_tenant(tenant_id_obj, tenant_data, user_id)
+        updated_tenant = await tenant_service.update_tenant_comprehensive(tenant_id_obj, tenant_data, user_id)
 
         if not updated_tenant:
             raise HTTPException(
@@ -264,59 +258,274 @@ async def update_tenant(
             detail=f"Error updating tenant: {str(e)}"
         )
 
-@router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_tenant(
-    tenant_id: UUID4 = Path(..., description="The ID of the tenant to delete"),
+# --- Document Management Endpoints ---
+
+@router.get("/{tenant_id}/documents", response_model=TenantDocumentsResponse)
+async def get_tenant_documents(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    document_type: Optional[str] = Query(None, description="Filter by document type"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Delete a tenant.
-    WARNING: This permanently deletes the tenant record and all property associations.
-    Requires the user to own at least one property the tenant is linked to.
-    """
+    """Get all documents for a tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
 
-        success = await tenant_service.delete_tenant(tenant_id_obj, user_id)
+        documents, total_count = await tenant_service.get_tenant_documents(
+            tenant_id_obj, user_id, document_type
+        )
+
+        return {
+            "documents": documents,
+            "total": total_count,
+            "message": "Documents retrieved successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving documents: {str(e)}"
+        )
+
+@router.post("/{tenant_id}/documents", response_model=TenantDocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_tenant_document(
+    document_data: DocumentUploadRequest,
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Upload a document for a tenant."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        document = await tenant_service.upload_tenant_document(
+            tenant_id_obj, document_data, user_id
+        )
+
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to upload document"
+            )
+
+        return {
+            "document": document,
+            "message": "Document uploaded successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error uploading document: {str(e)}"
+        )
+
+@router.delete("/{tenant_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tenant_document(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    document_id: UUID4 = Path(..., description="The ID of the document"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Delete a tenant document."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+        document_id_obj = uuid.UUID(str(document_id))
+
+        success = await tenant_service.delete_tenant_document(
+            tenant_id_obj, document_id_obj, user_id
+        )
 
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tenant not found or you don't have permission to delete this tenant"
+                detail="Document not found or you don't have permission to delete it"
             )
 
-        # Return None for 204 No Content response
         return None
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting tenant: {str(e)}"
+            detail=f"Error deleting document: {str(e)}"
         )
 
-# --- Tenant Invitation ---
+# --- Verification Endpoints ---
+
+@router.post("/{tenant_id}/verification", response_model=TenantVerificationResponse)
+async def verify_tenant(
+    verification_data: TenantVerificationRequest,
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Verify a tenant's documents and information."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        result = await tenant_service.verify_tenant(
+            tenant_id_obj, verification_data, user_id
+        )
+
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to verify tenant"
+            )
+
+        return result
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error verifying tenant: {str(e)}"
+        )
+
+@router.put("/{tenant_id}/verification-status", response_model=TenantResponse)
+async def update_verification_status(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    verification_status: str = Body(..., description="New verification status"),
+    notes: Optional[str] = Body(None, description="Verification notes")
+):
+    """Update a tenant's verification status."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        updated_tenant = await tenant_service.update_verification_status(
+            tenant_id_obj, verification_status, notes, user_id
+        )
+
+        if not updated_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant not found or you don't have permission to update verification status"
+            )
+
+        return {
+            "tenant": updated_tenant,
+            "message": "Verification status updated successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating verification status: {str(e)}"
+        )
+
+# --- History Endpoints ---
+
+@router.get("/{tenant_id}/history", response_model=TenantHistoryResponse)
+async def get_tenant_history(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    action_type: Optional[str] = Query(None, description="Filter by action type"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get tenant history with filtering and pagination."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        history, total_count = await tenant_service.get_tenant_history(
+            tenant_id_obj, user_id, skip, limit, action_type
+        )
+
+        return {
+            "history": history,
+            "total": total_count,
+            "message": "History retrieved successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving history: {str(e)}"
+        )
+
+# --- Status Management Endpoints ---
+
+@router.put("/{tenant_id}/status", response_model=TenantResponse)
+async def update_tenant_status(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    new_status: str = Body(..., description="New status (active, inactive, unassigned)"),
+    reason: Optional[str] = Body(None, description="Reason for status change")
+):
+    """Update tenant status with automatic workflow management."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        updated_tenant = await tenant_service.update_tenant_status(
+            tenant_id_obj, new_status, reason, user_id
+        )
+
+        if not updated_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant not found or you don't have permission to update status"
+            )
+
+        return {
+            "tenant": updated_tenant,
+            "message": f"Tenant status updated to {new_status} successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating status: {str(e)}"
+        )
+
+# --- Bulk Operations ---
+
+@router.post("/bulk-operations", response_model=BulkOperationResponse)
+async def bulk_tenant_operations(
+    operation_data: BulkTenantOperation,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Perform bulk operations on multiple tenants."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+
+        result = await tenant_service.perform_bulk_operation(operation_data, user_id)
+
+        return {
+            "success": result["success"],
+            "processed": result["processed"],
+            "failed": result["failed"],
+            "errors": result["errors"],
+            "message": f"Bulk operation completed. {result['processed']} processed, {result['failed']} failed"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error performing bulk operation: {str(e)}"
+        )
+
+# --- Existing endpoints with minimal changes ---
 
 @router.post("/{tenant_id}/invite", response_model=TenantInvitationResponse)
 async def invite_tenant(
     invitation_data: TenantInvitationCreate,
-    tenant_id: UUID4 = Path(..., description="The ID of the tenant to invite (optional, can be None for new tenants)"),
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant to invite"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db_client: Client = Depends(get_supabase_client_authenticated)
 ):
-    """
-    Create an invitation for a tenant to join the platform.
-    Requires the user to be the owner of the specified property.
-    The tenant_id is optional - it can be specified if the tenant already exists.
-    """
+    """Create an invitation for a tenant to join the platform."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
-
-        # Could add tenant_id to the invitation data here if needed
-
         created_invitation = await tenant_service.create_tenant_invitation(invitation_data, user_id, db_client)
 
         if not created_invitation:
@@ -337,78 +546,43 @@ async def invite_tenant(
             detail=f"Error creating invitation: {str(e)}"
         )
 
-# --- Tenant Linking/Verification ---
-
 @router.post("/verify-link", status_code=status.HTTP_200_OK)
 async def verify_and_link_tenant(
     request_body: TenantVerifyLinkRequest,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Verifies if the current authenticated user matches the tenant details
-    associated with the given property ID and links the tenant record to the user ID.
-    """
+    """Verify and link a tenant using invitation code."""
     try:
-        user_id_str = current_user.get("id")
-        user_email = current_user.get("email") # Assuming email is in the token payload
+        user_id = uuid.UUID(current_user["id"])
+        result = await tenant_service.verify_and_link_tenant(request_body, user_id)
 
-        if not user_id_str or not user_email:
+        if not result:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication token invalid or missing required user info (ID, email)."
-            )
-
-        user_id = uuid.UUID(user_id_str)
-        property_id = request_body.property_id
-
-        success = await tenant_service.verify_and_link_tenant_by_property(
-            property_id=property_id,
-            user_id=user_id,
-            user_email=user_email,
-            # Pass other user details if needed for verification (e.g., name, phone)
-            # user_details=current_user
-        )
-
-        if success:
-            return {"message": "Tenant verified and linked successfully."}
-        else:
-            # The service layer should raise specific HTTPExceptions for not found or mismatch
-            # This path might not be reached if service layer raises correctly.
-             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to verify or link tenant. Property ID might be invalid or tenant details do not match."
+                detail="Invalid invitation code or tenant link failed"
             )
 
+        return {"message": "Tenant verified and linked successfully"}
     except HTTPException as http_exc:
-        # Re-raise exceptions raised from the service layer or auth
         raise http_exc
     except Exception as e:
-        logger.exception(f"Error during tenant verification/linking for user {user_id_str} and property {request_body.property_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred during tenant verification: {str(e)}"
+            detail=f"Error verifying tenant link: {str(e)}"
         )
 
-# --- Related Data Endpoints ---
+# --- Relationship endpoints remain unchanged ---
 
 @router.get("/{tenant_id}/properties", response_model=List[Property])
 async def get_tenant_properties(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get properties associated with a tenant.
-    Access is restricted to:
-    - The tenant accessing their own properties
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get properties associated with a tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-
         properties = await tenant_service.get_properties_for_tenant(tenant_id_obj, user_id)
-
         return properties
     except Exception as e:
         raise HTTPException(
@@ -421,19 +595,11 @@ async def get_tenant_leases(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get lease/tenancy details for a tenant.
-    Access is restricted to:
-    - The tenant accessing their own leases
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get lease/tenancy details for a tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-
         leases = await tenant_service.get_leases_for_tenant(tenant_id_obj, user_id)
-
         return leases
     except Exception as e:
         raise HTTPException(
@@ -446,19 +612,11 @@ async def get_tenant_payments(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get payment history for a tenant.
-    Access is restricted to:
-    - The tenant accessing their own payments
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get payment history for a tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-
         payments = await tenant_service.get_payments_for_tenant(tenant_id_obj, user_id)
-
         return payments
     except Exception as e:
         raise HTTPException(
@@ -471,19 +629,11 @@ async def get_tenant_maintenance(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Get maintenance requests associated with a tenant.
-    Access is restricted to:
-    - The tenant accessing their own maintenance requests
-    - Property owners/managers for properties the tenant is linked to
-    """
+    """Get maintenance requests associated with a tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
-
         maintenance_requests = await tenant_service.get_maintenance_for_tenant(tenant_id_obj, user_id)
-
         return maintenance_requests
     except Exception as e:
         raise HTTPException(
@@ -491,101 +641,43 @@ async def get_tenant_maintenance(
             detail=f"Error retrieving tenant maintenance requests: {str(e)}"
         )
 
-@router.get("/{tenant_id}/payment-status", response_model=Dict[str, Any])
-async def get_tenant_payment_status(
-    tenant_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db_client: Client = Depends(get_supabase_client_authenticated)
+@router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tenant(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant to delete"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get payment status for a specific tenant"""
+    """Delete a tenant with comprehensive cleanup."""
     try:
-        # Verify access - tenant can view their own, owner can view their tenants
-        user_id = current_user.get("id")
-        user_type = current_user.get("user_type", "owner")
-        
-        if user_type == "tenant" and str(tenant_id) != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tenants can only view their own payment status"
-            )
-        
-        # Get tenant's current payments
-        from app.services import payment_service
-        
-        # Get recent payment status
-        payments, _ = await payment_service.get_payments(
-            user_id=user_id,
-            user_type=user_type,
-            tenant_id=str(tenant_id),
-            skip=0,
-            limit=5,
-            sort_by="due_date",
-            sort_order="desc"
-        )
-        
-        if not payments:
-            return {
-                "nextDueDate": None,
-                "nextDueAmount": None,
-                "lastPaymentDate": None,
-                "lastPaymentAmount": None,
-                "isOverdue": False
-            }
-        
-        # Find next due payment
-        from datetime import date
-        today = date.today()
-        
-        next_due = None
-        last_payment = None
-        is_overdue = False
-        
-        for payment in payments:
-            if payment.status == "pending" and payment.due_date >= today:
-                if not next_due or payment.due_date < next_due.due_date:
-                    next_due = payment
-            elif payment.status == "paid":
-                if not last_payment or (payment.payment_date and payment.payment_date > last_payment.payment_date):
-                    last_payment = payment
-            elif payment.status == "overdue":
-                is_overdue = True
-        
-        return {
-            "nextDueDate": next_due.due_date.isoformat() if next_due else None,
-            "nextDueAmount": float(next_due.amount_due) if next_due else None,
-            "lastPaymentDate": last_payment.payment_date.isoformat() if last_payment and last_payment.payment_date else None,
-            "lastPaymentAmount": float(last_payment.amount_paid or 0) if last_payment else None,
-            "isOverdue": is_overdue
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting tenant payment status: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get payment status: {str(e)}"
-        )
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
 
-# Note: The tenant document upload endpoint (POST /{tenant_id}/documents) has been removed
-# ID documents are now handled directly as part of the tenant profile (id_proof_url field)
-# Other documents are managed through the property document endpoints: /api/properties/{property_id}/documents
+        success = await tenant_service.delete_tenant_comprehensive(tenant_id_obj, user_id)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant not found or you don't have permission to delete this tenant"
+            )
+
+        return None
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting tenant: {str(e)}"
+        )
 
 @router.put("/{tenant_id}/reactivate", response_model=TenantResponse)
 async def reactivate_tenant(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to reactivate"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Reactivate an inactive tenant.
-    Changes tenant status from "inactive" to "unassigned".
-    """
+    """Reactivate an inactive tenant."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
 
-        # Get current tenant data
         current_tenant = await tenant_service.get_tenant_by_id(tenant_id_obj, user_id)
         
         if not current_tenant:
@@ -594,16 +686,15 @@ async def reactivate_tenant(
                 detail="Tenant not found or you don't have permission to access this tenant"
             )
             
-        # Verify tenant is inactive
         if current_tenant.get("status") != "inactive":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only inactive tenants can be reactivated"
             )
             
-        # Update status to unassigned
-        update_data = {"status": "unassigned"}
-        updated_tenant = await tenant_service.update_tenant(tenant_id_obj, update_data, user_id)
+        updated_tenant = await tenant_service.update_tenant_status(
+            tenant_id_obj, "unassigned", "Reactivated by owner", user_id
+        )
 
         if not updated_tenant:
             raise HTTPException(
@@ -629,22 +720,16 @@ async def link_tenant_to_property(
     tenant_id: UUID4 = Path(..., description="The ID of the tenant to link"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Links a tenant to a property.
-    Requires the user to be the owner of the specified property.
-    """
+    """Links a tenant to a property."""
     try:
-        # Convert string UUID from auth to UUID object for service layer
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
         
-        # Extract data from the request
         property_id = link_data.property_id
         unit_number = getattr(link_data, "unit_number", None)
         start_date = link_data.start_date 
         end_date = getattr(link_data, "end_date", None)
         
-        # Link the tenant to the property
         link = await tenant_service.link_tenant_to_property(
             tenant_id=tenant_id_obj,
             property_id=property_id,
@@ -679,20 +764,11 @@ async def terminate_tenant_lease(
     termination_data: Dict[str, Any] = Body(...),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Terminate a tenant's lease with proper business logic for advance payment refunds.
-    
-    Required fields in termination_data:
-    - link_id: The property_tenant link ID to terminate
-    - termination_date: The date the lease terminates (YYYY-MM-DD)
-    - refund_advance: Whether to refund the advance payment (default: true)
-    - termination_reason: Reason for termination (default: "owner_termination")
-    """
+    """Terminate a tenant's lease with comprehensive business logic."""
     try:
         user_id = uuid.UUID(current_user["id"])
         tenant_id_obj = uuid.UUID(str(tenant_id))
         
-        # Validate required fields
         link_id = termination_data.get('link_id')
         termination_date_str = termination_data.get('termination_date')
         
@@ -702,8 +778,8 @@ async def terminate_tenant_lease(
                 detail="link_id and termination_date are required"
             )
         
-        # Parse termination date
         try:
+            from datetime import date
             termination_date = date.fromisoformat(termination_date_str)
         except ValueError:
             raise HTTPException(
@@ -711,48 +787,24 @@ async def terminate_tenant_lease(
                 detail="termination_date must be in YYYY-MM-DD format"
             )
         
-        # Verify user has permission to terminate this lease
-        lease_details = await tenant_service.get_property_tenant_link_by_id(uuid.UUID(link_id))
-        if not lease_details:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lease not found"
-            )
-        
-        # Check if user owns the property
-        property_id = lease_details.get('property_id')
-        if property_id:
-            from ..config.database import supabase_client as db_client
-            property_owner = await properties_db.get_property_owner(db_client, uuid.UUID(property_id))
-            if property_owner != user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to terminate this lease"
-                )
-        
-        # Perform the termination
-        result = await tenant_service.terminate_tenant_lease(
-            link_id=uuid.UUID(link_id),
-            termination_date=termination_date,
-            refund_advance=termination_data.get('refund_advance', True),
-            termination_reason=termination_data.get('termination_reason', 'owner_termination')
+        result = await tenant_service.terminate_lease_comprehensive(
+            tenant_id_obj, link_id, termination_date, termination_data, user_id
         )
         
-        if not result.get('success'):
+        if not result:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.get('error', 'Failed to terminate lease')
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lease not found or you don't have permission to terminate it"
             )
-        
+            
         return {
             "message": "Lease terminated successfully",
             "termination_details": result
         }
-        
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        logger.error(f"Error terminating tenant lease: {e}", exc_info=True)
+        logger.error(f"Error terminating lease: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error terminating lease: {str(e)}"

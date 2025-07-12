@@ -351,3 +351,64 @@ export const sendBulkNotification = async (
     throw new Error(errorMessage);
   }
 }; 
+
+/**
+ * Get tenant documents
+ */
+export const getTenantDocuments = async (tenantId: string): Promise<{ documents: any[] }> => {
+  try {
+    const response = await apiClient.get(`/tenants/${tenantId}/documents`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching tenant documents:", error);
+    throw new Error('Failed to fetch tenant documents');
+  }
+};
+
+/**
+ * Get tenant history
+ */
+export const getTenantHistory = async (tenantId: string): Promise<{ history: any[] }> => {
+  try {
+    const response = await apiClient.get(`/tenants/${tenantId}/history`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching tenant history:", error);
+    throw new Error('Failed to fetch tenant history');
+  }
+};
+
+/**
+ * Update tenant status
+ */
+export const updateTenantStatus = async (
+  tenantId: string, 
+  status: 'active' | 'inactive' | 'unassigned',
+  reason?: string
+): Promise<any> => {
+  try {
+    const response = await apiClient.put(`/tenants/${tenantId}/status`, {
+      new_status: status,
+      reason
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating tenant status:", error);
+    throw new Error('Failed to update tenant status');
+  }
+};
+
+/**
+ * Download document
+ */
+export const downloadDocument = async (documentId: string): Promise<Blob> => {
+  try {
+    const response = await apiClient.get(`/documents/${documentId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error downloading document:", error);
+    throw new Error('Failed to download document');
+  }
+}; 
