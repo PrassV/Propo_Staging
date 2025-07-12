@@ -48,27 +48,27 @@ security_scheme = HTTPBearer()
 
 async def get_supabase_client_authenticated(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme)
-) -> Client: # Use standard Client type hint
+) -> Client:
     """
     FastAPI dependency that provides a Supabase client instance configured
-    with the user's JWT token in the headers for RLS. (Using v2 async capability)
+    with the user's JWT token for proper RLS enforcement.
     """
     try:
         token = credentials.credentials
 
-        # Create a standard client instance (v2 handles async)
+        # Create a Supabase client instance
         request_client: Client = create_client(
             settings.SUPABASE_URL,
-            settings.SUPABASE_KEY # Use the anon key for base client creation
+            settings.SUPABASE_KEY
         )
 
-        # Set the Authorization header
-        request_client.postgrest.auth(token) # Pass the token directly
+        # Set the Authorization header for RLS
+        request_client.postgrest.auth(token)
 
-        return request_client # Return the configured client
+        return request_client
 
     except Exception as e:
-        logger.error(f"Failed to create authenticated Supabase client (v2): {str(e)}", exc_info=True)
+        logger.error(f"Failed to create authenticated Supabase client: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not configure authenticated database client: {str(e)}"
