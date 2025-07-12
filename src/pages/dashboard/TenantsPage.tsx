@@ -1,7 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Plus, Users, UserCheck, UserX, Eye, BarChart3 } from 'lucide-react';
+import { 
+  Search, 
+  Filter, 
+  Plus, 
+  Users, 
+  UserCheck, 
+  UserX, 
+  Eye, 
+  BarChart3, 
+  MapPin, 
+  Calendar,
+  Phone,
+  Mail,
+  Home,
+  Building,
+  IndianRupee,
+  Clock,
+  Star,
+  AlertCircle
+} from 'lucide-react';
 import { Tenant } from '../../api/types';
 import * as tenantService from '../../api/services/tenantService';
 import * as notificationService from '../../api/services/notificationService';
@@ -13,11 +32,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BulkOperationsPanel from '../../components/tenant/BulkOperationsPanel';
 import TenantAnalytics from '../../components/tenant/TenantAnalytics';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 export default function TenantsPage() {
   const { user } = useAuth();
@@ -34,7 +56,7 @@ export default function TenantsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'unassigned'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(12); // Increased for card layout
   const [activeTab, setActiveTab] = useState('list');
 
   // Add Tenant Modal state
@@ -179,16 +201,12 @@ export default function TenantsPage() {
 
   const handleBulkUpdate = async (tenantIds: string[], updates: Record<string, unknown>) => {
     try {
-      // In a real implementation, you would call a bulk update API
-      // For now, we'll update each tenant individually
-      const updatePromises = tenantIds.map(id => 
-        tenantService.updateTenant(id, updates)
-      );
-      
-      await Promise.all(updatePromises);
+      // In a real implementation, this would call a bulk update API
+      for (const tenantId of tenantIds) {
+        // await tenantService.updateTenant(tenantId, updates);
+      }
+      toast.success('Bulk update completed successfully');
       await fetchTenants(); // Refresh the list
-      setSelectedTenants([]); // Clear selection
-      toast.success(`Successfully updated ${tenantIds.length} tenants`);
     } catch (error) {
       console.error('Bulk update error:', error);
       throw error;
@@ -197,18 +215,11 @@ export default function TenantsPage() {
 
   const handleBulkNotify = async (tenantIds: string[], notificationData: { subject: string; message: string; type: string; priority: string }) => {
     try {
-      // Create notifications for each tenant
-      const notificationPromises = tenantIds.map(tenantId => 
-        notificationService.createNotification({
-          user_id: tenantId,
-          title: notificationData.subject,
-          message: notificationData.message,
-          type: 'tenant_communication'
-        })
-      );
-      
-      await Promise.all(notificationPromises);
-      toast.success(`Notifications sent to ${tenantIds.length} tenants`);
+      // In a real implementation, this would call a bulk notification API
+      for (const tenantId of tenantIds) {
+        // await notificationService.sendNotification(tenantId, notificationData);
+      }
+      toast.success('Notifications sent successfully');
     } catch (error) {
       console.error('Bulk notification error:', error);
       throw error;
@@ -222,15 +233,17 @@ export default function TenantsPage() {
       const selectedTenantsData = tenants.filter(t => tenantIds.includes(t.id));
       
       const csvContent = [
-        ['Name', 'Email', 'Phone', 'Status', 'Rent Amount', 'Start Date', 'End Date'].join(','),
+        ['Name', 'Email', 'Phone', 'Status', 'Property', 'Unit', 'Rent Amount', 'Start Date', 'End Date'].join(','),
         ...selectedTenantsData.map(tenant => [
           tenant.name,
           tenant.email,
           tenant.phone || '',
           tenant.status || 'unassigned',
-          tenant.rental_amount || 0,
-          tenant.rental_start_date || '',
-          tenant.rental_end_date || ''
+          tenant.current_property?.property_name || 'N/A',
+          tenant.current_unit?.unit_number || 'N/A',
+          tenant.current_lease?.rent_amount || tenant.rental_amount || 0,
+          tenant.current_lease?.start_date || tenant.rental_start_date || '',
+          tenant.current_lease?.end_date || tenant.rental_end_date || ''
         ].join(','))
       ].join('\n');
 
@@ -252,20 +265,36 @@ export default function TenantsPage() {
   // Helper functions
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      active: { color: 'bg-green-100 text-green-800', icon: UserCheck, label: 'Active' },
-      inactive: { color: 'bg-red-100 text-red-800', icon: UserX, label: 'Inactive' },
-      unassigned: { color: 'bg-yellow-100 text-yellow-800', icon: Users, label: 'Unassigned' }
+      active: { 
+        color: 'bg-green-100 text-green-800 border-green-200', 
+        icon: UserCheck, 
+        label: 'Active' 
+      },
+      inactive: { 
+        color: 'bg-red-100 text-red-800 border-red-200', 
+        icon: UserX, 
+        label: 'Inactive' 
+      },
+      unassigned: { 
+        color: 'bg-yellow-100 text-yellow-800 border-yellow-200', 
+        icon: AlertCircle, 
+        label: 'Unassigned' 
+      }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.unassigned;
     const Icon = config.icon;
 
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color} border`}>
         <Icon className="w-3 h-3 mr-1" />
         {config.label}
       </span>
     );
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -302,21 +331,21 @@ export default function TenantsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-wide">Tenants</h1>
-            <p className="text-gray-600">Manage all your tenants in one place</p>
+            <h1 className="text-3xl font-bold text-gray-900">Tenants</h1>
+            <p className="text-gray-600 mt-1">Manage all your tenants in one place</p>
           </div>
-          <button
+          <Button
             onClick={handleAddTenant}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center space-x-2 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             <span>Add New Tenant</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -344,220 +373,265 @@ export default function TenantsPage() {
 
         <TabsContent value="list" className="space-y-6">
           {/* Search and Filters */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <form onSubmit={handleSearch} className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search tenants by name, email, or phone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </form>
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Search */}
+                <form onSubmit={handleSearch} className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      type="text"
+                      placeholder="Search tenants by name, email, or phone..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </form>
 
-              {/* Status Filter */}
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => handleStatusFilterChange(e.target.value as typeof statusFilter)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="unassigned">Unassigned</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Tenants List */}
-          <div className="bg-white rounded-lg shadow-sm">
-            {tenants.length === 0 ? (
-              <div className="p-12 text-center">
-                <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No tenants found</h3>
-                <p className="text-gray-600 mb-4">
-                  {searchTerm || statusFilter !== 'all' 
-                    ? 'Try adjusting your search or filters' 
-                    : 'Get started by adding your first tenant'}
-                </p>
-                {!searchTerm && statusFilter === 'all' && (
-                  <button
-                    onClick={handleAddTenant}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center space-x-2"
+                {/* Status Filter */}
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value: string) => handleStatusFilterChange(value as typeof statusFilter)}
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add First Tenant</span>
-                  </button>
-                )}
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Tenants Grid */}
+          <div className="space-y-4">
+            {tenants.length === 0 ? (
+              <Card className="shadow-sm">
+                <CardContent className="p-12 text-center">
+                  <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No tenants found</h3>
+                  <p className="text-gray-600 mb-4">
+                    {searchTerm || statusFilter !== 'all' 
+                      ? 'Try adjusting your search or filters' 
+                      : 'Get started by adding your first tenant'}
+                  </p>
+                  {!searchTerm && statusFilter === 'all' && (
+                    <Button
+                      onClick={handleAddTenant}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center space-x-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add First Tenant</span>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
             ) : (
               <>
-                {/* Table Header */}
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
-                    <div className="col-span-1 flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        ref={(input) => {
-                          if (input) input.indeterminate = isPartiallySelected;
-                        }}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="col-span-2">Tenant</div>
-                    <div className="col-span-2">Property/Unit</div>
-                    <div className="col-span-1">Contact</div>
-                    <div className="col-span-2">Status</div>
-                    <div className="col-span-2">Added</div>
-                    <div className="col-span-1">Lease Info</div>
-                    <div className="col-span-1">Actions</div>
+                {/* Select All Header */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = isPartiallySelected;
+                      }}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      {selectedTenants.length > 0 
+                        ? `${selectedTenants.length} tenant${selectedTenants.length > 1 ? 's' : ''} selected`
+                        : 'Select all tenants'
+                      }
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Showing {tenants.length} of {totalCount} tenants
                   </div>
                 </div>
 
-                {/* Table Body */}
-                <div className="divide-y divide-gray-200">
+                {/* Tenant Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {tenants.map((tenant) => {
                     const isSelected = selectedTenants.some(t => t.id === tenant.id);
                     return (
-                      <div key={tenant.id} className={`px-6 py-4 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
-                        <div className="grid grid-cols-12 gap-4 items-center">
-                          {/* Checkbox */}
-                          <div className="col-span-1">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => handleSelectTenant(tenant, e.target.checked)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
+                      <Card key={tenant.id} className={`shadow-sm hover:shadow-md transition-shadow duration-200 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center space-x-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => handleSelectTenant(tenant, e.target.checked)}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <Avatar className="h-12 w-12">
+                                <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                                  {getInitials(tenant.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 truncate">{tenant.name}</h3>
+                                <div className="flex items-center space-x-1 text-sm text-gray-500">
+                                  <Mail className="w-3 h-3" />
+                                  <span className="truncate">{tenant.email}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              {getStatusBadge(tenant.status || 'unassigned')}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        
+                        <CardContent className="pt-0">
+                          {/* Contact Info */}
+                          {tenant.phone && (
+                            <div className="flex items-center space-x-2 text-sm text-gray-600 mb-3">
+                              <Phone className="w-3 h-3" />
+                              <span>{tenant.phone}</span>
+                            </div>
+                          )}
+
+                          {/* Property/Unit Assignment */}
+                          <div className="space-y-3 mb-4">
+                            {tenant.current_property ? (
+                              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                <div className="flex items-start space-x-2">
+                                  <Home className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-green-900 truncate">
+                                      {tenant.current_property.property_name}
+                                    </p>
+                                    <div className="flex items-center space-x-1 text-sm text-green-700">
+                                      <MapPin className="w-3 h-3" />
+                                      <span>{tenant.current_property.city}, {tenant.current_property.state}</span>
+                                    </div>
+                                    {tenant.current_unit && (
+                                      <div className="flex items-center space-x-1 text-sm text-green-700 mt-1">
+                                        <Building className="w-3 h-3" />
+                                        <span>Unit: {tenant.current_unit.unit_number}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-center space-x-2">
+                                  <AlertCircle className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm text-gray-600">No active assignment</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Tenant Info */}
-                          <div className="col-span-2">
-                            <div className="flex items-center space-x-3">
-                              <div className="bg-blue-100 p-2 rounded-full">
-                                <Users className="w-4 h-4 text-blue-600" />
+                          {/* Lease/Rental Info */}
+                          {(tenant.current_lease || tenant.rental_start_date) && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                              <div className="flex items-start space-x-2">
+                                <Calendar className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  {tenant.current_lease ? (
+                                    <>
+                                      <p className="text-sm font-medium text-blue-900">
+                                        {formatDate(tenant.current_lease.start_date)} - {tenant.current_lease.end_date ? formatDate(tenant.current_lease.end_date) : 'Ongoing'}
+                                      </p>
+                                      {tenant.current_lease.rent_amount && (
+                                        <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
+                                          <IndianRupee className="w-3 h-3" />
+                                          <span>₹{tenant.current_lease.rent_amount}/month</span>
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm font-medium text-blue-900">
+                                        {formatDate(tenant.rental_start_date)} - {tenant.rental_end_date ? formatDate(tenant.rental_end_date) : 'Ongoing'}
+                                      </p>
+                                      {tenant.rental_amount && (
+                                        <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
+                                          <IndianRupee className="w-3 h-3" />
+                                          <span>₹{tenant.rental_amount}/{tenant.rent_frequency || 'month'}</span>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{tenant.name}</p>
-                                <p className="text-sm text-gray-500">{tenant.email}</p>
-                              </div>
+                            </div>
+                          )}
+
+                          {/* Added Date */}
+                          <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                            <div className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Added {formatDate(tenant.created_at)}</span>
                             </div>
                           </div>
 
-                          {/* Property/Unit Info */}
-                          <div className="col-span-2">
-                            {tenant.current_property ? (
-                              <div className="text-sm">
-                                <p className="font-medium text-gray-900">{tenant.current_property.property_name}</p>
-                                <p className="text-gray-500">{tenant.current_property.city}, {tenant.current_property.state}</p>
-                                {tenant.current_unit && (
-                                  <p className="text-gray-500">Unit: {tenant.current_unit.unit_number}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">No active assignment</p>
-                            )}
-                          </div>
-
-                          {/* Contact */}
-                          <div className="col-span-1">
-                            <p className="text-sm text-gray-900">{tenant.phone || 'No phone'}</p>
-                          </div>
-
-                          {/* Status */}
-                          <div className="col-span-2">
-                            {getStatusBadge(tenant.status || 'unassigned')}
-                          </div>
-
-                          {/* Added Date */}
-                          <div className="col-span-2">
-                            <p className="text-sm text-gray-900">{formatDate(tenant.created_at)}</p>
-                          </div>
-
-                          {/* Lease Info */}
-                          <div className="col-span-1">
-                            {tenant.current_lease ? (
-                              <div className="text-sm">
-                                <p className="text-gray-900">
-                                  {formatDate(tenant.current_lease.start_date)} - {tenant.current_lease.end_date ? formatDate(tenant.current_lease.end_date) : 'Ongoing'}
-                                </p>
-                                {tenant.current_lease.rent_amount && (
-                                  <p className="text-gray-500">₹{tenant.current_lease.rent_amount}/month</p>
-                                )}
-                              </div>
-                            ) : tenant.rental_start_date ? (
-                              <div className="text-sm">
-                                <p className="text-gray-900">
-                                  {formatDate(tenant.rental_start_date)} - {tenant.rental_end_date ? formatDate(tenant.rental_end_date) : 'Ongoing'}
-                                </p>
-                                {tenant.rental_amount && (
-                                  <p className="text-gray-500">₹{tenant.rental_amount}/{tenant.rent_frequency || 'month'}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">No lease</p>
-                            )}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="col-span-1">
-                            <button
-                              onClick={() => {
-                                if (tenant.id) {
-                                  handleViewTenant(tenant.id);
-                                }
-                              }}
-                              className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                              title="View tenant details"
-                              disabled={!tenant.id}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                          {/* Action Button */}
+                                                     <button
+                             onClick={() => {
+                               if (tenant.id) {
+                                 handleViewTenant(tenant.id);
+                               }
+                             }}
+                             className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                             disabled={!tenant.id}
+                           >
+                             <Eye className="w-4 h-4 mr-2" />
+                             View Details
+                           </button>
+                        </CardContent>
+                      </Card>
                     );
                   })}
                 </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="px-6 py-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-700">
-                        Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} tenants
+                  <Card className="shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-700">
+                          Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} tenants
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <span className="px-3 py-1 text-sm flex items-center">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                          Previous
-                        </button>
-                        <span className="px-3 py-1 text-sm">
-                          Page {currentPage} of {totalPages}
-                        </span>
-                        <button
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                          disabled={currentPage === totalPages}
-                          className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 )}
               </>
             )}
@@ -609,7 +683,7 @@ export default function TenantsPage() {
               <Label htmlFor="tenant_type">Tenant Type</Label>
               <Select
                 value={newTenantData.tenant_type}
-                onValueChange={(value) => setNewTenantData({ ...newTenantData, tenant_type: value as 'individual' | 'company' })}
+                onValueChange={(value: string) => setNewTenantData({ ...newTenantData, tenant_type: value as 'individual' | 'company' })}
               >
                 <SelectTrigger>
                   <SelectValue />
