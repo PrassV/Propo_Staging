@@ -90,24 +90,10 @@ export default function TenantsPage() {
         sort_order: 'desc' as const
       };
 
-      console.log('Fetching tenants with params:', params);
-      console.log('User authenticated:', !!user);
-      console.log('User object:', user);
-
-      // Test API connectivity first
-      try {
-        console.log('Testing API connectivity...');
-        const testResponse = await fetch('/health', { method: 'GET' });
-        console.log('API health check response:', testResponse.status);
-      } catch (healthError) {
-        console.error('API health check failed:', healthError);
-      }
-
       const response = await tenantService.getTenants(params);
       console.log('API Response:', response);
       console.log('Response items:', response.items);
       console.log('Response total:', response.total);
-      
       setTenants(response.items || []);
       setTotalCount(response.total || 0);
     } catch (err: unknown) {
