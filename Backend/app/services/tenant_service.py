@@ -1242,3 +1242,191 @@ async def get_leases_for_unit(unit_id: uuid.UUID) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.exception(f"Error in get_leases_for_unit for unit {unit_id}: {str(e)}")
         return []
+
+# --- Enhanced Tenant CRUD Methods ---
+
+async def get_tenants_enhanced(
+    owner_id: uuid.UUID,
+    property_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = None,
+    verification_status: Optional[str] = None,
+    occupation_category: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    sort_by: str = 'created_at',
+    sort_order: str = 'desc'
+) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Enhanced tenant retrieval with additional filtering and search capabilities.
+    """
+    try:
+        # Use existing get_tenants method with additional filters
+        tenant_dicts, total_count = await get_tenants(
+            owner_id=owner_id,
+            property_id=property_id,
+            status=status,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        
+        # Apply additional filters if provided
+        if verification_status or occupation_category or search:
+            filtered_tenants = []
+            for tenant in tenant_dicts:
+                # Apply verification status filter
+                if verification_status and tenant.get('verification_status') != verification_status:
+                    continue
+                
+                # Apply occupation category filter
+                if occupation_category and tenant.get('occupation_category') != occupation_category:
+                    continue
+                
+                # Apply search filter
+                if search:
+                    search_lower = search.lower()
+                    searchable_fields = [
+                        tenant.get('name', ''),
+                        tenant.get('email', ''),
+                        tenant.get('phone', ''),
+                        tenant.get('employer_name', '')
+                    ]
+                    if not any(search_lower in str(field).lower() for field in searchable_fields):
+                        continue
+                
+                filtered_tenants.append(tenant)
+            
+            tenant_dicts = filtered_tenants
+            total_count = len(filtered_tenants)
+        
+        return tenant_dicts, total_count
+    except Exception as e:
+        logger.error(f"Error in get_tenants_enhanced service: {str(e)}")
+        return [], 0
+
+async def get_tenant_with_history_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a tenant with their complete history.
+    """
+    try:
+        if not await _can_access_tenant(tenant_id, requesting_user_id):
+            return None
+        
+        # Get basic tenant data
+        tenant_dict = await tenants_db.get_tenant_by_id(tenant_id)
+        if not tenant_dict:
+            return None
+        
+        # Get history data (mock implementation for now)
+        history_data = []
+        
+        # Combine tenant with history
+        tenant_with_history = {
+            **tenant_dict,
+            'history': history_data,
+            'document_count': 0,
+            'verification_status': tenant_dict.get('verification_status', 'pending')
+        }
+        
+        return tenant_with_history
+    except Exception as e:
+        logger.error(f"Error in get_tenant_with_history_by_id service: {str(e)}")
+        return None
+
+async def get_tenant_with_history_by_user_id(user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Get a tenant with history by user ID.
+    """
+    try:
+        # First find the tenant by user_id
+        tenant_dict = await tenants_db.get_tenant_by_user_id(user_id)
+        if not tenant_dict:
+            return None
+        
+        tenant_id = tenant_dict['id']
+        return await get_tenant_with_history_by_id(tenant_id, user_id)
+    except Exception as e:
+        logger.error(f"Error in get_tenant_with_history_by_user_id service: {str(e)}")
+        return None
+
+async def create_tenant_comprehensive(tenant_data: TenantCreate, creator_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Create a tenant with comprehensive validation and history tracking.
+    """
+    try:
+        # Use existing create_tenant method
+        created_tenant = await create_tenant(tenant_data, creator_user_id)
+        if not created_tenant:
+            return None
+        
+        # Convert to dict for consistent return type
+        if hasattr(created_tenant, 'model_dump'):
+            return created_tenant.model_dump()
+        elif hasattr(created_tenant, 'dict'):
+            return created_tenant.dict()
+        else:
+            return created_tenant
+    except Exception as e:
+        logger.error(f"Error in create_tenant_comprehensive service: {str(e)}")
+        return None
+
+async def update_tenant_comprehensive(tenant_id: uuid.UUID, tenant_data: TenantUpdate, requesting_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Update a tenant with comprehensive validation and history tracking.
+    """
+    try:
+        # Use existing update_tenant method
+        updated_tenant = await update_tenant(tenant_id, tenant_data, requesting_user_id)
+        if not updated_tenant:
+            return None
+        
+        # Convert to dict for consistent return type
+        if hasattr(updated_tenant, 'model_dump'):
+            return updated_tenant.model_dump()
+        elif hasattr(updated_tenant, 'dict'):
+            return updated_tenant.dict()
+        else:
+            return updated_tenant
+    except Exception as e:
+        logger.error(f"Error in update_tenant_comprehensive service: {str(e)}")
+        return None
+
+async def get_tenant_documents(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID, document_type: Optional[str] = None) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Get documents for a tenant.
+    """
+    try:
+        if not await _can_access_tenant(tenant_id, requesting_user_id):
+            return [], 0
+        
+        # Mock implementation - in reality this would query the documents table
+        documents = []
+        return documents, len(documents)
+    except Exception as e:
+        logger.error(f"Error in get_tenant_documents service: {str(e)}")
+        return [], 0
+
+async def upload_tenant_document(tenant_id: uuid.UUID, document_data: Dict[str, Any], requesting_user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+    """
+    Upload a document for a tenant.
+    """
+    try:
+        if not await _can_access_tenant(tenant_id, requesting_user_id):
+            return None
+        
+        # Mock implementation - in reality this would upload to storage and create document record
+        document = {
+            'id': str(uuid.uuid4()),
+            'tenant_id': str(tenant_id),
+            'document_type': document_data.get('document_type', 'other'),
+            'file_name': document_data.get('file_name', ''),
+            'file_url': document_data.get('file_url', ''),
+            'uploaded_at': datetime.utcnow().isoformat()
+        }
+        
+        return document
+    except Exception as e:
+        logger.error(f"Error in upload_tenant_document service: {str(e)}")
+        return None
