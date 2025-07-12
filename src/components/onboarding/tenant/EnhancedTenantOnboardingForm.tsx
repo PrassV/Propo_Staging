@@ -8,7 +8,7 @@ import { TenantFormData } from '../../../types/tenant';
 import { uploadFile } from '../../../api/services/uploadService';
 import { createTenant } from '../../../api/services/tenantService';
 import { formatINR } from '../../../utils';
-import { Upload, Camera, FileText, User, Phone, Mail, MapPin, Briefcase, Heart, Shield } from 'lucide-react';
+import { Upload, Camera, FileText, User, MapPin, Briefcase, Heart, Shield } from 'lucide-react';
 import InputField from '../../auth/InputField';
 
 interface EnhancedTenantFormData extends TenantFormData {
@@ -104,8 +104,15 @@ export default function EnhancedTenantOnboardingForm() {
     setLoading(true);
     try {
       const uploadedFiles: Record<string, string> = {};
+      
+      // Get property_id from invitation data if available
+      const propertyId = invitationData?.property?.id;
+      
+      // Determine upload context and metadata based on property availability
+      const documentContext = propertyId ? 'tenant_documents' : 'id_documents';
+      const uploadMetadata = propertyId ? { property_id: propertyId } : undefined;
 
-      // Upload profile photo
+      // Upload profile photo (tenant_photos doesn't require property_id)
       if (formData.profilePhoto) {
         uploadedFiles.profilePhotoUrl = await uploadFile(
           formData.profilePhoto,
@@ -118,8 +125,9 @@ export default function EnhancedTenantOnboardingForm() {
       if (formData.idProof) {
         uploadedFiles.idProofUrl = await uploadFile(
           formData.idProof,
-          'tenant_documents',
-          user.id
+          documentContext,
+          user.id,
+          uploadMetadata
         );
       }
 
@@ -127,8 +135,9 @@ export default function EnhancedTenantOnboardingForm() {
       if (formData.bankStatement) {
         uploadedFiles.bankStatementUrl = await uploadFile(
           formData.bankStatement,
-          'tenant_documents',
-          user.id
+          documentContext,
+          user.id,
+          uploadMetadata
         );
       }
 
@@ -153,8 +162,9 @@ export default function EnhancedTenantOnboardingForm() {
         id_proof_url: uploadedFiles.idProofUrl || null,
         bank_statement_url: uploadedFiles.bankStatementUrl || null,
         verification_status: 'pending',
-        status: 'unassigned',
-        preferred_contact_method: 'email'
+        status: 'unassigned' as const,
+        preferred_contact_method: 'email',
+        property_id: propertyId || undefined
       };
 
       await createTenant(tenantData);

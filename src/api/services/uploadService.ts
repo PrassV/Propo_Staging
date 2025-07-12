@@ -10,10 +10,17 @@ interface UploadServiceResponse {
   file_url?: string; // For single file uploads
 }
 
+// Interface for additional upload metadata
+interface UploadMetadata {
+  property_id?: string;
+  tenant_id?: string;
+}
+
 export const uploadFile = async (
   file: File,
   context?: string,
-  relatedId?: string
+  relatedId?: string,
+  metadata?: UploadMetadata
 ): Promise<string> => {
   const formData = new FormData();
   // Fix: Use 'files' (plural) to match backend expectation
@@ -23,6 +30,14 @@ export const uploadFile = async (
   }
   if (relatedId) {
     formData.append('related_id', relatedId);
+  }
+  
+  // Add additional metadata if provided
+  if (metadata?.property_id) {
+    formData.append('property_id', metadata.property_id);
+  }
+  if (metadata?.tenant_id) {
+    formData.append('tenant_id', metadata.tenant_id);
   }
 
   try {
