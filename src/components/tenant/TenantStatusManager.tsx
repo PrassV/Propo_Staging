@@ -178,20 +178,24 @@ export default function TenantStatusManager({
 
         {/* Status Change History */}
         <div className="border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Status Guidelines</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Business Logic Rules</h4>
           <div className="space-y-2 text-xs text-gray-600">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-3 h-3 text-green-600" />
-              <span><strong>Active:</strong> Tenant is currently occupying a unit</span>
+              <span><strong>Active:</strong> Tenant must have an active lease assignment</span>
             </div>
             <div className="flex items-center gap-2">
               <XCircle className="w-3 h-3 text-red-600" />
-              <span><strong>Inactive:</strong> Tenant account is disabled</span>
+              <span><strong>Inactive:</strong> Tenant cannot have had active lease in last 3 months</span>
             </div>
             <div className="flex items-center gap-2">
               <AlertCircle className="w-3 h-3 text-yellow-600" />
-              <span><strong>Unassigned:</strong> Tenant is not assigned to any unit</span>
+              <span><strong>Unassigned:</strong> Tenant cannot have active lease assignments</span>
             </div>
+          </div>
+          <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
+            <strong>Note:</strong> Status changes are automatically validated against these rules. 
+            If a status change fails, ensure the tenant's lease status meets the requirements.
           </div>
         </div>
       </CardContent>

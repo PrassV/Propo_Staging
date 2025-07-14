@@ -326,6 +326,268 @@ async def delete_tenant(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) -> 
         logger.exception(f"Error in delete_tenant service: {str(e)}")
         return False
 
+# --- Tenant Status Management ---
+
+async def _validate_tenant_status_change_business_logic(
+    tenant_id: uuid.UUID,
+    new_status: str
+) -> None:
+    """
+    Pre-validate tenant status change against business logic rules.
+    This provides better error messages before database trigger validation.
+    """
+    from ..config.database import supabase_client
+    
+    try:
+        # Check current unit assignment
+        current_assignment = supabase_client.rpc(
+            'get_current_unit_assignment',
+            {'tenant_uuid': str(tenant_id)}
+        ).execute()
+        
+        has_active_lease = bool(current_assignment.data)
+        
+        # Check recent lease history for inactive status
+        if new_status == 'inactive':
+            recent_lease_check = supabase_client.rpc(
+                'has_recent_active_lease',
+                {'tenant_uuid': str(tenant_id), 'months_back': 3}
+            ).execute()
+            
+            if recent_lease_check.data:
+                raise ValueError("Cannot set tenant to inactive: tenant has had active lease in last 3 months")
+        
+        # Check active lease for unassigned status
+        elif new_status == 'unassigned':
+            if has_active_lease:
+                assignment_info = current_assignment.data[0] if current_assignment.data else {}
+                unit_info = f"unit {assignment_info.get('unit_number', 'unknown')}"
+                raise ValueError(f"Cannot set tenant to unassigned: tenant has active lease on {unit_info}. Terminate lease first.")
+        
+        # Check lease requirement for active status
+        elif new_status == 'active':
+            if not has_active_lease:
+                raise ValueError("Cannot set tenant to active: tenant must have an active lease assignment")
+                
+    except Exception as e:
+        logger.error(f"Error validating tenant status change: {str(e)}")
+        raise
+
+async def update_tenant_status(
+    tenant_id: uuid.UUID,
+    new_status: str,
+    reason: Optional[str] = None,
+    requesting_user_id: uuid.UUID = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Update tenant status with proper validation and business logic enforcement.
+    
+    Business Logic Rules:
+    1. Unassigned tenants cannot have active leases
+    2. Active tenants must have active lease assignments
+    3. Inactive tenants cannot have had active leases in last 3 months
+    
+    Args:
+        tenant_id: The tenant ID
+        new_status: The new status to set ('active', 'inactive', 'unassigned')
+        reason: Optional reason for the status change
+        requesting_user_id: ID of the user making the request
+        
+    Returns:
+        Updated tenant data or None if failed
+    """
+    try:
+        # Validate that the requesting user can access this tenant
+        if requesting_user_id and not await _can_access_tenant(tenant_id, requesting_user_id):
+            logger.error(f"User {requesting_user_id} cannot access tenant {tenant_id}")
+            return None
+        
+        # Validate the status value
+        valid_statuses = ['active', 'inactive', 'unassigned']
+        if new_status not in valid_statuses:
+            logger.error(f"Invalid status {new_status}. Must be one of: {valid_statuses}")
+            return None
+        
+        # Get current tenant data for validation
+        current_tenant = await tenants_db.get_tenant_by_id(tenant_id)
+        if not current_tenant:
+            logger.error(f"Tenant {tenant_id} not found")
+            return None
+        
+        # Check if status is actually changing
+        if current_tenant.get('status') == new_status:
+            logger.info(f"Tenant {tenant_id} status already {new_status}")
+            return current_tenant
+        
+        # Validate business logic rules using helper function
+        try:
+            await _validate_tenant_status_change_business_logic(tenant_id, new_status)
+        except ValueError as validation_error:
+            logger.error(f"Business logic validation failed for tenant {tenant_id}: {str(validation_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Status change validation failed: {str(validation_error)}"
+            )
+        
+        # Perform the status update - the database trigger will enforce business rules
+        success = await tenants_db.update_tenant_status(tenant_id, new_status)
+        if not success:
+            logger.error(f"Failed to update tenant {tenant_id} status to {new_status}")
+            return None
+        
+        # Get the updated tenant data
+        updated_tenant = await tenants_db.get_tenant_by_id(tenant_id)
+        
+        # Log the status change
+        logger.info(f"Tenant {tenant_id} status updated to {new_status} by {requesting_user_id}")
+        if reason:
+            logger.info(f"Reason: {reason}")
+        
+        return updated_tenant
+        
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error updating tenant {tenant_id} status: {str(e)}")
+        return None
+
+# --- Tenant History Management ---
+
+async def get_tenant_history(
+    tenant_id: uuid.UUID,
+    requesting_user_id: uuid.UUID,
+    skip: int = 0,
+    limit: int = 20,
+    action_type: Optional[str] = None
+) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Get tenant history with proper access control and filtering.
+    
+    Args:
+        tenant_id: The tenant ID
+        requesting_user_id: ID of the user making the request
+        skip: Number of records to skip for pagination
+        limit: Maximum number of records to return
+        action_type: Optional filter by action type
+        
+    Returns:
+        Tuple of (history_records, total_count)
+    """
+    try:
+        # Validate that the requesting user can access this tenant
+        if not await _can_access_tenant(tenant_id, requesting_user_id):
+            logger.error(f"User {requesting_user_id} cannot access tenant {tenant_id}")
+            return [], 0
+        
+        # Get tenant history using database function
+        from ..config.database import supabase_client
+        
+        # Get history records
+        history_response = supabase_client.rpc(
+            'get_tenant_history',
+            {
+                'tenant_uuid': str(tenant_id),
+                'limit_records': limit + skip  # Get more records for pagination
+            }
+        ).execute()
+        
+        if not history_response.data:
+            return [], 0
+        
+        # Apply pagination
+        history_records = history_response.data[skip:skip + limit]
+        total_count = len(history_response.data)
+        
+        # Apply action_type filter if specified
+        if action_type:
+            history_records = [
+                record for record in history_records
+                if record.get('action') == action_type
+            ]
+        
+        # Convert to expected format
+        formatted_history = []
+        for record in history_records:
+            formatted_history.append({
+                'id': record.get('history_id'),
+                'action': record.get('action'),
+                'action_date': record.get('action_date'),
+                'property_name': record.get('property_name'),
+                'unit_number': record.get('unit_number'),
+                'lease_id': record.get('lease_id'),
+                'start_date': record.get('start_date'),
+                'end_date': record.get('end_date'),
+                'rent_amount': record.get('rent_amount'),
+                'deposit_amount': record.get('deposit_amount'),
+                'payment_amount': record.get('payment_amount'),
+                'termination_reason': record.get('termination_reason'),
+                'notes': record.get('notes'),
+                'created_at': record.get('created_at')
+            })
+        
+        logger.info(f"Retrieved {len(formatted_history)} history records for tenant {tenant_id}")
+        return formatted_history, total_count
+        
+    except Exception as e:
+        logger.error(f"Error getting tenant history for {tenant_id}: {str(e)}")
+        return [], 0
+
+async def get_tenant_lease_history(
+    tenant_id: uuid.UUID,
+    requesting_user_id: uuid.UUID
+) -> List[Dict[str, Any]]:
+    """
+    Get comprehensive lease history for a tenant.
+    
+    Args:
+        tenant_id: The tenant ID
+        requesting_user_id: ID of the user making the request
+        
+    Returns:
+        List of lease history records
+    """
+    try:
+        # Validate that the requesting user can access this tenant
+        if not await _can_access_tenant(tenant_id, requesting_user_id):
+            logger.error(f"User {requesting_user_id} cannot access tenant {tenant_id}")
+            return []
+        
+        # Get lease history using database function
+        from ..config.database import supabase_client
+        
+        lease_history_response = supabase_client.rpc(
+            'get_tenant_lease_history',
+            {'tenant_uuid': str(tenant_id)}
+        ).execute()
+        
+        if not lease_history_response.data:
+            logger.info(f"No lease history found for tenant {tenant_id}")
+            return []
+        
+        # Format the lease history
+        formatted_leases = []
+        for lease in lease_history_response.data:
+            formatted_leases.append({
+                'id': lease.get('lease_id'),
+                'property_name': lease.get('property_name'),
+                'unit_number': lease.get('unit_number'),
+                'start_date': lease.get('start_date'),
+                'end_date': lease.get('end_date'),
+                'rent_amount': lease.get('rent_amount'),
+                'deposit_amount': lease.get('deposit_amount'),
+                'status': lease.get('status'),
+                'duration_months': lease.get('duration_months'),
+                'is_current': lease.get('is_current'),
+                'created_at': lease.get('created_at')
+            })
+        
+        logger.info(f"Retrieved {len(formatted_leases)} lease records for tenant {tenant_id}")
+        return formatted_leases
+        
+    except Exception as e:
+        logger.error(f"Error getting tenant lease history for {tenant_id}: {str(e)}")
+        return []
+
 async def terminate_lease_for_unit(unit_id: str, owner_id: str, termination_date: date) -> bool:
     """
     Terminates the active lease for a specific unit.

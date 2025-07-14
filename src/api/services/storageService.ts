@@ -57,6 +57,7 @@ export interface StorageMetadata {
   tenantId?: string;
   unitId?: string;
   category?: string;
+  documentType?: string;
   [key: string]: string | undefined;
 }
 
@@ -92,11 +93,13 @@ function generateFilePath(
       return `users/${metadata.userId}/properties/${metadata.propertyId}/${metadata.category || 'general'}/${uniqueFileName}`;
       
     case 'tenant_documents':
-    case 'documents':
-      if (!metadata.propertyId) {
-        throw new Error('propertyId is required for tenant documents');
+    case 'documents': {
+      if (!metadata.tenantId) {
+        throw new Error('tenantId is required for tenant documents');
       }
-      return `users/${metadata.userId}/properties/${metadata.propertyId}/documents/${uniqueFileName}`;
+      const docType = metadata.documentType || 'other';
+      return `users/${metadata.userId}/tenants/${metadata.tenantId}/documents/${docType}/${uniqueFileName}`;
+    }
       
     case 'maintenance_files':
       if (!metadata.propertyId) {
@@ -104,11 +107,15 @@ function generateFilePath(
       }
       return `users/${metadata.userId}/properties/${metadata.propertyId}/maintenance/${uniqueFileName}`;
       
-    case 'agreements':
+    case 'agreements': {
       if (!metadata.propertyId) {
         throw new Error('propertyId is required for agreements');
       }
-      return `users/${metadata.userId}/properties/${metadata.propertyId}/agreements/${uniqueFileName}`;
+      if (!metadata.tenantId) {
+        throw new Error('tenantId is required for agreements');
+      }
+      return `users/${metadata.userId}/properties/${metadata.propertyId}/tenants/${metadata.tenantId}/agreements/${uniqueFileName}`;
+    }
       
     case 'id_documents':
       return `users/${metadata.userId}/id/${uniqueFileName}`;

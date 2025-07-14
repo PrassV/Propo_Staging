@@ -445,6 +445,33 @@ async def get_tenant_history(
             detail=f"Error retrieving history: {str(e)}"
         )
 
+@router.get("/{tenant_id}/lease-history", response_model=Dict[str, Any])
+async def get_tenant_lease_history(
+    tenant_id: UUID4 = Path(..., description="The ID of the tenant"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get comprehensive lease history for a tenant."""
+    try:
+        user_id = uuid.UUID(current_user["id"])
+        tenant_id_obj = uuid.UUID(str(tenant_id))
+
+        lease_history = await tenant_service.get_tenant_lease_history(
+            tenant_id_obj, user_id
+        )
+
+        return {
+            "lease_history": lease_history,
+            "total": len(lease_history),
+            "message": "Lease history retrieved successfully"
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving lease history: {str(e)}"
+        )
+
 # --- Status Management Endpoints ---
 
 @router.put("/{tenant_id}/status", response_model=TenantResponse)

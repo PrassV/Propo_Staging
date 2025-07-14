@@ -373,11 +373,11 @@ export default function TenantsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {tenants.map((tenant) => {
                     return (
-                      <Card key={tenant.id} className="shadow-sm hover:shadow-md transition-shadow duration-200">
-                        <CardHeader className="pb-3">
+                      <Card key={tenant.id} className="shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col h-full">
+                        <CardHeader className="pb-3 flex-shrink-0">
                           <div className="flex items-start justify-between">
-                            <div className="flex items-center space-x-3">
-                              <Avatar className="h-12 w-12">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <Avatar className="h-12 w-12 flex-shrink-0">
                                 <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
                                   {getInitials(tenant.name)}
                                 </AvatarFallback>
@@ -385,28 +385,30 @@ export default function TenantsPage() {
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-gray-900 truncate">{tenant.name}</h3>
                                 <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Mail className="w-3 h-3" />
+                                  <Mail className="w-3 h-3 flex-shrink-0" />
                                   <span className="truncate">{tenant.email}</span>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-start space-x-2 flex-shrink-0">
                               {getStatusBadge(tenant.status || 'unassigned')}
                             </div>
                           </div>
                         </CardHeader>
                         
-                        <CardContent className="pt-0">
+                        <CardContent className="pt-0 flex flex-col flex-1">
                           {/* Contact Info */}
-                          {tenant.phone && (
-                            <div className="flex items-center space-x-2 text-sm text-gray-600 mb-3">
-                              <Phone className="w-3 h-3" />
-                              <span>{tenant.phone}</span>
-                            </div>
-                          )}
+                          <div className="mb-3 min-h-[20px]">
+                            {tenant.phone && (
+                              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                                <Phone className="w-3 h-3" />
+                                <span>{tenant.phone}</span>
+                              </div>
+                            )}
+                          </div>
 
                           {/* Property/Unit Assignment */}
-                          <div className="space-y-3 mb-4">
+                          <div className="mb-4 flex-1">
                             {tenant.current_property ? (
                               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                                 <div className="flex items-start space-x-2">
@@ -436,65 +438,68 @@ export default function TenantsPage() {
                                 </div>
                               </div>
                             )}
-                          </div>
 
-                          {/* Lease/Rental Info */}
-                          {(tenant.current_lease || tenant.rental_start_date) && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                              <div className="flex items-start space-x-2">
-                                <Calendar className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  {tenant.current_lease ? (
-                                    <>
-                                      <p className="text-sm font-medium text-blue-900">
-                                        {formatDate(tenant.current_lease.start_date)} - {tenant.current_lease.end_date ? formatDate(tenant.current_lease.end_date) : 'Ongoing'}
-                                      </p>
-                                      {tenant.current_lease.rent_amount && (
-                                        <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
-                                          <IndianRupee className="w-3 h-3" />
-                                          <span>₹{tenant.current_lease.rent_amount}/month</span>
-                                        </div>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <p className="text-sm font-medium text-blue-900">
-                                        {formatDate(tenant.rental_start_date)} - {tenant.rental_end_date ? formatDate(tenant.rental_end_date) : 'Ongoing'}
-                                      </p>
-                                      {tenant.rental_amount && (
-                                        <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
-                                          <IndianRupee className="w-3 h-3" />
-                                          <span>₹{tenant.rental_amount}/{tenant.rent_frequency || 'month'}</span>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
+                            {/* Lease/Rental Info */}
+                            {(tenant.current_lease || tenant.rental_start_date) && (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
+                                <div className="flex items-start space-x-2">
+                                  <Calendar className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    {tenant.current_lease ? (
+                                      <>
+                                        <p className="text-sm font-medium text-blue-900">
+                                          {formatDate(tenant.current_lease.start_date)} - {tenant.current_lease.end_date ? formatDate(tenant.current_lease.end_date) : 'Ongoing'}
+                                        </p>
+                                        {tenant.current_lease.rent_amount && (
+                                          <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
+                                            <IndianRupee className="w-3 h-3" />
+                                            <span>₹{tenant.current_lease.rent_amount}/month</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm font-medium text-blue-900">
+                                          {formatDate(tenant.rental_start_date)} - {tenant.rental_end_date ? formatDate(tenant.rental_end_date) : 'Ongoing'}
+                                        </p>
+                                        {tenant.rental_amount && (
+                                          <div className="flex items-center space-x-1 text-sm text-blue-700 mt-1">
+                                            <IndianRupee className="w-3 h-3" />
+                                            <span>₹{tenant.rental_amount}/{tenant.rent_frequency || 'month'}</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
-
-                          {/* Added Date */}
-                          <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-3 h-3" />
-                              <span>Added {formatDate(tenant.created_at)}</span>
-                            </div>
+                            )}
                           </div>
 
-                          {/* Action Button */}
-                                                     <button
-                             onClick={() => {
-                               if (tenant.id) {
-                                 handleViewTenant(tenant.id);
-                               }
-                             }}
-                             className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                             disabled={!tenant.id}
-                           >
-                             <Eye className="w-4 h-4 mr-2" />
-                             View Details
-                           </button>
+                          {/* Bottom Section - Always at bottom */}
+                          <div className="mt-auto space-y-3 flex-shrink-0">
+                            {/* Added Date */}
+                            <div className="flex items-center justify-between text-sm text-gray-500">
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>Added {formatDate(tenant.created_at)}</span>
+                              </div>
+                            </div>
+
+                            {/* Action Button */}
+                            <button
+                              onClick={() => {
+                                if (tenant.id) {
+                                  handleViewTenant(tenant.id);
+                                }
+                              }}
+                              className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                              disabled={!tenant.id}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </button>
+                          </div>
                         </CardContent>
                       </Card>
                     );

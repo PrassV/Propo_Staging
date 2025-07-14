@@ -316,10 +316,42 @@ export const getTenantDocuments = async (tenantId: string): Promise<{ documents:
   }
 };
 
+// History interfaces
+interface TenantHistoryItem {
+  id: string;
+  action: string;
+  action_date: string;
+  property_name?: string;
+  unit_number?: string;
+  lease_id?: string;
+  start_date?: string;
+  end_date?: string;
+  rent_amount?: number;
+  deposit_amount?: number;
+  payment_amount?: number;
+  termination_reason?: string;
+  notes?: string;
+  created_at: string;
+}
+
+interface TenantLeaseHistoryItem {
+  id: string;
+  property_name: string;
+  unit_number: string;
+  start_date: string;
+  end_date?: string;
+  rent_amount?: number;
+  deposit_amount?: number;
+  status: string;
+  duration_months?: number;
+  is_current: boolean;
+  created_at: string;
+}
+
 /**
  * Get tenant history
  */
-export const getTenantHistory = async (tenantId: string): Promise<{ history: any[] }> => {
+export const getTenantHistory = async (tenantId: string): Promise<{ history: TenantHistoryItem[] }> => {
   try {
     const response = await apiClient.get(`/tenants/${tenantId}/history`);
     return response.data;
@@ -327,10 +359,28 @@ export const getTenantHistory = async (tenantId: string): Promise<{ history: any
     console.error("Error fetching tenant history:", error);
     // If endpoint doesn't exist, return empty history array
     if (error && typeof error === 'object' && 'response' in error && 
-        (error as any).response?.status === 404) {
+        (error as { response?: { status?: number } }).response?.status === 404) {
       return { history: [] };
     }
     throw new Error('Failed to fetch tenant history');
+  }
+};
+
+/**
+ * Get tenant lease history
+ */
+export const getTenantLeaseHistory = async (tenantId: string): Promise<{ lease_history: TenantLeaseHistoryItem[] }> => {
+  try {
+    const response = await apiClient.get(`/tenants/${tenantId}/lease-history`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching tenant lease history:", error);
+    // If endpoint doesn't exist, return empty history array
+    if (error && typeof error === 'object' && 'response' in error && 
+        (error as { response?: { status?: number } }).response?.status === 404) {
+      return { lease_history: [] };
+    }
+    throw new Error('Failed to fetch tenant lease history');
   }
 };
 

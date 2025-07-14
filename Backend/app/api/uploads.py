@@ -65,6 +65,10 @@ async def upload_files(
                     'tenant_id': tenant_id
                 }
                 
+                # Add document_type for tenant documents
+                if storage_context == 'tenant_documents' and tenant_id:
+                    metadata['document_type'] = 'general'  # Default type, can be overridden
+                
                 # Upload using unified storage service
                 upload_result = storage_service.upload_file(
                     file_content=content,

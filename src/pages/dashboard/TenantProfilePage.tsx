@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'react-hot-toast';
 import { formatCurrency } from '@/utils/currency';
+import TenantLeaseHistory from '@/components/tenant/TenantLeaseHistory';
 
 // New interfaces for enhanced functionality
 interface TenantDocument {
@@ -302,9 +303,10 @@ export default function TenantProfilePage() {
 
       {/* Enhanced Tabs Interface */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="leases">Leases</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
         </TabsList>
@@ -481,6 +483,13 @@ export default function TenantProfilePage() {
             loading={documentsLoading}
             onRefresh={fetchDocuments}
             onDownload={handleDownloadDocument}
+          />
+        </TabsContent>
+
+        <TabsContent value="leases" className="space-y-6">
+          <TenantLeaseHistory
+            tenantId={tenantId!}
+            onRefresh={fetchTenant}
           />
         </TabsContent>
 

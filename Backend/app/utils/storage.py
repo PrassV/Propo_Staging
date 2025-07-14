@@ -39,7 +39,7 @@ STORAGE_CONFIG = {
             'application/msword', 
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ],
-        'path_template': 'users/{user_id}/properties/{property_id}/documents/{filename}'
+        'path_template': 'users/{user_id}/tenants/{tenant_id}/documents/{document_type}/{filename}'
     },
     'maintenance_files': {
         'bucket': 'maintenance-files',
@@ -51,7 +51,7 @@ STORAGE_CONFIG = {
         'bucket': 'agreements',
         'max_size': 50 * 1024 * 1024,  # 50MB
         'allowed_types': ['application/pdf'],
-        'path_template': 'users/{user_id}/properties/{property_id}/agreements/{filename}'
+        'path_template': 'users/{user_id}/properties/{property_id}/tenants/{tenant_id}/agreements/{filename}'
     },
     'id_documents': {
         'bucket': 'id-documents',
@@ -117,7 +117,8 @@ class UnifiedStorageService:
             '{property_id}': metadata.get('property_id', 'unknown'),
             '{tenant_id}': metadata.get('tenant_id', 'unknown'),
             '{user_id}': metadata.get('user_id', 'unknown'),
-            '{category}': metadata.get('category', 'general')
+            '{category}': metadata.get('category', 'general'),
+            '{document_type}': metadata.get('document_type', 'other')
         }
         
         file_path = path_template
@@ -137,8 +138,12 @@ class UnifiedStorageService:
         required = ['user_id']
         
         # Add context-specific requirements
-        if context in ['property_images', 'tenant_documents', 'maintenance_files', 'agreements']:
+        if context in ['property_images', 'maintenance_files']:
             required.append('property_id')
+        elif context == 'tenant_documents':
+            required.extend(['tenant_id', 'document_type'])
+        elif context == 'agreements':
+            required.extend(['property_id', 'tenant_id'])
             
         # Only include placeholders that are actually in the template
         return [field for field in required if field in placeholders]
