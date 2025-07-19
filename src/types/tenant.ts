@@ -5,6 +5,20 @@ export type BillResponsibility = 'tenant' | 'owner' | 'split';
 export type Gender = "male" | "female" | "other" | "prefer_not_to_say";
 export type IdType = "passport" | "driving_license" | "national_id" | "pan_card" | "aadhaar" | "ration_card" | "other";
 
+// Rental Details interface for forms
+export interface RentalDetails {
+  rental_type: RentalType;
+  rental_frequency: RentalFrequency;
+  rental_amount?: number;
+  maintenance_fee?: number;
+  advance_amount?: number;
+  rental_start_date?: string;
+  rental_end_date?: string;
+  lease_amount?: number;
+  lease_start_date?: string;
+  lease_end_date?: string;
+}
+
 // New types for comprehensive tenant management
 export type OccupationCategory = "student" | "employed" | "self_employed" | "retired" | "unemployed" | "other";
 export type VerificationStatus = "pending" | "verified" | "rejected" | "expired";

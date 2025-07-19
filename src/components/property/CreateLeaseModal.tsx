@@ -22,6 +22,10 @@ const leaseSchema = z.object({
   end_date: z.string().min(1, "End date is required."),
   rent_amount: z.coerce.number().positive({ message: "Rent must be a positive number." }),
   deposit_amount: z.coerce.number().positive().optional(),
+  rental_type: z.enum(['rent', 'lease']),
+  rental_frequency: z.enum(['monthly', 'weekly', 'yearly']),
+  maintenance_fee: z.coerce.number().min(0, "Maintenance fee cannot be negative."),
+  advance_amount: z.coerce.number().min(0, "Advance amount cannot be negative."),
   notes: z.string().optional(),
 }).refine(data => new Date(data.end_date) > new Date(data.start_date), {
   message: "End date must be after start date.",
@@ -55,6 +59,12 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
 
   const { control, handleSubmit, formState: { errors }, setValue, watch } = useForm<LeaseFormData>({
     resolver: zodResolver(leaseSchema),
+    defaultValues: {
+      rental_type: 'lease',
+      rental_frequency: 'monthly',
+      maintenance_fee: 0,
+      advance_amount: 0,
+    }
   });
 
   const { control: tenantControl, handleSubmit: handleTenantSubmit, formState: { errors: tenantErrors }, reset: resetTenantForm } = useForm<NewTenantFormData>({
@@ -62,6 +72,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
   });
 
   const selectedTenantId = watch('tenant_id');
+  const selectedRentalType = watch('rental_type');
 
   useEffect(() => {
     if (isOpen) {
@@ -146,9 +157,17 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
   const onSubmit = async (data: LeaseFormData) => {
     setIsLoading(true);
     try {
-      const leasePayload = { ...data, unit_id: unitId, property_id: propertyId };
+      const leasePayload = { 
+        ...data, 
+        unit_id: unitId, 
+        property_id: propertyId,
+        rental_type: data.rental_type || 'lease',
+        rental_frequency: data.rental_frequency || 'monthly',
+        maintenance_fee: data.maintenance_fee || 0,
+        advance_amount: data.advance_amount || 0,
+      };
       await createLease(leasePayload);
-      toast.success(`Lease created for Unit ${unitNumber}!`);
+      toast.success(`${selectedRentalType === 'rent' ? 'Rental' : 'Lease'} created for Unit ${unitNumber}!`);
       onSuccess();
       onClose();
     } catch (error) {
@@ -172,11 +191,11 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
     <>
       {/* Main Lease Creation Modal */}
       <Dialog open={isOpen && !showAddTenantModal} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Create Lease for Unit {unitNumber}</DialogTitle>
+            <DialogTitle>Create {selectedRentalType === 'rent' ? 'Rental' : 'Lease'} for Unit {unitNumber}</DialogTitle>
             <DialogDescription>
-              Assign a tenant and define the lease terms for this unit.
+              Assign a tenant and define the {selectedRentalType === 'rent' ? 'rental' : 'lease'} terms for this unit.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-4">
@@ -256,6 +275,37 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
               )}
             </div>
 
+            {/* Rental Type Selection */}
+            <div className="grid gap-2">
+              <Label htmlFor="rental_type">Rental Type</Label>
+              <Controller
+                name="rental_type"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value || 'lease'}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select rental type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lease">
+                        <div className="flex items-center space-x-2">
+                          <span>📋 Lease Agreement</span>
+                          <span className="text-xs text-gray-500">(Long-term, formal contract)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="rent">
+                        <div className="flex items-center space-x-2">
+                          <span>🏠 Rent Only</span>
+                          <span className="text-xs text-gray-500">(Short-term, informal)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.rental_type && <p className="text-sm text-red-500">{errors.rental_type.message}</p>}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="start_date">Start Date</Label>
@@ -297,6 +347,48 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
                 {errors.deposit_amount && <p className="text-sm text-red-500">{errors.deposit_amount.message}</p>}
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="rental_frequency">Payment Frequency</Label>
+                <Controller
+                  name="rental_frequency"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value || 'monthly'}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="yearly">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.rental_frequency && <p className="text-sm text-red-500">{errors.rental_frequency.message}</p>}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="maintenance_fee">Maintenance Fee (₹)</Label>
+                <Controller
+                  name="maintenance_fee"
+                  control={control}
+                  render={({ field }) => <Input id="maintenance_fee" type="number" step="0.01" {...field} value={field.value || 0} />}
+                />
+                {errors.maintenance_fee && <p className="text-sm text-red-500">{errors.maintenance_fee.message}</p>}
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="advance_amount">Advance Amount (₹)</Label>
+              <Controller
+                name="advance_amount"
+                control={control}
+                render={({ field }) => <Input id="advance_amount" type="number" step="0.01" placeholder="0.00" {...field} value={field.value || 0} />}
+              />
+              {errors.advance_amount && <p className="text-sm text-red-500">{errors.advance_amount.message}</p>}
+            </div>
             
             <div className="grid gap-2">
               <Label htmlFor="notes">Notes (Optional)</Label>
@@ -310,7 +402,7 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>Cancel</Button>
               <Button type="submit" disabled={isLoading || !selectedTenantId}>
-                {isLoading ? "Creating..." : "Create Lease"}
+                {isLoading ? "Creating..." : `Create ${selectedRentalType === 'rent' ? 'Rental' : 'Lease'}`}
               </Button>
             </DialogFooter>
           </form>

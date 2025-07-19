@@ -208,12 +208,20 @@ export interface LeaseCreate {
     end_date: string;
     rent_amount: number;
     deposit_amount?: number;
+    rental_type?: 'rent' | 'lease';
+    rental_frequency?: 'monthly' | 'weekly' | 'yearly';
+    maintenance_fee?: number;
+    advance_amount?: number;
     notes?: string;
 }
 
 export interface Lease extends LeaseCreate {
     id: string;
     status: string;
+    rental_type: 'rent' | 'lease';
+    rental_frequency: 'monthly' | 'weekly' | 'yearly';
+    maintenance_fee: number;
+    advance_amount: number;
     created_at: string;
     updated_at: string;
 }

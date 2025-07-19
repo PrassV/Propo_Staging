@@ -44,6 +44,10 @@ async def create_lease(db_client: Client, lease_data: LeaseCreate) -> Optional[D
             'end_date': lease_data.end_date.isoformat() if lease_data.end_date else None,
             'rent_amount': float(lease_data.rent_amount) if lease_data.rent_amount else 0.0,
             'deposit_amount': float(lease_data.deposit_amount) if lease_data.deposit_amount else 0.0,
+            'rental_type': lease_data.rental_type or 'lease',
+            'rental_frequency': lease_data.rental_frequency or 'monthly',
+            'maintenance_fee': float(lease_data.maintenance_fee) if lease_data.maintenance_fee else 0.0,
+            'advance_amount': float(lease_data.advance_amount) if lease_data.advance_amount else 0.0,
             'status': 'active'
         }
         
