@@ -1,7 +1,7 @@
 from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
-from ..config.database import supabase_client
+from supabase import Client
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,8 @@ async def get_user_notifications(
     user_id: str, 
     is_read: bool = None, 
     limit: int = 50, 
-    offset: int = 0
+    offset: int = 0,
+    db_client: Client = None
 ) -> List[Dict[str, Any]]:
     """
     Get notifications for a user from Supabase.
@@ -19,12 +20,17 @@ async def get_user_notifications(
         is_read: Optional filter for read/unread notifications
         limit: Maximum number of notifications to return
         offset: Offset for pagination
+        db_client: Authenticated Supabase client (required for RLS)
         
     Returns:
         List of notifications
     """
     try:
-        query = supabase_client.table('notifications').select('*').eq('user_id', user_id)
+        if not db_client:
+            logger.error("Database client is required for notifications access")
+            return []
+            
+        query = db_client.table('notifications').select('*').eq('user_id', user_id)
         
         if is_read is not None:
             query = query.eq('is_read', is_read)
@@ -34,8 +40,8 @@ async def get_user_notifications(
         
         response = query.execute()
         
-        if "error" in response and response["error"]:
-            logger.error(f"Error fetching notifications: {response['error']}")
+        if hasattr(response, 'error') and response.error:
+            logger.error(f"Error fetching notifications: {response.error}")
             return []
         
         return response.data or []

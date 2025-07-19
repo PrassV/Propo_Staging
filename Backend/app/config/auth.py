@@ -19,6 +19,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """
     try:
         token = credentials.credentials
+        logger.info(f"Processing authentication for token: {token[:20]}...")
         
         # Create authenticated Supabase client with the token
         supabase_client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
@@ -32,6 +33,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             user_response = supabase_client.auth.get_user(token)
             
             if not user_response.user:
+                logger.error("Supabase user not found in token response")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authentication token: User not found",
@@ -41,6 +43,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             user_id = supabase_user.id
             email = supabase_user.email
             
+            logger.info(f"Successfully validated Supabase user: {user_id} ({email})")
+            
         except Exception as e:
             logger.error(f"Failed to validate Supabase token: {str(e)}")
             raise HTTPException(
@@ -49,7 +53,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             )
         
         # Get additional profile data from our database
+        logger.info(f"Fetching profile data for user {user_id}")
         profile_data = user_service.get_user_profile(supabase_client, user_id)
+        logger.info(f"Profile data result: {profile_data is not None}")
         
         # Start with base Supabase user data
         user_dict = {
@@ -85,7 +91,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         # Populate with profile data if found
         if profile_data:
-            logger.debug(f"Profile found for user {user_id}")
+            logger.info(f"Profile found for user {user_id}: {profile_data}")
             user_dict.update({
                 "first_name": profile_data.get("first_name") or user_dict["first_name"],
                 "last_name": profile_data.get("last_name") or user_dict["last_name"],
@@ -111,6 +117,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         else:
             logger.warning(f"Profile not found for user {user_id}. Returning Supabase data with null profile fields.")
         
+        logger.info(f"Returning user dict: {user_dict}")
         return user_dict
         
     except HTTPException:

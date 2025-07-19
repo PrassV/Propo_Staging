@@ -57,7 +57,8 @@ async def get_user_notifications(
     user_id: str,
     is_read: bool = None,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    db_client = None
 ) -> List[Dict[str, Any]]:
     """
     Get notifications for a user.
@@ -67,11 +68,12 @@ async def get_user_notifications(
         is_read: Optional filter for read/unread notifications
         limit: Maximum number of notifications to return
         offset: Offset for pagination
+        db_client: Authenticated Supabase client (required for RLS)
         
     Returns:
         List of notifications
     """
-    return await notifications_db.get_user_notifications(user_id, is_read, limit, offset)
+    return await notifications_db.get_user_notifications(user_id, is_read, limit, offset, db_client)
 
 async def get_notification(notification_id: str) -> Optional[Dict[str, Any]]:
     """

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Body
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import uuid
+import logging
 
 from app.models.notification import (
     NotificationCreate,
@@ -11,7 +12,11 @@ from app.models.notification import (
 )
 from app.services import notification_service
 from app.config.auth import get_current_user
+from app.config.database import get_supabase_client_authenticated
 from app.models.user import User
+from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -35,7 +40,8 @@ async def get_notifications(
     is_read: Optional[bool] = Query(None, description="Filter by read status"),
     limit: int = Query(50, description="Maximum number of notifications to return"),
     offset: int = Query(0, description="Offset for pagination"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
 ):
     """
     Get notifications for the current user.
@@ -45,6 +51,7 @@ async def get_notifications(
         limit: Maximum number of notifications to return
         offset: Offset for pagination
         current_user: The current authenticated user
+        db_client: Authenticated Supabase client
         
     Returns:
         List of notifications
@@ -53,20 +60,26 @@ async def get_notifications(
     user_id = current_user.get("id")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found")
+    
+    logger.info(f"Getting notifications for user: {user_id}")
         
     try:
         notifications = await notification_service.get_user_notifications(
             user_id,
             is_read,
             limit,
-            offset
+            offset,
+            db_client
         )
         
         # Get unread count
         unread_notifications = await notification_service.get_user_notifications(
             user_id,
-            is_read=False
+            is_read=False,
+            db_client=db_client
         )
+        
+        logger.info(f"Successfully retrieved {len(notifications)} notifications for user {user_id}")
         
         return {
             "notifications": notifications,
@@ -77,6 +90,38 @@ async def get_notifications(
     except Exception as e:
         logger.error(f"Error getting notifications: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve notifications")
+
+@router.get("/debug", response_model=Dict[str, Any])
+async def debug_notifications(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db_client: Client = Depends(get_supabase_client_authenticated)
+):
+    """
+    Debug endpoint to check notification permissions.
+    """
+    try:
+        user_id = current_user.get("id")
+        
+        # Test notifications table access with authenticated client
+        test_response = db_client.table("notifications").select("id").limit(1).execute()
+        
+        # Test user-specific notifications access
+        user_notifications_response = db_client.table("notifications").select("id").eq("user_id", user_id).limit(1).execute()
+        
+        return {
+            "user": current_user,
+            "user_id": user_id,
+            "general_access": "success" if test_response.data is not None else "failed",
+            "user_specific_access": "success" if user_notifications_response.data is not None else "failed",
+            "test_response": test_response.data,
+            "user_notifications": user_notifications_response.data
+        }
+    except Exception as e:
+        logger.error(f"Debug notifications error: {str(e)}")
+        return {
+            "user": current_user,
+            "error": str(e)
+        }
 
 @router.get("/{notification_id}", response_model=NotificationResponse)
 async def get_notification(

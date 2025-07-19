@@ -255,7 +255,34 @@ async def get_user_info(current_user: Dict[str, Any] = Depends(get_current_user)
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials or fetch user data."
         )
-    logger.debug(f"Returning current_user data from dependency: {current_user}")
+    logger.info(f"Returning current_user data from dependency: {current_user}")
     return current_user
+
+@router.get("/debug", response_model=Dict[str, Any])
+async def debug_auth(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Debug endpoint to check authentication and permissions.
+    """
+    try:
+        from ..config.database import supabase_client
+        
+        # Test basic database access
+        test_response = supabase_client.table("user_profiles").select("id").limit(1).execute()
+        
+        return {
+            "user": current_user,
+            "database_test": "success" if test_response.data else "failed",
+            "user_id": current_user.get("id"),
+            "email": current_user.get("email"),
+            "user_type": current_user.get("user_type"),
+            "role": current_user.get("role")
+        }
+    except Exception as e:
+        logger.error(f"Debug endpoint error: {str(e)}")
+        return {
+            "user": current_user,
+            "database_test": "error",
+            "error": str(e)
+        }
 
 # Additional endpoints if needed, e.g., password reset, etc. 
