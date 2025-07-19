@@ -305,6 +305,18 @@ export interface Tenant {
   rent_frequency?: 'monthly' | 'quarterly' | 'annually';
   property_id?: string;
   
+  // Additional fields for enhanced tenant profile
+  date_of_birth?: string;
+  profile_photo_url?: string;
+  occupation?: string;
+  employer_name?: string;
+  monthly_income?: number;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relationship?: string;
+  verification_status?: 'pending' | 'verified' | 'rejected';
+  verification_notes?: string;
+  
   // Enriched fields from backend with property/unit information
   properties?: Array<{
     property: {
