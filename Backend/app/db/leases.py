@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Dict, Any, Optional, List
 from supabase import Client
-from ..models.property import LeaseCreate
+from ..schemas.lease import LeaseCreate
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,7 @@ async def create_lease(db_client: Client, lease_data: LeaseCreate) -> Optional[D
         # Step 3: Update the unit to mark it as occupied
         unit_update_data = {
             'status': 'Occupied',
-            'tenant_id': str(lease_data.tenant_id),
-            'start_date': lease_data.start_date.isoformat(),
-            'end_date': lease_data.end_date.isoformat() if lease_data.end_date else None,
-            'rent': float(lease_data.rent_amount) if lease_data.rent_amount else 0.0,
-            'deposit': float(lease_data.deposit_amount) if lease_data.deposit_amount else 0.0
+            'tenant_id': str(lease_data.tenant_id)
         }
         
         logger.info(f"Updating unit {lease_data.unit_id} with data: {unit_update_data}")

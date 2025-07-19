@@ -113,43 +113,29 @@ async def get_tenant_by_id(tenant_id: uuid.UUID, requesting_user_id: uuid.UUID) 
 async def _enrich_tenant_with_property_info(tenant_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Enrich tenant data with property information for frontend compatibility.
-    Adds property_id and current_property fields based on property_tenants relationship.
+    Now uses the single source of truth view for consistent data.
     """
     try:
         tenant_id = tenant_dict.get('id')
         if not tenant_id:
             return tenant_dict
             
-        # Get current property relationship
-        property_links = await tenants_db.get_property_links_for_tenant(uuid.UUID(tenant_id))
+        # Use the new single source of truth view
+        from ..config.database import supabase_client as db_client
         
-        if property_links:
-            # Get the most recent/current property link
-            current_link = property_links[0]  # Assuming sorted by most recent
-            property_id = current_link.get('property_id')
+        response = db_client.from_('enriched_tenants_view')\
+            .select('*')\
+            .eq('id', str(tenant_id))\
+            .single()\
+            .execute()
+        
+        if response.data:
+            # The view already includes all the enriched data
+            return response.data
+        else:
+            # Fallback to original data if view doesn't return anything
+            return tenant_dict
             
-            if property_id:
-                # Add property_id for storage compatibility
-                tenant_dict['property_id'] = property_id
-                
-                # Get property details for current_property field
-                from ..config.database import supabase_client as db_client
-                property_data = await properties_db.get_property_by_id(db_client, uuid.UUID(property_id))
-                
-                if property_data:
-                    tenant_dict['current_property'] = {
-                        'id': property_id,
-                        'property_name': property_data.get('property_name'),
-                        'address_line1': property_data.get('address_line1'),
-                        'address_line2': property_data.get('address_line2'),
-                        'city': property_data.get('city'),
-                        'state': property_data.get('state'),
-                        'pincode': property_data.get('pincode')
-                    }
-                    
-                    logger.info(f"Enriched tenant {tenant_id} with property {property_id}")
-        
-        return tenant_dict
     except Exception as e:
         logger.error(f"Error enriching tenant with property info: {str(e)}")
         return tenant_dict  # Return original data if enrichment fails

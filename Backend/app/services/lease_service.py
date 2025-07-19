@@ -5,7 +5,7 @@ from supabase import Client
 from fastapi import HTTPException, status
 
 # Updated imports to use the new models
-from app.models.property import Lease, LeaseCreate, LeaseUpdate
+from app.schemas.lease import Lease, LeaseCreate, LeaseUpdate
 from ..db import leases as lease_db
 from ..db import properties as property_db # To verify ownership
 

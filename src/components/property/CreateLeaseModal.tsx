@@ -338,11 +338,11 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
                 {errors.rent_amount && <p className="text-sm text-red-500">{errors.rent_amount.message}</p>}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="deposit_amount">Deposit Amount (₹)</Label>
+                <Label htmlFor="deposit_amount">Security Deposit (₹)</Label>
                 <Controller
                   name="deposit_amount"
                   control={control}
-                  render={({ field }) => <Input id="deposit_amount" type="number" step="0.01" {...field} value={field.value || ''} />}
+                  render={({ field }) => <Input id="deposit_amount" type="number" step="0.01" placeholder="Refundable deposit" {...field} value={field.value || ''} />}
                 />
                 {errors.deposit_amount && <p className="text-sm text-red-500">{errors.deposit_amount.message}</p>}
               </div>
@@ -381,12 +381,13 @@ export default function CreateLeaseModal({ isOpen, onClose, onSuccess, unitId, u
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="advance_amount">Advance Amount (₹)</Label>
+              <Label htmlFor="advance_amount">Advance Rent (₹)</Label>
               <Controller
                 name="advance_amount"
                 control={control}
-                render={({ field }) => <Input id="advance_amount" type="number" step="0.01" placeholder="0.00" {...field} value={field.value || 0} />}
+                render={({ field }) => <Input id="advance_amount" type="number" step="0.01" placeholder="Prepaid rent (optional)" {...field} value={field.value || 0} />}
               />
+              <p className="text-xs text-gray-500">Prepaid rent for first few months (optional)</p>
               {errors.advance_amount && <p className="text-sm text-red-500">{errors.advance_amount.message}</p>}
             </div>
             

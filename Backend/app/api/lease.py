@@ -7,7 +7,8 @@ from datetime import date
 from supabase import Client
 
 # Updated imports to use the new models
-from app.models.property import Lease, LeaseCreate, LeaseUpdate, LeaseInfo, TenantLeaseInfo
+from app.schemas.lease import Lease, LeaseCreate, LeaseUpdate
+from app.models.property import LeaseInfo, TenantLeaseInfo
 from app.models.tenant import PropertyTenantLink, PropertyTenantLinkCreate, PropertyTenantLinkUpdate
 from app.services import tenant_service, lease_service
 from app.config.auth import get_current_user
